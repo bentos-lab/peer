@@ -4,29 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"bentos-backend/adapter/outbound/commandrunner"
 )
 
 // GitChangeDetector discovers changed files from local git state.
 type GitChangeDetector struct {
-	runGit func(ctx context.Context, args ...string) ([]byte, error)
+	runner commandrunner.Runner
 }
 
 // NewGitChangeDetector creates a git-backed change detector.
 func NewGitChangeDetector() *GitChangeDetector {
-	return newGitChangeDetectorWithRunner(func(ctx context.Context, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "git", args...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return nil, fmt.Errorf("git %s failed: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-		}
-		return out, nil
-	})
+	return newGitChangeDetectorWithRunner(commandrunner.NewOSCommandRunner())
 }
 
-func newGitChangeDetectorWithRunner(runGit func(ctx context.Context, args ...string) ([]byte, error)) *GitChangeDetector {
-	return &GitChangeDetector{runGit: runGit}
+func newGitChangeDetectorWithRunner(runner commandrunner.Runner) *GitChangeDetector {
+	return &GitChangeDetector{runner: runner}
 }
 
 // ListStaged returns staged changed file paths.
@@ -45,16 +39,23 @@ func (d *GitChangeDetector) ListUntracked(ctx context.Context) ([]string, error)
 }
 
 func (d *GitChangeDetector) list(ctx context.Context, args ...string) ([]string, error) {
-	if d.runGit == nil {
+	if d.runner == nil {
 		return nil, errors.New("git runner is required")
 	}
 
-	out, err := d.runGit(ctx, args...)
+	result, err := d.runner.Run(ctx, "git", args...)
 	if err != nil {
-		return nil, err
+		output := strings.TrimSpace(string(result.Stderr))
+		if output == "" {
+			output = strings.TrimSpace(string(result.Stdout))
+		}
+		if output == "" {
+			return nil, fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+		}
+		return nil, fmt.Errorf("git %s failed: %w: %s", strings.Join(args, " "), err, output)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	lines := strings.Split(strings.TrimSpace(string(result.Stdout)), "\n")
 	paths := make([]string, 0, len(lines))
 	for _, line := range lines {
 		line = strings.TrimSpace(line)

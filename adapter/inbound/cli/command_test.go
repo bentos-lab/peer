@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	cliinput "bentos-backend/adapter/outbound/input/cli"
+	"bentos-backend/domain"
 	"bentos-backend/usecase"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func (f *fakeReviewUseCase) Execute(_ context.Context, request usecase.ReviewReq
 
 func TestCommand_RunMapsParamsToMetadata(t *testing.T) {
 	fakeUC := &fakeReviewUseCase{}
-	command := NewCommand(fakeUC)
+	command := NewLocalCommand(fakeUC)
 
 	err := command.Run(context.Background(), RunParams{
 		IncludeUnstaged:  true,
@@ -38,7 +39,7 @@ func TestCommand_RunMapsParamsToMetadata(t *testing.T) {
 
 func TestCommand_RunKeepsChangedFilesOverride(t *testing.T) {
 	fakeUC := &fakeReviewUseCase{}
-	command := NewCommand(fakeUC)
+	command := NewLocalCommand(fakeUC)
 
 	err := command.Run(context.Background(), RunParams{
 		ChangedFiles:    "a.go,b.go",
@@ -46,4 +47,37 @@ func TestCommand_RunKeepsChangedFilesOverride(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "a.go,b.go", fakeUC.lastRequest.Metadata[cliinput.MetadataKeyChangedFiles])
+}
+
+func TestCommand_RunGitHubPRMapsRequest(t *testing.T) {
+	fakeUC := &fakeReviewUseCase{}
+	command := NewGitHubPRCommand(fakeUC)
+
+	err := command.Run(context.Background(), RunParams{
+		PRNumber: 7,
+	})
+	require.NoError(t, err)
+	require.True(t, fakeUC.executed)
+	require.Equal(t, 7, fakeUC.lastRequest.ChangeRequestNumber)
+	require.Equal(t, "", fakeUC.lastRequest.Repository)
+	require.Empty(t, fakeUC.lastRequest.Metadata)
+}
+
+func TestCommand_RunReturnsErrorWhenProviderIsNotConfigured(t *testing.T) {
+	fakeUC := &fakeReviewUseCase{}
+	command := &Command{
+		reviewer:     fakeUC,
+		providerName: domain.ReviewInputProvider("unknown"),
+	}
+
+	err := command.Run(context.Background(), RunParams{})
+	require.Error(t, err)
+	require.False(t, fakeUC.executed)
+}
+
+func TestCommand_RunReturnsErrorWhenReviewerIsNotConfigured(t *testing.T) {
+	command := NewLocalCommand(nil)
+
+	err := command.Run(context.Background(), RunParams{})
+	require.Error(t, err)
 }

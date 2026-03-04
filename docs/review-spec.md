@@ -51,7 +51,8 @@ Current reviewer adapter (`adapter/outbound/reviewer/llm`) expects model output 
   "findings": [
     {
       "filePath": "path/to/file.go",
-      "line": 123,
+      "startLine": 123,
+      "endLine": 126,
       "severity": "CRITICAL|MAJOR|MINOR|NIT",
       "title": "Short finding title",
       "detail": "Why this matters",

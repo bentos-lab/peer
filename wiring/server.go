@@ -19,16 +19,11 @@ import (
 	"bentos-backend/usecase/rulepack"
 )
 
+const serverLLMTimeout = 600 * time.Second
+
 // BuildGitHubHandler wires dependencies for GitHub webhook flow.
 func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	llmClient := openai.NewClient(httpClient, openai.ClientConfig{
-		BaseURL: cfg.OpenAIBaseURL,
-		APIKey:  cfg.OpenAIAPIKey,
-		Model:   cfg.OpenAIModel,
-		Timeout: 60 * time.Second,
-	})
-	llmReviewer, err := reviewerllm.NewReviewer(llmClient)
+	llmReviewer, err := buildServerLLMReviewer(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -47,14 +42,7 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 
 // BuildGitLabHandler wires dependencies for GitLab webhook flow.
 func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	llmClient := openai.NewClient(httpClient, openai.ClientConfig{
-		BaseURL: cfg.OpenAIBaseURL,
-		APIKey:  cfg.OpenAIAPIKey,
-		Model:   cfg.OpenAIModel,
-		Timeout: 60 * time.Second,
-	})
-	llmReviewer, err := reviewerllm.NewReviewer(llmClient)
+	llmReviewer, err := buildServerLLMReviewer(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -69,4 +57,18 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
 		return nil, err
 	}
 	return gitlabinbound.NewHandler(uc), nil
+}
+
+func buildServerLLMReviewer(cfg config.Config) (*reviewerllm.Reviewer, error) {
+	httpClient := &http.Client{Timeout: serverLLMTimeout}
+	llmClient := openai.NewClient(httpClient, buildOpenAIClientConfig(cfg))
+	return reviewerllm.NewReviewer(llmClient)
+}
+
+func buildOpenAIClientConfig(cfg config.Config) openai.ClientConfig {
+	return openai.ClientConfig{
+		BaseURL: cfg.OpenAIBaseURL,
+		APIKey:  cfg.OpenAIAPIKey,
+		Model:   cfg.OpenAIModel,
+	}
 }

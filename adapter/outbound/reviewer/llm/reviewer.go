@@ -101,6 +101,9 @@ func (r *Reviewer) ReviewDiff(ctx context.Context, payload usecase.LLMReviewPayl
 		if err := json.Unmarshal(findingRaw, &finding); err != nil {
 			return usecase.LLMReviewResult{}, fmt.Errorf("invalid finding format: %w", err)
 		}
+		if finding.StartLine <= 0 || finding.EndLine <= 0 || finding.StartLine > finding.EndLine {
+			return usecase.LLMReviewResult{}, fmt.Errorf("invalid finding range for %q: startLine=%d endLine=%d", finding.FilePath, finding.StartLine, finding.EndLine)
+		}
 		resultFindings = append(resultFindings, finding)
 	}
 
@@ -126,7 +129,8 @@ func reviewResponseSchema() map[string]any {
 					"additionalProperties": false,
 					"required": []string{
 						"filePath",
-						"line",
+						"startLine",
+						"endLine",
 						"severity",
 						"title",
 						"detail",
@@ -136,7 +140,11 @@ func reviewResponseSchema() map[string]any {
 						"filePath": map[string]any{
 							"type": "string",
 						},
-						"line": map[string]any{
+						"startLine": map[string]any{
+							"type":    "integer",
+							"minimum": 1,
+						},
+						"endLine": map[string]any{
 							"type":    "integer",
 							"minimum": 1,
 						},

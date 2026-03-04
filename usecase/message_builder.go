@@ -29,17 +29,21 @@ func BuildMessages(findings []domain.Finding, llmSummary string) []domain.Review
 	for _, path := range paths {
 		items := grouped[path]
 		sort.Slice(items, func(i, j int) bool {
-			if items[i].Line == items[j].Line {
+			if items[i].StartLine == items[j].StartLine {
 				return items[i].Title < items[j].Title
 			}
-			return items[i].Line < items[j].Line
+			return items[i].StartLine < items[j].StartLine
 		})
 
 		var bodyBuilder strings.Builder
 		for _, item := range items {
 			lineText := ""
-			if item.Line > 0 {
-				lineText = fmt.Sprintf(" (line %d)", item.Line)
+			if item.StartLine > 0 {
+				if item.EndLine > item.StartLine {
+					lineText = fmt.Sprintf(" (lines %d-%d)", item.StartLine, item.EndLine)
+				} else {
+					lineText = fmt.Sprintf(" (line %d)", item.StartLine)
+				}
 			}
 			bodyBuilder.WriteString(fmt.Sprintf("- [%s]%s %s: %s", item.Severity, lineText, item.Title, item.Detail))
 			if item.Suggestion != "" {

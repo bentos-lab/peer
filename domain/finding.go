@@ -17,7 +17,8 @@ const (
 // Finding represents one LLM-generated review finding.
 type Finding struct {
 	FilePath   string
-	Line       int
+	StartLine  int
+	EndLine    int
 	Severity   FindingSeverityEnum
 	Title      string
 	Detail     string

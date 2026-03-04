@@ -64,6 +64,8 @@ go run ./cmd/cli --all
 go run ./cmd/cli --untracked
 go run ./cmd/cli --all --untracked
 go run ./cmd/cli --changed-files file1.go,file2.go
+go run ./cmd/cli --gh-pr 123
+go run ./cmd/cli --gh-pr 123 --comment-on-pr
 go run ./cmd/cli -a
 go run ./cmd/cli -u
 go run ./cmd/cli -a -u
@@ -77,6 +79,10 @@ go run ./cmd/cli --openai-base-url https://example.com/v1 --openai-model model-i
 Notes:
 - CLI argument parsing is handled in `cmd/cli/main.go`; inbound CLI adapter only receives parsed parameters.
 - Review flags support shorthands: `-a` (`--all`), `-u` (`--untracked`), `-c` (`--changed-files`).
+- GitHub PR mode is enabled by `--gh-pr <number>`.
+- `--comment-on-pr` is only supported with `--gh-pr` and posts comments to the PR.
+- `--all`, `--untracked`, and `--changed-files` are not supported with `--gh-pr`.
+- GitHub PR mode requires an authenticated GitHub CLI session (`gh auth login`).
 - `--openai-base-url` supports shortcuts: `gemini`, `openai`, `anthropic`.
 - For shortcut URLs, if `--openai-model` is not provided, a shortcut default model is used.
 - For full URLs, a model must be resolvable (`--openai-model` or `OPENAI_MODEL`).

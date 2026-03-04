@@ -1,4 +1,5 @@
 Review the following code changes and report actionable findings only.
+For each finding, return both `startLine` and `endLine`. Use equal values for a single-line issue.
 
 Review language: {{ .Language }}
 

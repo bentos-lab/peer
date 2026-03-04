@@ -38,7 +38,8 @@ func TestReviewer_ReviewDiff_MapsModelOutput(t *testing.T) {
 			"findings": []any{
 				map[string]any{
 					"filePath":   "a.go",
-					"line":       9,
+					"startLine":  9,
+					"endLine":    9,
 					"severity":   "MAJOR",
 					"title":      "Nil risk",
 					"detail":     "Potential nil dereference",
@@ -54,6 +55,8 @@ func TestReviewer_ReviewDiff_MapsModelOutput(t *testing.T) {
 	require.Equal(t, "done", result.Summary)
 	require.Len(t, result.Findings, 1)
 	require.Equal(t, domain.FindingSeverityMajor, result.Findings[0].Severity)
+	require.Equal(t, 9, result.Findings[0].StartLine)
+	require.Equal(t, 9, result.Findings[0].EndLine)
 }
 
 func TestReviewer_ReviewDiff_SummaryOnly(t *testing.T) {
@@ -82,6 +85,76 @@ func TestReviewer_ReviewDiff_InvalidFindingsShape(t *testing.T) {
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid review model output")
+}
+
+func TestReviewer_ReviewDiff_RejectsMissingStartLine(t *testing.T) {
+	reviewer, err := NewReviewer(&mockGenerator{
+		result: map[string]any{
+			"summary": "done",
+			"findings": []any{
+				map[string]any{
+					"filePath":   "a.go",
+					"endLine":    9,
+					"severity":   "MAJOR",
+					"title":      "Nil risk",
+					"detail":     "Potential nil dereference",
+					"suggestion": "Check nil",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid finding range")
+}
+
+func TestReviewer_ReviewDiff_RejectsMissingEndLine(t *testing.T) {
+	reviewer, err := NewReviewer(&mockGenerator{
+		result: map[string]any{
+			"summary": "done",
+			"findings": []any{
+				map[string]any{
+					"filePath":   "a.go",
+					"startLine":  9,
+					"severity":   "MAJOR",
+					"title":      "Nil risk",
+					"detail":     "Potential nil dereference",
+					"suggestion": "Check nil",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid finding range")
+}
+
+func TestReviewer_ReviewDiff_RejectsInvalidRange(t *testing.T) {
+	reviewer, err := NewReviewer(&mockGenerator{
+		result: map[string]any{
+			"summary": "done",
+			"findings": []any{
+				map[string]any{
+					"filePath":   "a.go",
+					"startLine":  11,
+					"endLine":    9,
+					"severity":   "MAJOR",
+					"title":      "Nil risk",
+					"detail":     "Potential nil dereference",
+					"suggestion": "Check nil",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid finding range")
 }
 
 func TestReviewer_ReviewDiff_RendersSystemPromptFromSingleRulePackString(t *testing.T) {

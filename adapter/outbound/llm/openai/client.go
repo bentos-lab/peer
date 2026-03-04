@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"bentos-backend/usecase/contracts"
 )
@@ -22,7 +21,6 @@ type ClientConfig struct {
 	BaseURL string
 	APIKey  string
 	Model   string
-	Timeout time.Duration
 }
 
 // Client is an OpenAI-compatible LLM adapter.

@@ -56,11 +56,12 @@ func TestReviewerUseCase_ExecutePublishesMessages(t *testing.T) {
 		result: LLMReviewResult{
 			Findings: []domain.Finding{
 				{
-					FilePath: "service.go",
-					Line:     12,
-					Severity: domain.FindingSeverityMajor,
-					Title:    "Error handling",
-					Detail:   "Returned error is ignored.",
+					FilePath:  "service.go",
+					StartLine: 12,
+					EndLine:   12,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Error handling",
+					Detail:    "Returned error is ignored.",
 				},
 			},
 			Summary: "1 important potential issue found.",
@@ -99,4 +100,6 @@ func TestReviewerUseCase_ExecutePublishesMessages(t *testing.T) {
 	require.Equal(t, domain.ReviewMessageTypeSummary, result.Messages[1].Type)
 	require.Equal(t, 1, llm.calls)
 	require.Equal(t, "org/repo", pub.last.Target.Repository)
+	require.Equal(t, llm.result.Findings, pub.last.Findings)
+	require.Equal(t, llm.result.Summary, pub.last.Summary)
 }

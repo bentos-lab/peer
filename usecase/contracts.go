@@ -58,6 +58,8 @@ type ReviewPublishResult struct {
 	ReviewID string
 	Target   domain.ReviewTarget
 	Messages []domain.ReviewMessage
+	Findings []domain.Finding
+	Summary  string
 }
 
 // ReviewResultPublisher publishes review results (comment or print).

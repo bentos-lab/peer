@@ -56,6 +56,8 @@ func (u *ReviewerUseCase) Execute(ctx context.Context, request ReviewRequest) (R
 		ReviewID: request.ReviewID,
 		Target:   input.Target,
 		Messages: messages,
+		Findings: llmResult.Findings,
+		Summary:  llmResult.Summary,
 	}
 	if err := u.publisher.Publish(ctx, publishInput); err != nil {
 		return ReviewExecutionResult{}, err
