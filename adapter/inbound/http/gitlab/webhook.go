@@ -3,7 +3,6 @@ package gitlab
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -31,11 +30,15 @@ type mergeRequestEvent struct {
 // Handler receives GitLab webhook events and triggers review.
 type Handler struct {
 	reviewer usecase.ReviewUseCase
+	logger   usecase.Logger
 }
 
 // NewHandler creates a GitLab webhook handler.
-func NewHandler(reviewer usecase.ReviewUseCase) *Handler {
-	return &Handler{reviewer: reviewer}
+func NewHandler(reviewer usecase.ReviewUseCase, logger usecase.Logger) *Handler {
+	if logger == nil {
+		logger = usecase.NopLogger
+	}
+	return &Handler{reviewer: reviewer, logger: logger}
 }
 
 // ServeHTTP handles merge request events and starts review usecase.
@@ -52,7 +55,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	request := usecase.ReviewRequest{
-		ReviewID:            time.Now().UTC().Format(time.RFC3339Nano),
 		Repository:          event.Project.PathWithNamespace,
 		ChangeRequestNumber: event.ObjectAttributes.IID,
 		Title:               event.ObjectAttributes.Title,
@@ -65,15 +67,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func(req usecase.ReviewRequest, action string) {
+		startedAt := time.Now()
+		h.logger.Infof("GitLab webhook background review started.")
+		h.logger.Debugf("Repository is %q and change request number is %d.", req.Repository, req.ChangeRequestNumber)
+		h.logger.Debugf("Webhook action is %q.", action)
+
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				log.Printf(
-					"webhook background review panic provider=gitlab repository=%q change_request_number=%d action=%q panic=%v",
-					req.Repository,
-					req.ChangeRequestNumber,
-					action,
-					recovered,
-				)
+				h.logger.Errorf("GitLab webhook background review panicked.")
+				h.logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", req.Repository, req.ChangeRequestNumber, action)
+				h.logger.Debugf("The background review ran for %d ms before panicking.", time.Since(startedAt).Milliseconds())
+				h.logger.Debugf("Panic details: %v.", recovered)
 			}
 		}()
 
@@ -81,16 +85,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 
 		if _, err := h.reviewer.Execute(ctx, req); err != nil {
-			log.Printf(
-				"webhook background review failed provider=gitlab repository=%q change_request_number=%d action=%q error=%v",
-				req.Repository,
-				req.ChangeRequestNumber,
-				action,
-				err,
-			)
+			h.logger.Errorf("GitLab webhook background review failed.")
+			h.logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", req.Repository, req.ChangeRequestNumber, action)
+			h.logger.Debugf("The background review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
+			h.logger.Debugf("Failure details: %v.", err)
+			return
 		}
+
+		h.logger.Infof("GitLab webhook background review completed.")
+		h.logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", req.Repository, req.ChangeRequestNumber, action)
+		h.logger.Debugf("The background review completed in %d ms.", time.Since(startedAt).Milliseconds())
 	}(request, event.ObjectAttributes.Action)
 
+	h.logger.Infof("GitLab webhook review request was accepted.")
+	h.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
+	h.logger.Debugf("Webhook action is %q.", event.ObjectAttributes.Action)
 	w.WriteHeader(http.StatusAccepted)
 }
 

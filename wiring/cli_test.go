@@ -125,6 +125,7 @@ func TestBuildCLICommandRejectsUnsupportedSelection(t *testing.T) {
 		CLILLMOptions{},
 		domain.ReviewInputProviderLocal,
 		domain.ReviewPublishTypeComment,
+		"",
 	)
 	require.Error(t, err)
 }
@@ -160,9 +161,32 @@ func TestBuildCLICommandBuildsSupportedSelections(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd, err := BuildCLICommand(cfg, CLILLMOptions{}, tt.inputType, tt.publishType)
+			cmd, err := BuildCLICommand(cfg, CLILLMOptions{}, tt.inputType, tt.publishType, "")
 			require.NoError(t, err)
 			require.NotNil(t, cmd)
 		})
 	}
+}
+
+func TestBuildCLICommandRejectsInvalidLogLevel(t *testing.T) {
+	cfg := config.Config{
+		LogLevel:      "invalid",
+		OpenAIBaseURL: "openai",
+		OpenAIModel:   "gpt-4.1-mini",
+		OpenAIAPIKey:  "test-key",
+	}
+
+	_, err := BuildCLICommand(cfg, CLILLMOptions{}, domain.ReviewInputProviderLocal, domain.ReviewPublishTypePrint, "")
+	require.Error(t, err)
+}
+
+func TestResolveLogLevelUsesOverride(t *testing.T) {
+	level, err := resolveLogLevel(config.Config{LogLevel: "error"}, "debug")
+	require.NoError(t, err)
+	require.Equal(t, "debug", string(level))
+}
+
+func TestResolveLogLevelRejectsInvalidValue(t *testing.T) {
+	_, err := resolveLogLevel(config.Config{LogLevel: "invalid"}, "")
+	require.Error(t, err)
 }

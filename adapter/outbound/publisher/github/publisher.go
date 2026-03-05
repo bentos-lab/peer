@@ -3,8 +3,8 @@ package github
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
+	"time"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
@@ -20,29 +20,37 @@ type CommentClient interface {
 // Publisher publishes review comments to GitHub.
 type Publisher struct {
 	client CommentClient
+	logger usecase.Logger
 }
 
 // NewPublisher creates a GitHub publisher.
-func NewPublisher(client CommentClient) *Publisher {
-	return &Publisher{client: client}
+func NewPublisher(client CommentClient, logger usecase.Logger) *Publisher {
+	if logger == nil {
+		logger = usecase.NopLogger
+	}
+	return &Publisher{client: client, logger: logger}
 }
 
 // Publish posts one anchored review comment per finding and one summary PR comment.
 func (p *Publisher) Publish(ctx context.Context, result usecase.ReviewPublishResult) error {
+	startedAt := time.Now()
+	p.logger.Infof("Publishing GitHub review result started.")
+	p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
+	p.logger.Debugf("The publish request includes %d findings.", len(result.Findings))
+
 	for _, finding := range result.Findings {
 		if err := p.publishFinding(ctx, result.Target, finding); err != nil {
 			if githubvcs.IsInvalidAnchorError(err) {
-				log.Printf(
-					"github publisher skipped invalid anchor repository=%q pull_request_number=%d file=%q start_line=%d end_line=%d error=%v",
-					result.Target.Repository,
-					result.Target.ChangeRequestNumber,
-					finding.FilePath,
-					finding.StartLine,
-					finding.EndLine,
-					err,
-				)
+				p.logger.Infof("Skipped one GitHub review comment because its anchor is invalid.")
+				p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
+				p.logger.Debugf("The skipped finding used line range %d to %d.", finding.StartLine, finding.EndLine)
+				p.logger.Debugf("Failure details: %v.", err)
 				continue
 			}
+			p.logger.Errorf("Publishing GitHub review result failed.")
+			p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
+			p.logger.Debugf("The publish operation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
+			p.logger.Debugf("Failure details: %v.", err)
 			return err
 		}
 	}
@@ -53,8 +61,17 @@ func (p *Publisher) Publish(ctx context.Context, result usecase.ReviewPublishRes
 	}
 	body := fmt.Sprintf("Review summary\n\n%s", summary)
 	if err := p.client.CreateComment(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, body); err != nil {
+		p.logger.Errorf("Publishing GitHub review summary failed.")
+		p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
+		p.logger.Debugf("The publish operation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
+		p.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
+
+	p.logger.Infof("Publishing GitHub review result completed.")
+	p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
+	p.logger.Debugf("The publish operation completed in %d ms.", time.Since(startedAt).Milliseconds())
+	p.logger.Debugf("Published %d summary message and processed %d findings.", 1, len(result.Findings))
 
 	return nil
 }

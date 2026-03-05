@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
@@ -10,9 +11,15 @@ import (
 
 // main bootstraps webhook handlers for GitHub and GitLab.
 func main() {
+	logLevel := flag.String("log-level", "", "log level override: trace|debug|info|warning|error|silence")
+	flag.Parse()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *logLevel != "" {
+		cfg.LogLevel = *logLevel
 	}
 
 	githubHandler, err := wiring.BuildGitHubHandler(cfg)

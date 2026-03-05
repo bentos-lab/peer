@@ -36,7 +36,7 @@ func (f *fakeClient) CreateReviewComment(_ context.Context, _ string, _ int, inp
 
 func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 	client := &fakeClient{}
-	pub := NewPublisher(client)
+	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -76,7 +76,7 @@ func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 
 func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
 	client := &fakeClient{}
-	pub := NewPublisher(client)
+	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -105,7 +105,7 @@ func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
 	client := &fakeClient{
 		reviewErr: &githubvcs.InvalidAnchorError{Message: "invalid review comment anchor"},
 	}
-	pub := NewPublisher(client)
+	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -133,7 +133,7 @@ func TestPublisher_PublishFailsForNonAnchorError(t *testing.T) {
 	client := &fakeClient{
 		reviewErr: errors.New("network fail"),
 	}
-	pub := NewPublisher(client)
+	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -159,7 +159,7 @@ func TestPublisher_PublishFailsForNonAnchorError(t *testing.T) {
 
 func TestPublisher_PublishPostsOnlySummaryWhenNoFindings(t *testing.T) {
 	client := &fakeClient{}
-	pub := NewPublisher(client)
+	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{

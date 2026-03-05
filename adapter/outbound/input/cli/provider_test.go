@@ -46,7 +46,6 @@ func TestProvider_LoadReviewInputManualOverride(t *testing.T) {
 
 	provider := NewProvider(&fakeChangeDetector{})
 	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
-		ReviewID:   "r1",
 		Repository: "org/repo",
 		Metadata: map[string]string{
 			MetadataKeyChangedFiles: path,

@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,9 +18,13 @@ type mockUseCase struct {
 	requestCh chan usecase.ReviewRequest
 	proceedCh chan struct{}
 	err       error
+	panicVal  any
 }
 
 func (m *mockUseCase) Execute(_ context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
+	if m.panicVal != nil {
+		panic(m.panicVal)
+	}
 	if m.requestCh != nil {
 		m.requestCh <- request
 	}
@@ -29,9 +34,26 @@ func (m *mockUseCase) Execute(_ context.Context, request usecase.ReviewRequest) 
 	return usecase.ReviewExecutionResult{}, m.err
 }
 
+type spyLogger struct {
+	events []string
+}
+
+func (s *spyLogger) Infof(format string, args ...any) {
+	s.events = append(s.events, "info:"+fmt.Sprintf(format, args...))
+}
+
+func (s *spyLogger) Debugf(format string, args ...any) {
+	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
+}
+
+func (s *spyLogger) Errorf(format string, args ...any) {
+	s.events = append(s.events, "error:"+fmt.Sprintf(format, args...))
+}
+
 func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc)
+	logger := &spyLogger{}
+	handler := NewHandler(uc, logger)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":"org/repo"},
@@ -60,7 +82,7 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 
 func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc)
+	handler := NewHandler(uc, nil)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{`))
 	resp := httptest.NewRecorder()
 
@@ -72,7 +94,7 @@ func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 
 func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc)
+	handler := NewHandler(uc, nil)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":" "},
@@ -98,7 +120,7 @@ func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 		requestCh: make(chan usecase.ReviewRequest, 1),
 		proceedCh: make(chan struct{}),
 	}
-	handler := NewHandler(uc)
+	handler := NewHandler(uc, nil)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":"org/repo"},
@@ -139,7 +161,8 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 		requestCh: make(chan usecase.ReviewRequest, 1),
 		err:       errors.New("review failed"),
 	}
-	handler := NewHandler(uc)
+	logger := &spyLogger{}
+	handler := NewHandler(uc, logger)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":"org/repo"},
@@ -162,4 +185,45 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
+	require.Eventually(t, func() bool {
+		return containsEvent(logger.events, "error:GitHub webhook background review failed.")
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
+	uc := &mockUseCase{
+		requestCh: make(chan usecase.ReviewRequest, 1),
+		panicVal:  "boom",
+	}
+	logger := &spyLogger{}
+	handler := NewHandler(uc, logger)
+	payload := `{
+		"action":"opened",
+		"repository":{"full_name":"org/repo"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(payload))
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	require.Eventually(t, func() bool {
+		return containsEvent(logger.events, "error:GitHub webhook background review panicked.")
+	}, time.Second, 10*time.Millisecond)
+}
+
+func containsEvent(events []string, target string) bool {
+	for _, event := range events {
+		if strings.Contains(event, target) {
+			return true
+		}
+	}
+	return false
 }

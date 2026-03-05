@@ -74,7 +74,6 @@ func (p *Provider) LoadReviewInput(ctx context.Context, request usecase.ReviewRe
 	}
 
 	return domain.ReviewInput{
-		ReviewID: request.ReviewID,
 		Target: domain.ReviewTarget{
 			Repository:          request.Repository,
 			ChangeRequestNumber: request.ChangeRequestNumber,

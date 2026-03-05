@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
+	stdlogger "bentos-backend/adapter/outbound/logger/stdlogger"
 	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/wiring"
@@ -21,8 +22,8 @@ func main() {
 		context.Background(),
 		os.Args[1:],
 		config.Load,
-		func(cfg config.Config, opts wiring.CLILLMOptions, provider domain.ReviewInputProvider, publishType domain.ReviewPublishType) (*cliinbound.Command, error) {
-			return wiring.BuildCLICommand(cfg, opts, provider, publishType)
+		func(cfg config.Config, opts wiring.CLILLMOptions, provider domain.ReviewInputProvider, publishType domain.ReviewPublishType, logLevelOverride string) (*cliinbound.Command, error) {
+			return wiring.BuildCLICommand(cfg, opts, provider, publishType, logLevelOverride)
 		},
 	); err != nil {
 		log.Fatal(err)
@@ -33,7 +34,7 @@ func runCLI(
 	ctx context.Context,
 	args []string,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ReviewInputProvider, domain.ReviewPublishType) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ReviewInputProvider, domain.ReviewPublishType, string) (*cliinbound.Command, error),
 ) error {
 	root := newRootCommand(ctx, loadConfig, buildCommand)
 	root.SetArgs(args)
@@ -43,7 +44,7 @@ func runCLI(
 func newRootCommand(
 	ctx context.Context,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ReviewInputProvider, domain.ReviewPublishType) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ReviewInputProvider, domain.ReviewPublishType, string) (*cliinbound.Command, error),
 ) *cobra.Command {
 	var openAIBaseURL string
 	var openAIModel string
@@ -53,6 +54,7 @@ func newRootCommand(
 	var includeUntracked bool
 	var githubPRNumber int
 	var commentOnPR bool
+	var logLevel string
 
 	var cmd *cobra.Command
 	cmd = &cobra.Command{
@@ -85,6 +87,13 @@ func newRootCommand(
 				}
 				opts.OpenAIAPIKey = value
 			}
+			if cmd.Flags().Changed("log-level") {
+				value, err := validateLogLevelFlagValue(logLevel)
+				if err != nil {
+					return err
+				}
+				logLevel = value
+			}
 
 			cfg, err := loadConfig()
 			if err != nil {
@@ -93,7 +102,7 @@ func newRootCommand(
 
 			provider, publishType := resolveCLISelection(githubPRNumber, commentOnPR)
 
-			cliCommand, err := buildCommand(cfg, opts, provider, publishType)
+			cliCommand, err := buildCommand(cfg, opts, provider, publishType, logLevel)
 			if err != nil {
 				return err
 			}
@@ -116,8 +125,20 @@ func newRootCommand(
 	flags.BoolVarP(&includeUntracked, "untracked", "u", false, "include untracked files")
 	flags.IntVar(&githubPRNumber, "gh-pr", 0, "GitHub pull request number to review")
 	flags.BoolVar(&commentOnPR, "comment-on-pr", false, "post review result as comments on the GitHub pull request")
+	flags.StringVar(&logLevel, "log-level", "", "log level override: trace|debug|info|warning|error|silence")
 
 	return cmd
+}
+
+func validateLogLevelFlagValue(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", fmt.Errorf("flag --log-level requires a non-empty value")
+	}
+	if _, ok := stdlogger.ParseLevel(trimmed); !ok {
+		return "", fmt.Errorf("invalid --log-level %q: allowed values are trace, debug, info, warning, error, silence", trimmed)
+	}
+	return strings.ToLower(trimmed), nil
 }
 
 func validateOpenAIStringFlagValue(flagName string, value string) (string, error) {

@@ -34,11 +34,11 @@ func TestRunCLISupportsLongAndShortReviewFlags(t *testing.T) {
 		context.Background(),
 		[]string{"-a", "-u", "-c", "a.go,b.go", "--openai-base-url", "openai"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, opts wiring.CLILLMOptions, inputType domain.ReviewInputProvider, publishType domain.ReviewPublishType) (*cliinbound.Command, error) {
+		func(_ config.Config, opts wiring.CLILLMOptions, inputType domain.ReviewInputProvider, publishType domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
 			capturedOpts = opts
 			capturedInputType = inputType
 			capturedPublishType = publishType
-			return cliinbound.NewLocalCommand(fakeUC), nil
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
 		},
 	)
 	require.NoError(t, err)
@@ -60,9 +60,9 @@ func TestRunCLIParsesOpenAIFlagsEqualsAndSpaceForms(t *testing.T) {
 		context.Background(),
 		[]string{"--openai-base-url=openai", "--openai-model", "gpt-4.1-mini", "--openai-api-key=secret"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, opts wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
+		func(_ config.Config, opts wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
 			capturedOpts = opts
-			return cliinbound.NewLocalCommand(fakeUC), nil
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
 		},
 	)
 	require.NoError(t, err)
@@ -78,8 +78,8 @@ func TestRunCLIRejectsMissingOpenAIStringFlagValue(t *testing.T) {
 		context.Background(),
 		[]string{"--openai-model", "--all"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
-			return cliinbound.NewLocalCommand(fakeUC), nil
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
 		},
 	)
 	require.Error(t, err)
@@ -94,9 +94,9 @@ func TestRunCLIDoesNotOverrideOpenAIEnvWhenFlagsNotProvided(t *testing.T) {
 		context.Background(),
 		[]string{"--all"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, opts wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
+		func(_ config.Config, opts wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
 			capturedOpts = opts
-			return cliinbound.NewLocalCommand(fakeUC), nil
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
 		},
 	)
 	require.NoError(t, err)
@@ -113,10 +113,10 @@ func TestRunCLIParsesGitHubPRFlags(t *testing.T) {
 		context.Background(),
 		[]string{"--gh-pr", "123"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, _ wiring.CLILLMOptions, inputType domain.ReviewInputProvider, publishType domain.ReviewPublishType) (*cliinbound.Command, error) {
+		func(_ config.Config, _ wiring.CLILLMOptions, inputType domain.ReviewInputProvider, publishType domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
 			capturedInputType = inputType
 			capturedPublishType = publishType
-			return cliinbound.NewGitHubPRCommand(fakeUC), nil
+			return cliinbound.NewGitHubPRCommand(fakeUC, nil), nil
 		},
 	)
 	require.NoError(t, err)
@@ -135,10 +135,10 @@ func TestRunCLIAcceptsCommentOnPRWithGitHubPR(t *testing.T) {
 		context.Background(),
 		[]string{"--gh-pr", "123", "--comment-on-pr"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, _ wiring.CLILLMOptions, inputType domain.ReviewInputProvider, publishType domain.ReviewPublishType) (*cliinbound.Command, error) {
+		func(_ config.Config, _ wiring.CLILLMOptions, inputType domain.ReviewInputProvider, publishType domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
 			capturedInputType = inputType
 			capturedPublishType = publishType
-			return cliinbound.NewGitHubPRCommand(fakeUC), nil
+			return cliinbound.NewGitHubPRCommand(fakeUC, nil), nil
 		},
 	)
 	require.NoError(t, err)
@@ -155,8 +155,8 @@ func TestRunCLIRejectsCommentOnPRWithoutGitHubPR(t *testing.T) {
 		context.Background(),
 		[]string{"--comment-on-pr"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
-			return cliinbound.NewLocalCommand(fakeUC), nil
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
 		},
 	)
 	require.Error(t, err)
@@ -189,8 +189,8 @@ func TestRunCLIRejectsLocalSelectionFlagsWhenGitHubPRIsEnabled(t *testing.T) {
 				context.Background(),
 				tt.args,
 				func() (config.Config, error) { return config.Config{}, nil },
-				func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
-					return cliinbound.NewLocalCommand(fakeUC), nil
+				func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
+					return cliinbound.NewLocalCommand(fakeUC, nil), nil
 				},
 			)
 			require.Error(t, err)
@@ -206,8 +206,8 @@ func TestRunCLIRejectsUnknownRemovedFlags(t *testing.T) {
 		context.Background(),
 		[]string{"--base", "main"},
 		func() (config.Config, error) { return config.Config{}, nil },
-		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
-			return cliinbound.NewLocalCommand(fakeUC), nil
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
 		},
 	)
 	require.Error(t, err)
@@ -225,12 +225,61 @@ func TestRunCLIHelpDoesNotLoadOrExecute(t *testing.T) {
 			loadCalled = true
 			return config.Config{}, nil
 		},
-		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType) (*cliinbound.Command, error) {
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
 			buildCalled = true
-			return cliinbound.NewLocalCommand(nil), nil
+			return cliinbound.NewLocalCommand(nil, nil), nil
 		},
 	)
 	require.NoError(t, err)
 	require.False(t, loadCalled)
 	require.False(t, buildCalled)
+}
+
+func TestRunCLIParsesLogLevelFlag(t *testing.T) {
+	fakeUC := &fakeMainReviewUseCase{}
+	var capturedLogLevel string
+
+	err := runCLI(
+		context.Background(),
+		[]string{"--log-level", "warning"},
+		func() (config.Config, error) { return config.Config{}, nil },
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, logLevelOverride string) (*cliinbound.Command, error) {
+			capturedLogLevel = logLevelOverride
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, "warning", capturedLogLevel)
+}
+
+func TestRunCLIRejectsInvalidLogLevelFlag(t *testing.T) {
+	fakeUC := &fakeMainReviewUseCase{}
+
+	err := runCLI(
+		context.Background(),
+		[]string{"--log-level", "verbose"},
+		func() (config.Config, error) { return config.Config{}, nil },
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, _ string) (*cliinbound.Command, error) {
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
+		},
+	)
+	require.Error(t, err)
+	require.False(t, fakeUC.executed)
+}
+
+func TestRunCLIOmitsLogLevelOverrideWhenFlagMissing(t *testing.T) {
+	fakeUC := &fakeMainReviewUseCase{}
+	var capturedLogLevel string
+
+	err := runCLI(
+		context.Background(),
+		[]string{"--all"},
+		func() (config.Config, error) { return config.Config{LogLevel: "error"}, nil },
+		func(_ config.Config, _ wiring.CLILLMOptions, _ domain.ReviewInputProvider, _ domain.ReviewPublishType, logLevelOverride string) (*cliinbound.Command, error) {
+			capturedLogLevel = logLevelOverride
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, "", capturedLogLevel)
 }

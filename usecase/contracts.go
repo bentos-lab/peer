@@ -16,7 +16,6 @@ type RulePack struct {
 
 // ReviewRequest is the usecase input and is platform-neutral.
 type ReviewRequest struct {
-	ReviewID            string
 	Repository          string
 	ChangeRequestNumber int
 	Title               string
@@ -55,7 +54,6 @@ type LLMReviewer interface {
 
 // ReviewPublishResult is output passed to a concrete publisher.
 type ReviewPublishResult struct {
-	ReviewID string
 	Target   domain.ReviewTarget
 	Messages []domain.ReviewMessage
 	Findings []domain.Finding

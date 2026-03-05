@@ -27,7 +27,7 @@ func (m *mockGenerator) GenerateJSON(_ context.Context, params contracts.Generat
 }
 
 func TestNewReviewer_RequiresGenerator(t *testing.T) {
-	_, err := NewReviewer(nil)
+	_, err := NewReviewer(nil, nil)
 	require.Error(t, err)
 }
 
@@ -47,7 +47,7 @@ func TestReviewer_ReviewDiff_MapsModelOutput(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	result, err := reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -64,7 +64,7 @@ func TestReviewer_ReviewDiff_SummaryOnly(t *testing.T) {
 		result: map[string]any{
 			"summary": "done",
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	result, err := reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -79,7 +79,7 @@ func TestReviewer_ReviewDiff_InvalidFindingsShape(t *testing.T) {
 			"summary":  "done",
 			"findings": "invalid",
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -102,7 +102,7 @@ func TestReviewer_ReviewDiff_RejectsMissingStartLine(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -125,7 +125,7 @@ func TestReviewer_ReviewDiff_RejectsMissingEndLine(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -149,7 +149,7 @@ func TestReviewer_ReviewDiff_RejectsInvalidRange(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -163,7 +163,7 @@ func TestReviewer_ReviewDiff_RendersSystemPromptFromSingleRulePackString(t *test
 			"summary": "done",
 		},
 	}
-	reviewer, err := NewReviewer(generator)
+	reviewer, err := NewReviewer(generator, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{
@@ -186,7 +186,7 @@ func TestReviewer_ReviewDiff_SetsResponseSchema(t *testing.T) {
 			"findings": []any{},
 		},
 	}
-	reviewer, err := NewReviewer(generator)
+	reviewer, err := NewReviewer(generator, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -209,7 +209,7 @@ func TestReviewer_ReviewDiff_RendersUserPromptInNaturalLanguage(t *testing.T) {
 			"summary": "done",
 		},
 	}
-	reviewer, err := NewReviewer(generator)
+	reviewer, err := NewReviewer(generator, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{
@@ -245,7 +245,7 @@ func TestReviewer_ReviewDiff_ReturnsErrorWhenSystemPromptTemplateInvalid(t *test
 		result: map[string]any{
 			"summary": "done",
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})
@@ -263,7 +263,7 @@ func TestReviewer_ReviewDiff_ReturnsErrorWhenUserPromptTemplateInvalid(t *testin
 		result: map[string]any{
 			"summary": "done",
 		},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	_, err = reviewer.ReviewDiff(context.Background(), usecase.LLMReviewPayload{})

@@ -23,7 +23,11 @@ const serverLLMTimeout = 600 * time.Second
 
 // BuildGitHubHandler wires dependencies for GitHub webhook flow.
 func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
-	llmReviewer, err := buildServerLLMReviewer(cfg)
+	logger, err := buildLogger(cfg, "")
+	if err != nil {
+		return nil, err
+	}
+	llmReviewer, err := buildServerLLMReviewer(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -32,17 +36,22 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 		githubinput.NewProvider(ghClient),
 		rulepack.NewCoreRulePackProvider(),
 		llmReviewer,
-		githubpublisher.NewPublisher(ghClient),
+		githubpublisher.NewPublisher(ghClient, logger),
+		logger,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return githubinbound.NewHandler(uc), nil
+	return githubinbound.NewHandler(uc, logger), nil
 }
 
 // BuildGitLabHandler wires dependencies for GitLab webhook flow.
 func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
-	llmReviewer, err := buildServerLLMReviewer(cfg)
+	logger, err := buildLogger(cfg, "")
+	if err != nil {
+		return nil, err
+	}
+	llmReviewer, err := buildServerLLMReviewer(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -51,18 +60,19 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
 		gitlabinput.NewProvider(glClient),
 		rulepack.NewCoreRulePackProvider(),
 		llmReviewer,
-		gitlabpublisher.NewPublisher(glClient),
+		gitlabpublisher.NewPublisher(glClient, logger),
+		logger,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return gitlabinbound.NewHandler(uc), nil
+	return gitlabinbound.NewHandler(uc, logger), nil
 }
 
-func buildServerLLMReviewer(cfg config.Config) (*reviewerllm.Reviewer, error) {
+func buildServerLLMReviewer(cfg config.Config, logger usecase.Logger) (*reviewerllm.Reviewer, error) {
 	httpClient := &http.Client{Timeout: serverLLMTimeout}
 	llmClient := openai.NewClient(httpClient, buildOpenAIClientConfig(cfg))
-	return reviewerllm.NewReviewer(llmClient)
+	return reviewerllm.NewReviewer(llmClient, logger)
 }
 
 func buildOpenAIClientConfig(cfg config.Config) openai.ClientConfig {

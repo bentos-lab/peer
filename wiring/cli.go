@@ -30,7 +30,7 @@ type CLILLMOptions struct {
 }
 
 // BuildCLICommand wires dependencies for a single CLI review mode.
-func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.ReviewInputProvider, publishType domain.ReviewPublishType) (*cliinbound.Command, error) {
+func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.ReviewInputProvider, publishType domain.ReviewPublishType, logLevelOverride string) (*cliinbound.Command, error) {
 	if err := validateCLISelection(provider, publishType); err != nil {
 		return nil, err
 	}
@@ -39,10 +39,14 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Revi
 	if err != nil {
 		return nil, err
 	}
+	logger, err := buildLogger(cfg, logLevelOverride)
+	if err != nil {
+		return nil, err
+	}
 
 	httpClient := &http.Client{Timeout: 600 * time.Second}
 	llmClient := openai.NewClient(httpClient, llmConfig)
-	llmReviewer, err := reviewerllm.NewReviewer(llmClient)
+	llmReviewer, err := reviewerllm.NewReviewer(llmClient, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +56,7 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Revi
 	if err != nil {
 		return nil, err
 	}
-	publisher, err := buildPublisher(publishType, provider, providerClient)
+	publisher, err := buildPublisher(publishType, provider, providerClient, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -62,12 +66,13 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Revi
 		ruleProvider,
 		llmReviewer,
 		publisher,
+		logger,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return buildCLIInboundCommand(providerName, useCase)
+	return buildCLIInboundCommand(providerName, useCase, logger)
 }
 
 func buildInputProvider(provider domain.ReviewInputProvider) (usecase.ReviewInputProvider, domain.ReviewInputProvider, any, error) {
@@ -82,7 +87,7 @@ func buildInputProvider(provider domain.ReviewInputProvider) (usecase.ReviewInpu
 	}
 }
 
-func buildPublisher(publishType domain.ReviewPublishType, provider domain.ReviewInputProvider, providerClient any) (usecase.ReviewResultPublisher, error) {
+func buildPublisher(publishType domain.ReviewPublishType, provider domain.ReviewInputProvider, providerClient any, logger usecase.Logger) (usecase.ReviewResultPublisher, error) {
 	switch publishType {
 	case domain.ReviewPublishTypePrint:
 		return clipublisher.NewPublisher(os.Stdout), nil
@@ -93,7 +98,7 @@ func buildPublisher(publishType domain.ReviewPublishType, provider domain.Review
 			if !ok || githubClient == nil {
 				return nil, fmt.Errorf("provider client is not configured for provider: %s", provider)
 			}
-			return githubpublisher.NewPublisher(githubClient), nil
+			return githubpublisher.NewPublisher(githubClient, logger), nil
 		default:
 			return nil, fmt.Errorf("publish type %q is not supported with provider %q", publishType, provider)
 		}
@@ -102,12 +107,12 @@ func buildPublisher(publishType domain.ReviewPublishType, provider domain.Review
 	}
 }
 
-func buildCLIInboundCommand(providerName domain.ReviewInputProvider, reviewUseCase usecase.ReviewUseCase) (*cliinbound.Command, error) {
+func buildCLIInboundCommand(providerName domain.ReviewInputProvider, reviewUseCase usecase.ReviewUseCase, logger usecase.Logger) (*cliinbound.Command, error) {
 	switch providerName {
 	case domain.ReviewInputProviderLocal:
-		return cliinbound.NewLocalCommand(reviewUseCase), nil
+		return cliinbound.NewLocalCommand(reviewUseCase, logger), nil
 	case domain.ReviewInputProviderGitHub:
-		return cliinbound.NewGitHubPRCommand(reviewUseCase), nil
+		return cliinbound.NewGitHubPRCommand(reviewUseCase, logger), nil
 	default:
 		return nil, fmt.Errorf("unsupported review input provider: %s", providerName)
 	}

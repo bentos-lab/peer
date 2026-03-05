@@ -50,6 +50,7 @@ go test ./...
 
 ```bash
 go run ./cmd/server
+go run ./cmd/server --log-level warning
 ```
 
 Webhook routes:
@@ -74,6 +75,7 @@ go run ./cmd/cli --openai-base-url gemini
 go run ./cmd/cli --openai-base-url openai --openai-model gpt-4.1-mini
 go run ./cmd/cli --openai-base-url anthropic --openai-model claude-3-5-haiku-latest
 go run ./cmd/cli --openai-base-url https://example.com/v1 --openai-model model-id --openai-api-key your-key
+go run ./cmd/cli --log-level error
 ```
 
 Notes:
@@ -87,10 +89,14 @@ Notes:
 - For shortcut URLs, if `--openai-model` is not provided, a shortcut default model is used.
 - For full URLs, a model must be resolvable (`--openai-model` or `OPENAI_MODEL`).
 - API key can be provided via `--openai-api-key` or `OPENAI_API_KEY`.
+- Log level can be provided via `--log-level` or `LOG_LEVEL`.
+- Supported log levels: `trace`, `debug`, `info`, `warning`, `error`, `silence` (`warn` is accepted as alias).
+- Logs are emitted via direct format strings (for example: `logger.Infof("review execution started id=%s", reviewID)`), not key-value field logging.
 
 ## Environment Variables
 
 - `PORT` (default: `8080`)
+- `LOG_LEVEL` (default: `info`)
 - `OPENAI_BASE_URL` (default: `gemini`)
 - `OPENAI_API_KEY` (required for real LLM calls)
 - `OPENAI_MODEL` (default: `gemini-2.5-flash-lite`)

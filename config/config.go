@@ -11,6 +11,7 @@ import (
 // Config contains app runtime configuration.
 type Config struct {
 	Port          string
+	LogLevel      string
 	OpenAIBaseURL string
 	OpenAIAPIKey  string
 	OpenAIModel   string
@@ -24,6 +25,7 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		Port:          envOrDefault("PORT", "8080"),
+		LogLevel:      envOrDefault("LOG_LEVEL", "info"),
 		OpenAIBaseURL: envOrDefault("OPENAI_BASE_URL", "gemini"),
 		OpenAIAPIKey:  os.Getenv("OPENAI_API_KEY"),
 		OpenAIModel:   envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite"),

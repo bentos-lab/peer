@@ -20,7 +20,7 @@ func (f *fakeClient) CreateMergeRequestNote(_ context.Context, _ string, _ int, 
 
 func TestPublisher_Publish(t *testing.T) {
 	client := &fakeClient{}
-	pub := NewPublisher(client)
+	pub := NewPublisher(client, nil)
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
 			Repository:          "group/repo",

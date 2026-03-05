@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"bentos-backend/domain"
@@ -51,6 +53,36 @@ func (m *mockPublisher) Publish(_ context.Context, result ReviewPublishResult) e
 	return m.err
 }
 
+type spyLogEvent struct {
+	level string
+	msg   string
+}
+
+type spyLogger struct {
+	events []spyLogEvent
+}
+
+func (s *spyLogger) Infof(format string, args ...any) {
+	s.events = append(s.events, spyLogEvent{
+		level: "info",
+		msg:   fmt.Sprintf(format, args...),
+	})
+}
+
+func (s *spyLogger) Debugf(format string, args ...any) {
+	s.events = append(s.events, spyLogEvent{
+		level: "debug",
+		msg:   fmt.Sprintf(format, args...),
+	})
+}
+
+func (s *spyLogger) Errorf(format string, args ...any) {
+	s.events = append(s.events, spyLogEvent{
+		level: "error",
+		msg:   fmt.Sprintf(format, args...),
+	})
+}
+
 func TestReviewerUseCase_ExecutePublishesMessages(t *testing.T) {
 	llm := &mockLLM{
 		result: LLMReviewResult{
@@ -68,10 +100,10 @@ func TestReviewerUseCase_ExecutePublishesMessages(t *testing.T) {
 		},
 	}
 	pub := &mockPublisher{}
+	logger := &spyLogger{}
 	uc, err := NewReviewerUseCase(
 		mockInputProvider{
 			input: domain.ReviewInput{
-				ReviewID: "r1",
 				Target: domain.ReviewTarget{
 					Repository:          "org/repo",
 					ChangeRequestNumber: 10,
@@ -91,10 +123,11 @@ func TestReviewerUseCase_ExecutePublishesMessages(t *testing.T) {
 		},
 		llm,
 		pub,
+		logger,
 	)
 	require.NoError(t, err)
 
-	result, err := uc.Execute(context.Background(), ReviewRequest{ReviewID: "r1"})
+	result, err := uc.Execute(context.Background(), ReviewRequest{})
 	require.NoError(t, err)
 	require.Len(t, result.Messages, 2)
 	require.Equal(t, domain.ReviewMessageTypeSummary, result.Messages[1].Type)
@@ -102,4 +135,55 @@ func TestReviewerUseCase_ExecutePublishesMessages(t *testing.T) {
 	require.Equal(t, "org/repo", pub.last.Target.Repository)
 	require.Equal(t, llm.result.Findings, pub.last.Findings)
 	require.Equal(t, llm.result.Summary, pub.last.Summary)
+	require.GreaterOrEqual(t, len(logger.events), 10)
+	require.True(t, containsUsecaseEvent(logger.events, "info", "Review execution started."))
+	require.True(t, containsUsecaseEvent(logger.events, "info", "Review execution completed."))
+}
+
+func TestReviewerUseCase_ExecuteLogsStageFailure(t *testing.T) {
+	expectedErr := errors.New("publish failed")
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary:  "summary",
+			Findings: []domain.Finding{},
+		},
+	}
+	pub := &mockPublisher{err: expectedErr}
+	logger := &spyLogger{}
+
+	uc, err := NewReviewerUseCase(
+		mockInputProvider{
+			input: domain.ReviewInput{
+				Target: domain.ReviewTarget{
+					Repository:          "org/repo",
+					ChangeRequestNumber: 10,
+				},
+			},
+		},
+		mockRuleProvider{
+			pack: RulePack{
+				ID:           "core",
+				Instructions: []string{"review"},
+			},
+		},
+		llm,
+		pub,
+		logger,
+	)
+	require.NoError(t, err)
+
+	_, err = uc.Execute(context.Background(), ReviewRequest{Repository: "org/repo", ChangeRequestNumber: 10})
+	require.Error(t, err)
+	require.ErrorIs(t, err, expectedErr)
+	require.True(t, containsUsecaseEvent(logger.events, "error", "Review stage failed."))
+	require.True(t, containsUsecaseEvent(logger.events, "debug", "Stage \"publish_review_result\" failed"))
+}
+
+func containsUsecaseEvent(events []spyLogEvent, level string, target string) bool {
+	for _, event := range events {
+		if event.level == level && strings.Contains(event.msg, target) {
+			return true
+		}
+	}
+	return false
 }

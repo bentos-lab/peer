@@ -16,7 +16,6 @@ type ReviewTarget struct {
 
 // ReviewInput is the complete input for the review engine.
 type ReviewInput struct {
-	ReviewID      string
 	Target        ReviewTarget
 	Title         string
 	Description   string
