@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"bentos-backend/adapter/inbound/http/background"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/usecase"
 )
@@ -111,37 +112,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	installationID := event.Installation.ID
 
-	go func(req usecase.ReviewRequest, action string, installationID int64) {
-		startedAt := time.Now()
-		h.logger.Infof("GitHub webhook background review started.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", req.Repository, req.ChangeRequestNumber)
-		h.logger.Debugf("Webhook action is %q.", action)
-
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				h.logger.Errorf("GitHub webhook background review panicked.")
-				h.logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", req.Repository, req.ChangeRequestNumber, action)
-				h.logger.Debugf("The background review ran for %d ms before panicking.", time.Since(startedAt).Milliseconds())
-				h.logger.Debugf("Panic details: %v.", recovered)
-			}
-		}()
-
-		ctx, cancel := context.WithTimeout(context.Background(), backgroundReviewTimeout)
-		defer cancel()
-		ctx = githubvcs.WithInstallationID(ctx, strconv.FormatInt(installationID, 10))
-
-		if _, err := h.reviewer.Execute(ctx, req); err != nil {
-			h.logger.Errorf("GitHub webhook background review failed.")
-			h.logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", req.Repository, req.ChangeRequestNumber, action)
-			h.logger.Debugf("The background review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-			h.logger.Debugf("Failure details: %v.", err)
-			return
-		}
-
-		h.logger.Infof("GitHub webhook background review completed.")
-		h.logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", req.Repository, req.ChangeRequestNumber, action)
-		h.logger.Debugf("The background review completed in %d ms.", time.Since(startedAt).Milliseconds())
-	}(request, event.Action, installationID)
+	background.RunReviewAsync(
+		h.logger,
+		"GitHub",
+		event.Action,
+		request,
+		backgroundReviewTimeout,
+		func(ctx context.Context) context.Context {
+			return githubvcs.WithInstallationID(ctx, strconv.FormatInt(installationID, 10))
+		},
+		func(ctx context.Context, req usecase.ReviewRequest) error {
+			_, err := h.reviewer.Execute(ctx, req)
+			return err
+		},
+	)
 
 	h.logger.Infof("GitHub webhook review request was accepted.")
 	h.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)

@@ -15,7 +15,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,18 +96,7 @@ func (c *AppClient) GetPullRequestChangedFiles(ctx context.Context, repository s
 		if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
 			return nil, err
 		}
-
-		for _, file := range payload {
-			patch := strings.TrimSpace(file.Patch)
-			if patch == "" {
-				continue
-			}
-			changedFiles = append(changedFiles, domain.ChangedFile{
-				Path:        file.Filename,
-				Content:     patch,
-				DiffSnippet: patch,
-			})
-		}
+		changedFiles = append(changedFiles, mapPullRequestFilesToChangedFiles(payload)...)
 
 		if len(payload) < 100 {
 			break
@@ -394,17 +382,4 @@ func resolveGitHubAppPrivateKeyRaw(raw string) (string, error) {
 	}
 
 	return raw, nil
-}
-
-func isInvalidAnchorAPIError(err error) bool {
-	errorText := strings.ToLower(err.Error())
-	if !strings.Contains(errorText, strconv.Itoa(http.StatusUnprocessableEntity)) {
-		return false
-	}
-	return strings.Contains(errorText, "line must be part of the diff") ||
-		strings.Contains(errorText, "start_line must be part of the diff") ||
-		strings.Contains(errorText, "is outside the diff") ||
-		strings.Contains(errorText, "is not part of the diff") ||
-		strings.Contains(errorText, "pull_request_review_thread.path") ||
-		strings.Contains(errorText, "path is missing")
 }
