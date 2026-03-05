@@ -6,12 +6,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestResolveBaseURLAndModelShortcutUsesDefaultWhenFlagModelMissing(t *testing.T) {
-	baseURL, model, isShortcut, err := ResolveBaseURLAndModel("gemini", "ignored-config-model", "")
+func TestResolveBaseURLAndModelShortcutUsesConfigModelWhenFlagModelMissing(t *testing.T) {
+	baseURL, model, isShortcut, err := ResolveBaseURLAndModel("gemini", "gemini-3-pro-preview", "")
 	require.NoError(t, err)
 	require.True(t, isShortcut)
 	require.Equal(t, "https://generativelanguage.googleapis.com/v1beta/openai", baseURL)
-	require.Equal(t, "gemini-2.5-flash-lite", model)
+	require.Equal(t, "gemini-3-pro-preview", model)
 }
 
 func TestResolveBaseURLAndModelShortcutUsesFlagModelWhenProvided(t *testing.T) {
@@ -42,4 +42,26 @@ func TestResolveBaseURLAndModelAnthropicShortcut(t *testing.T) {
 	require.True(t, isShortcut)
 	require.Equal(t, "https://api.anthropic.com/v1", baseURL)
 	require.Equal(t, "claude-3-5-haiku-latest", model)
+}
+
+func TestResolveBaseURLAndModelShortcutUsesDefaultWhenModelMissing(t *testing.T) {
+	baseURL, model, isShortcut, err := ResolveBaseURLAndModel("gemini", "", "")
+	require.NoError(t, err)
+	require.True(t, isShortcut)
+	require.Equal(t, "https://generativelanguage.googleapis.com/v1beta/openai", baseURL)
+	require.Equal(t, "gemini-2.5-flash-lite", model)
+}
+
+func TestResolveBaseURLAndModelRejectsInvalidFullURL(t *testing.T) {
+	_, _, isShortcut, err := ResolveBaseURLAndModel("not-a-url", "custom-model", "")
+	require.Error(t, err)
+	require.False(t, isShortcut)
+	require.Contains(t, err.Error(), "valid http(s) URL")
+}
+
+func TestResolveBaseURLAndModelRejectsUnsupportedFullURLScheme(t *testing.T) {
+	_, _, isShortcut, err := ResolveBaseURLAndModel("ftp://example.com/v1", "custom-model", "")
+	require.Error(t, err)
+	require.False(t, isShortcut)
+	require.Contains(t, err.Error(), "http or https scheme")
 }

@@ -2,6 +2,7 @@ package llm
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -46,7 +47,14 @@ func ResolveBaseURLAndModel(baseURLInput, configModel, flagModel string) (string
 		if flagModel != "" {
 			return cfg.baseURL, flagModel, true, nil
 		}
+		if configModel != "" {
+			return cfg.baseURL, configModel, true, nil
+		}
 		return cfg.baseURL, cfg.model, true, nil
+	}
+
+	if err := validateFullBaseURL(baseURLInput); err != nil {
+		return "", "", false, err
 	}
 
 	if flagModel != "" {
@@ -57,4 +65,18 @@ func ResolveBaseURLAndModel(baseURLInput, configModel, flagModel string) (string
 	}
 
 	return "", "", false, fmt.Errorf("openai model is required when using full base URL")
+}
+
+func validateFullBaseURL(baseURL string) error {
+	parsed, err := url.ParseRequestURI(baseURL)
+	if err != nil {
+		return fmt.Errorf("openai base URL must be a valid http(s) URL or a known shortcut (gemini|openai|anthropic)")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("openai base URL must use http or https scheme")
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("openai base URL must include a host")
+	}
+	return nil
 }

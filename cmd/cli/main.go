@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,6 +17,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var errCLIConfigLoad = errors.New("cli config load failed")
+
+type cliConfigLoadError struct {
+	cause error
+}
+
+func (e cliConfigLoadError) Error() string {
+	return fmt.Sprintf("load config: %v", e.cause)
+}
+
+func (e cliConfigLoadError) Unwrap() error {
+	return e.cause
+}
+
+func (e cliConfigLoadError) Is(target error) bool {
+	return target == errCLIConfigLoad
+}
+
 // main bootstraps the CLI review command.
 func main() {
 	if err := runCLI(
@@ -26,7 +45,10 @@ func main() {
 			return wiring.BuildCLICommand(cfg, opts, provider, publishType, logLevelOverride)
 		},
 	); err != nil {
-		log.Fatal(err)
+		if errors.Is(err, errCLIConfigLoad) {
+			log.Printf("cli startup failed: %v", err)
+		}
+		os.Exit(1)
 	}
 }
 
@@ -97,8 +119,21 @@ func newRootCommand(
 
 			cfg, err := loadConfig()
 			if err != nil {
+				return cliConfigLoadError{cause: err}
+			}
+			startupLogger, err := wiring.BuildLogger(cfg, logLevel)
+			if err != nil {
 				return err
 			}
+			effectiveOpenAIConfig, err := wiring.ResolveEffectiveOpenAIConfig(cfg, opts)
+			if err != nil {
+				return err
+			}
+			startupLogger.Infof(
+				`cli startup: llm_config base_url=%q model=%q`,
+				effectiveOpenAIConfig.BaseURL,
+				effectiveOpenAIConfig.Model,
+			)
 
 			provider, publishType := resolveCLISelection(githubPRNumber, commentOnPR)
 

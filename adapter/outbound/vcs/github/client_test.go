@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestClient(runner commandrunner.Runner) *Client {
-	return &Client{runner: runner}
+func newTestCLIClient(runner commandrunner.Runner) *CLIClient {
+	return &CLIClient{runner: runner}
 }
 
 func TestClient_GetPullRequestChangedFiles(t *testing.T) {
@@ -26,7 +26,7 @@ func TestClient_GetPullRequestChangedFiles(t *testing.T) {
 			{"filename":"b.png"}
 		]`)},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	files, err := client.GetPullRequestChangedFiles(context.Background(), "org/repo", 7)
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestClient_GetPullRequestChangedFilesResolvesRepositoryWhenMissing(t *testi
 		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"api", "repos/org/repo/pulls/12/files", "--paginate"}},
 		Result:   commandrunner.Result{Stdout: []byte(`[]`)},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	_, err := client.GetPullRequestChangedFiles(context.Background(), "", 12)
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestClient_GetPullRequestChangedFilesFailsWhenGitHubCLIUnauthorized(t *test
 		Result:   commandrunner.Result{Stderr: []byte("not logged in")},
 		Err:      errors.New("exit status 1"),
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	_, err := client.GetPullRequestChangedFiles(context.Background(), "org/repo", 7)
 	require.Error(t, err)
@@ -83,7 +83,7 @@ func TestClient_CreateComment(t *testing.T) {
 		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"pr", "comment", "21", "--repo", "org/repo", "--body", "hello"}},
 		Result:   commandrunner.Result{Stdout: []byte("ok")},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	err := client.CreateComment(context.Background(), "org/repo", 21, "hello")
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestClient_CreateCommentResolvesRepositoryWhenMissing(t *testing.T) {
 		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"pr", "comment", "3", "--repo", "org/repo", "--body", "body"}},
 		Result:   commandrunner.Result{Stdout: []byte("ok")},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	err := client.CreateComment(context.Background(), "", 3, "body")
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestClient_GetPullRequestChangedFilesParsesPaginatedMultiDocumentOutput(t *
 [{"filename":"b.go","patch":"@@ -2 +2 @@\n-old2\n+new2"}]
 `)},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	files, err := client.GetPullRequestChangedFiles(context.Background(), "org/repo", 7)
 	require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestClient_CreateReviewCommentSingleLine(t *testing.T) {
 		}},
 		Result: commandrunner.Result{Stdout: []byte("ok")},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	err := client.CreateReviewComment(context.Background(), "org/repo", 21, CreateReviewCommentInput{
 		Body:      "hello",
@@ -196,7 +196,7 @@ func TestClient_CreateReviewCommentRangeAndResolveRepo(t *testing.T) {
 		}},
 		Result: commandrunner.Result{Stdout: []byte("ok")},
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	err := client.CreateReviewComment(context.Background(), "", 3, CreateReviewCommentInput{
 		Body:      "body",
@@ -230,7 +230,7 @@ func TestClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 		Result: commandrunner.Result{Stderr: []byte("HTTP 422: line must be part of the diff")},
 		Err:    errors.New("exit status 1"),
 	})
-	client := newTestClient(runner)
+	client := newTestCLIClient(runner)
 
 	err := client.CreateReviewComment(context.Background(), "org/repo", 7, CreateReviewCommentInput{
 		Body:      "bad",

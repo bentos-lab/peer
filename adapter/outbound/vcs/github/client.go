@@ -14,8 +14,8 @@ import (
 	"bentos-backend/domain"
 )
 
-// Client executes GitHub operations via the gh CLI.
-type Client struct {
+// CLIClient executes GitHub operations via the gh CLI.
+type CLIClient struct {
 	runner commandrunner.Runner
 }
 
@@ -52,15 +52,15 @@ func IsInvalidAnchorError(err error) bool {
 	return errors.As(err, &invalidAnchorErr)
 }
 
-// NewClient creates a GitHub API client.
-func NewClient() *Client {
-	return &Client{
+// NewCLIClient creates a GitHub CLI API client.
+func NewCLIClient() *CLIClient {
+	return &CLIClient{
 		runner: commandrunner.NewOSCommandRunner(),
 	}
 }
 
 // GetPullRequestChangedFiles loads changed files for a pull request.
-func (c *Client) GetPullRequestChangedFiles(ctx context.Context, repository string, pullRequestNumber int) ([]domain.ChangedFile, error) {
+func (c *CLIClient) GetPullRequestChangedFiles(ctx context.Context, repository string, pullRequestNumber int) ([]domain.ChangedFile, error) {
 	if pullRequestNumber <= 0 {
 		return nil, fmt.Errorf("pull request number must be positive")
 	}
@@ -101,7 +101,7 @@ func (c *Client) GetPullRequestChangedFiles(ctx context.Context, repository stri
 }
 
 // CreateComment posts a comment to GitHub.
-func (c *Client) CreateComment(ctx context.Context, repository string, pullRequestNumber int, body string) error {
+func (c *CLIClient) CreateComment(ctx context.Context, repository string, pullRequestNumber int, body string) error {
 	if pullRequestNumber <= 0 {
 		return fmt.Errorf("pull request number must be positive")
 	}
@@ -132,7 +132,7 @@ func (c *Client) CreateComment(ctx context.Context, repository string, pullReque
 }
 
 // CreateReviewComment posts a file-anchored review comment to GitHub.
-func (c *Client) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input CreateReviewCommentInput) error {
+func (c *CLIClient) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input CreateReviewCommentInput) error {
 	if pullRequestNumber <= 0 {
 		return fmt.Errorf("pull request number must be positive")
 	}
@@ -191,7 +191,7 @@ func (c *Client) CreateReviewComment(ctx context.Context, repository string, pul
 	return nil
 }
 
-func (c *Client) getPullRequestHeadSHA(ctx context.Context, repository string, pullRequestNumber int) (string, error) {
+func (c *CLIClient) getPullRequestHeadSHA(ctx context.Context, repository string, pullRequestNumber int) (string, error) {
 	result, err := c.runner.Run(
 		ctx,
 		"gh",
@@ -217,7 +217,7 @@ func (c *Client) getPullRequestHeadSHA(ctx context.Context, repository string, p
 	return payload.Head.SHA, nil
 }
 
-func (c *Client) ensureAuth(ctx context.Context) error {
+func (c *CLIClient) ensureAuth(ctx context.Context) error {
 	result, err := c.runner.Run(ctx, "gh", "auth", "status")
 	if err != nil {
 		return fmt.Errorf("github CLI is not authenticated; run `gh auth login` first: %w", formatCommandError(err, result))
@@ -225,7 +225,7 @@ func (c *Client) ensureAuth(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) resolveRepository(ctx context.Context, repository string) (string, error) {
+func (c *CLIClient) resolveRepository(ctx context.Context, repository string) (string, error) {
 	repository = strings.TrimSpace(repository)
 	if repository != "" {
 		return repository, nil

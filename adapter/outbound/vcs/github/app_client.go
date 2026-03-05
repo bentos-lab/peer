@@ -1,0 +1,410 @@
+package github
+
+import (
+	"bytes"
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"bentos-backend/domain"
+)
+
+const githubAPIVersion = "2022-11-28"
+
+// AppClientConfig contains GitHub App client settings.
+type AppClientConfig struct {
+	APIBaseURL string
+	AppID      string
+	PrivateKey string
+}
+
+type installationTokenCacheItem struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
+// AppClient executes GitHub operations using GitHub App installation tokens.
+type AppClient struct {
+	httpClient    *http.Client
+	apiBaseURL    string
+	appID         string
+	privateKey    *rsa.PrivateKey
+	now           func() time.Time
+	cacheMutex    sync.Mutex
+	tokenByInstID map[string]installationTokenCacheItem
+}
+
+// NewAppClient creates a GitHub App API client.
+func NewAppClient(httpClient *http.Client, cfg AppClientConfig) (*AppClient, error) {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	apiBaseURL := strings.TrimSpace(cfg.APIBaseURL)
+	if apiBaseURL == "" {
+		return nil, fmt.Errorf("github API base URL is required")
+	}
+	appID := strings.TrimSpace(cfg.AppID)
+	if appID == "" {
+		return nil, fmt.Errorf("github app ID is required")
+	}
+	privateKey, err := parseGitHubAppPrivateKey(cfg.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	return &AppClient{
+		httpClient:    httpClient,
+		apiBaseURL:    strings.TrimRight(apiBaseURL, "/"),
+		appID:         appID,
+		privateKey:    privateKey,
+		now:           time.Now,
+		tokenByInstID: make(map[string]installationTokenCacheItem),
+	}, nil
+}
+
+// GetPullRequestChangedFiles loads changed files for a pull request.
+func (c *AppClient) GetPullRequestChangedFiles(ctx context.Context, repository string, pullRequestNumber int) ([]domain.ChangedFile, error) {
+	if pullRequestNumber <= 0 {
+		return nil, fmt.Errorf("pull request number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return nil, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	changedFiles := make([]domain.ChangedFile, 0)
+	page := 1
+	for {
+		endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/files?per_page=100&page=%d", c.apiBaseURL, repository, pullRequestNumber, page)
+		var payload []pullRequestFile
+		if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+			return nil, err
+		}
+
+		for _, file := range payload {
+			patch := strings.TrimSpace(file.Patch)
+			if patch == "" {
+				continue
+			}
+			changedFiles = append(changedFiles, domain.ChangedFile{
+				Path:        file.Filename,
+				Content:     patch,
+				DiffSnippet: patch,
+			})
+		}
+
+		if len(payload) < 100 {
+			break
+		}
+		page++
+	}
+
+	return changedFiles, nil
+}
+
+// CreateComment posts a comment to GitHub.
+func (c *AppClient) CreateComment(ctx context.Context, repository string, pullRequestNumber int, body string) error {
+	if pullRequestNumber <= 0 {
+		return fmt.Errorf("pull request number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	payload := map[string]string{"body": body}
+	endpoint := fmt.Sprintf("%s/repos/%s/issues/%d/comments", c.apiBaseURL, repository, pullRequestNumber)
+	if err := c.requestJSON(ctx, token, http.MethodPost, endpoint, payload, nil); err != nil {
+		return fmt.Errorf("failed to create pull request comment: %w", err)
+	}
+	return nil
+}
+
+// CreateReviewComment posts a file-anchored review comment to GitHub.
+func (c *AppClient) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input CreateReviewCommentInput) error {
+	if pullRequestNumber <= 0 {
+		return fmt.Errorf("pull request number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	headSHA, err := c.getPullRequestHeadSHA(ctx, token, repository, pullRequestNumber)
+	if err != nil {
+		return err
+	}
+
+	payload := map[string]any{
+		"body":      input.Body,
+		"path":      input.Path,
+		"side":      "RIGHT",
+		"commit_id": headSHA,
+		"line":      input.EndLine,
+	}
+	if input.StartLine != input.EndLine {
+		payload["start_line"] = input.StartLine
+		payload["start_side"] = "RIGHT"
+	}
+
+	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/comments", c.apiBaseURL, repository, pullRequestNumber)
+	if err := c.requestJSON(ctx, token, http.MethodPost, endpoint, payload, nil); err != nil {
+		if isInvalidAnchorAPIError(err) {
+			return &InvalidAnchorError{
+				Message: "invalid review comment anchor",
+				Cause:   err,
+			}
+		}
+		return fmt.Errorf("failed to create pull request review comment: %w", err)
+	}
+
+	return nil
+}
+
+func (c *AppClient) getPullRequestHeadSHA(ctx context.Context, token string, repository string, pullRequestNumber int) (string, error) {
+	var payload struct {
+		Head struct {
+			SHA string `json:"sha"`
+		} `json:"head"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d", c.apiBaseURL, repository, pullRequestNumber)
+	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return "", fmt.Errorf("failed to load pull request metadata: %w", err)
+	}
+	payload.Head.SHA = strings.TrimSpace(payload.Head.SHA)
+	if payload.Head.SHA == "" {
+		return "", fmt.Errorf("failed to resolve pull request head commit")
+	}
+	return payload.Head.SHA, nil
+}
+
+func (c *AppClient) installationAccessToken(ctx context.Context) (string, error) {
+	installationID := installationIDFromContext(ctx)
+	if installationID == "" {
+		return "", fmt.Errorf("missing github app installation id in context")
+	}
+
+	c.cacheMutex.Lock()
+	if item, ok := c.tokenByInstID[installationID]; ok && c.now().Before(item.ExpiresAt.Add(-time.Minute)) {
+		c.cacheMutex.Unlock()
+		return item.Token, nil
+	}
+	c.cacheMutex.Unlock()
+
+	appJWT, err := c.createAppJWT()
+	if err != nil {
+		return "", err
+	}
+
+	token, expiresAt, err := c.createInstallationToken(ctx, installationID, appJWT)
+	if err != nil {
+		return "", err
+	}
+
+	c.cacheMutex.Lock()
+	c.tokenByInstID[installationID] = installationTokenCacheItem{
+		Token:     token,
+		ExpiresAt: expiresAt,
+	}
+	c.cacheMutex.Unlock()
+
+	return token, nil
+}
+
+func (c *AppClient) createInstallationToken(ctx context.Context, installationID string, appJWT string) (string, time.Time, error) {
+	endpoint := fmt.Sprintf("%s/app/installations/%s/access_tokens", c.apiBaseURL, installationID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, http.NoBody)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", githubAPIVersion)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", time.Time{}, fmt.Errorf("github API request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
+	}
+
+	var payload struct {
+		Token     string `json:"token"`
+		ExpiresAt string `json:"expires_at"`
+	}
+	if err := json.Unmarshal(responseBody, &payload); err != nil {
+		return "", time.Time{}, err
+	}
+	payload.Token = strings.TrimSpace(payload.Token)
+	if payload.Token == "" {
+		return "", time.Time{}, fmt.Errorf("github installation token is empty")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, payload.ExpiresAt)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return payload.Token, expiresAt, nil
+}
+
+func (c *AppClient) createAppJWT() (string, error) {
+	now := c.now().UTC()
+	claims := map[string]any{
+		"iat": now.Add(-30 * time.Second).Unix(),
+		"exp": now.Add(9 * time.Minute).Unix(),
+		"iss": c.appID,
+	}
+	headerJSON, err := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
+	if err != nil {
+		return "", err
+	}
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+
+	encodedHeader := base64.RawURLEncoding.EncodeToString(headerJSON)
+	encodedClaims := base64.RawURLEncoding.EncodeToString(claimsJSON)
+	signingInput := encodedHeader + "." + encodedClaims
+
+	hashed := sha256.Sum256([]byte(signingInput))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, c.privateKey, crypto.SHA256, hashed[:])
+	if err != nil {
+		return "", err
+	}
+
+	return signingInput + "." + base64.RawURLEncoding.EncodeToString(signature), nil
+}
+
+func (c *AppClient) requestJSON(ctx context.Context, token string, method string, endpoint string, requestBody any, out any) error {
+	var body io.Reader
+	if requestBody != nil {
+		encodedBody, err := json.Marshal(requestBody)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(encodedBody)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", githubAPIVersion)
+	if requestBody != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("github API request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(responseBody)))
+	}
+	if out == nil || len(responseBody) == 0 {
+		return nil
+	}
+	return json.Unmarshal(responseBody, out)
+}
+
+func parseGitHubAppPrivateKey(raw string) (*rsa.PrivateKey, error) {
+	resolvedRaw, err := resolveGitHubAppPrivateKeyRaw(raw)
+	if err != nil {
+		return nil, err
+	}
+	resolvedRaw = strings.ReplaceAll(resolvedRaw, `\n`, "\n")
+	if resolvedRaw == "" {
+		return nil, fmt.Errorf("github app private key is required")
+	}
+
+	block, _ := pem.Decode([]byte(resolvedRaw))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode github app private key PEM")
+	}
+
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse github app private key: %w", err)
+	}
+	privateKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("github app private key must be RSA")
+	}
+	return privateKey, nil
+}
+
+func resolveGitHubAppPrivateKeyRaw(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("github app private key is required")
+	}
+
+	if info, err := os.Stat(raw); err == nil {
+		if info != nil {
+			content, readErr := os.ReadFile(raw)
+			if readErr != nil {
+				return "", fmt.Errorf("failed to read github app private key file %q: %w", raw, readErr)
+			}
+			return strings.TrimSpace(string(content)), nil
+		}
+	}
+
+	return raw, nil
+}
+
+func isInvalidAnchorAPIError(err error) bool {
+	errorText := strings.ToLower(err.Error())
+	if !strings.Contains(errorText, strconv.Itoa(http.StatusUnprocessableEntity)) {
+		return false
+	}
+	return strings.Contains(errorText, "line must be part of the diff") ||
+		strings.Contains(errorText, "start_line must be part of the diff") ||
+		strings.Contains(errorText, "is outside the diff") ||
+		strings.Contains(errorText, "is not part of the diff") ||
+		strings.Contains(errorText, "pull_request_review_thread.path") ||
+		strings.Contains(errorText, "path is missing")
+}

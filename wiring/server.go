@@ -1,7 +1,9 @@
 package wiring
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
@@ -31,7 +33,18 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	ghClient := githubvcs.NewClient()
+	if strings.TrimSpace(cfg.Server.GitHub.WebhookSecret) == "" {
+		return nil, fmt.Errorf("github webhook secret is required")
+	}
+	httpClient := &http.Client{Timeout: 60 * time.Second}
+	ghClient, err := githubvcs.NewAppClient(httpClient, githubvcs.AppClientConfig{
+		APIBaseURL: cfg.Server.GitHub.APIBaseURL,
+		AppID:      cfg.Server.GitHub.AppID,
+		PrivateKey: cfg.Server.GitHub.AppPrivateKey,
+	})
+	if err != nil {
+		return nil, err
+	}
 	uc, err := usecase.NewReviewerUseCase(
 		githubinput.NewProvider(ghClient),
 		rulepack.NewCoreRulePackProvider(),
@@ -42,7 +55,7 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return githubinbound.NewHandler(uc, logger), nil
+	return githubinbound.NewHandler(uc, logger, cfg.Server.GitHub.WebhookSecret), nil
 }
 
 // BuildGitLabHandler wires dependencies for GitLab webhook flow.
@@ -71,14 +84,23 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
 
 func buildServerLLMReviewer(cfg config.Config, logger usecase.Logger) (*reviewerllm.Reviewer, error) {
 	httpClient := &http.Client{Timeout: serverLLMTimeout}
-	llmClient := openai.NewClient(httpClient, buildOpenAIClientConfig(cfg))
+	openAIConfig, err := buildOpenAIClientConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	llmClient := openai.NewClient(httpClient, openAIConfig)
 	return reviewerllm.NewReviewer(llmClient, logger)
 }
 
-func buildOpenAIClientConfig(cfg config.Config) openai.ClientConfig {
-	return openai.ClientConfig{
-		BaseURL: cfg.OpenAIBaseURL,
-		APIKey:  cfg.OpenAIAPIKey,
-		Model:   cfg.OpenAIModel,
+func buildOpenAIClientConfig(cfg config.Config) (openai.ClientConfig, error) {
+	effectiveConfig, err := ResolveEffectiveOpenAIConfig(cfg, CLILLMOptions{})
+	if err != nil {
+		return openai.ClientConfig{}, err
 	}
+
+	return openai.ClientConfig{
+		BaseURL: effectiveConfig.BaseURL,
+		APIKey:  cfg.OpenAI.APIKey,
+		Model:   effectiveConfig.Model,
+	}, nil
 }

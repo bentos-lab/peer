@@ -17,7 +17,6 @@ import (
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/domain"
-	sharedllm "bentos-backend/shared/llm"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/rulepack"
 )
@@ -80,7 +79,7 @@ func buildInputProvider(provider domain.ReviewInputProvider) (usecase.ReviewInpu
 	case domain.ReviewInputProviderLocal:
 		return cliinput.NewProvider(cliinput.NewGitChangeDetector()), domain.ReviewInputProviderLocal, nil, nil
 	case domain.ReviewInputProviderGitHub:
-		providerClient := githubvcs.NewClient()
+		providerClient := githubvcs.NewCLIClient()
 		return githubinput.NewProvider(providerClient), domain.ReviewInputProviderGitHub, providerClient, nil
 	default:
 		return nil, "", nil, fmt.Errorf("unsupported review input provider: %s", provider)
@@ -94,7 +93,7 @@ func buildPublisher(publishType domain.ReviewPublishType, provider domain.Review
 	case domain.ReviewPublishTypeComment:
 		switch provider {
 		case domain.ReviewInputProviderGitHub:
-			githubClient, ok := providerClient.(*githubvcs.Client)
+			githubClient, ok := providerClient.(*githubvcs.CLIClient)
 			if !ok || githubClient == nil {
 				return nil, fmt.Errorf("provider client is not configured for provider: %s", provider)
 			}
@@ -140,16 +139,12 @@ func validateCLISelection(provider domain.ReviewInputProvider, publishType domai
 }
 
 func resolveCLILLMConfig(cfg config.Config, opts CLILLMOptions) (openai.ClientConfig, error) {
-	baseURLInput := strings.TrimSpace(cfg.OpenAIBaseURL)
-	if strings.TrimSpace(opts.OpenAIBaseURL) != "" {
-		baseURLInput = strings.TrimSpace(opts.OpenAIBaseURL)
-	}
-	resolvedBaseURL, resolvedModel, _, err := sharedllm.ResolveBaseURLAndModel(baseURLInput, cfg.OpenAIModel, opts.OpenAIModel)
+	effectiveConfig, err := ResolveEffectiveOpenAIConfig(cfg, opts)
 	if err != nil {
 		return openai.ClientConfig{}, err
 	}
 
-	resolvedAPIKey := strings.TrimSpace(cfg.OpenAIAPIKey)
+	resolvedAPIKey := strings.TrimSpace(cfg.OpenAI.APIKey)
 	if strings.TrimSpace(opts.OpenAIAPIKey) != "" {
 		resolvedAPIKey = strings.TrimSpace(opts.OpenAIAPIKey)
 	}
@@ -158,8 +153,8 @@ func resolveCLILLMConfig(cfg config.Config, opts CLILLMOptions) (openai.ClientCo
 	}
 
 	return openai.ClientConfig{
-		BaseURL: resolvedBaseURL,
+		BaseURL: effectiveConfig.BaseURL,
 		APIKey:  resolvedAPIKey,
-		Model:   resolvedModel,
+		Model:   effectiveConfig.Model,
 	}, nil
 }

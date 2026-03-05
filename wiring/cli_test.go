@@ -65,26 +65,30 @@ func TestValidateCLISelection(t *testing.T) {
 	}
 }
 
-func TestResolveCLILLMConfigUsesShortcutDefaultModelWhenFlagMissing(t *testing.T) {
+func TestResolveCLILLMConfigUsesConfiguredModelForShortcutWhenFlagMissing(t *testing.T) {
 	cfg := config.Config{
-		OpenAIBaseURL: "gemini",
-		OpenAIModel:   "env-model",
-		OpenAIAPIKey:  "env-key",
+		OpenAI: config.OpenAIConfig{
+			BaseURL: "gemini",
+			Model:   "env-model",
+			APIKey:  "env-key",
+		},
 	}
 	llmCfg, err := resolveCLILLMConfig(cfg, CLILLMOptions{
 		OpenAIBaseURL: "openai",
 	})
 	require.NoError(t, err)
 	require.Equal(t, "https://api.openai.com/v1", llmCfg.BaseURL)
-	require.Equal(t, "gpt-4.1-mini", llmCfg.Model)
+	require.Equal(t, "env-model", llmCfg.Model)
 	require.Equal(t, "env-key", llmCfg.APIKey)
 }
 
 func TestResolveCLILLMConfigFullURLRequiresResolvedModel(t *testing.T) {
 	cfg := config.Config{
-		OpenAIBaseURL: "gemini",
-		OpenAIModel:   "",
-		OpenAIAPIKey:  "env-key",
+		OpenAI: config.OpenAIConfig{
+			BaseURL: "gemini",
+			Model:   "",
+			APIKey:  "env-key",
+		},
 	}
 	_, err := resolveCLILLMConfig(cfg, CLILLMOptions{
 		OpenAIBaseURL: "https://example.com/v1",
@@ -94,9 +98,11 @@ func TestResolveCLILLMConfigFullURLRequiresResolvedModel(t *testing.T) {
 
 func TestResolveCLILLMConfigUsesFlagOverrides(t *testing.T) {
 	cfg := config.Config{
-		OpenAIBaseURL: "gemini",
-		OpenAIModel:   "env-model",
-		OpenAIAPIKey:  "env-key",
+		OpenAI: config.OpenAIConfig{
+			BaseURL: "gemini",
+			Model:   "env-model",
+			APIKey:  "env-key",
+		},
 	}
 	llmCfg, err := resolveCLILLMConfig(cfg, CLILLMOptions{
 		OpenAIBaseURL: "https://example.com/v1",
@@ -111,9 +117,11 @@ func TestResolveCLILLMConfigUsesFlagOverrides(t *testing.T) {
 
 func TestResolveCLILLMConfigRequiresAPIKey(t *testing.T) {
 	cfg := config.Config{
-		OpenAIBaseURL: "gemini",
-		OpenAIModel:   "env-model",
-		OpenAIAPIKey:  "",
+		OpenAI: config.OpenAIConfig{
+			BaseURL: "gemini",
+			Model:   "env-model",
+			APIKey:  "",
+		},
 	}
 	_, err := resolveCLILLMConfig(cfg, CLILLMOptions{})
 	require.Error(t, err)
@@ -132,9 +140,11 @@ func TestBuildCLICommandRejectsUnsupportedSelection(t *testing.T) {
 
 func TestBuildCLICommandBuildsSupportedSelections(t *testing.T) {
 	cfg := config.Config{
-		OpenAIBaseURL: "openai",
-		OpenAIModel:   "gpt-4.1-mini",
-		OpenAIAPIKey:  "test-key",
+		OpenAI: config.OpenAIConfig{
+			BaseURL: "openai",
+			Model:   "gpt-4.1-mini",
+			APIKey:  "test-key",
+		},
 	}
 
 	tests := []struct {
@@ -170,10 +180,12 @@ func TestBuildCLICommandBuildsSupportedSelections(t *testing.T) {
 
 func TestBuildCLICommandRejectsInvalidLogLevel(t *testing.T) {
 	cfg := config.Config{
-		LogLevel:      "invalid",
-		OpenAIBaseURL: "openai",
-		OpenAIModel:   "gpt-4.1-mini",
-		OpenAIAPIKey:  "test-key",
+		LogLevel: "invalid",
+		OpenAI: config.OpenAIConfig{
+			BaseURL: "openai",
+			Model:   "gpt-4.1-mini",
+			APIKey:  "test-key",
+		},
 	}
 
 	_, err := BuildCLICommand(cfg, CLILLMOptions{}, domain.ReviewInputProviderLocal, domain.ReviewPublishTypePrint, "")

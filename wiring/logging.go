@@ -34,5 +34,10 @@ func buildLogger(cfg config.Config, logLevelOverride string) (usecase.Logger, er
 		return nil, err
 	}
 
-	return stdlogger.NewWithLevel(log.Default(), level), nil
+	return stdlogger.NewWithLevel(log.New(log.Writer(), log.Prefix(), log.Flags()), level), nil
+}
+
+// BuildLogger creates a logger with level resolved from config and optional override.
+func BuildLogger(cfg config.Config, logLevelOverride string) (usecase.Logger, error) {
+	return buildLogger(cfg, logLevelOverride)
 }

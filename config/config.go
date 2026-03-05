@@ -10,11 +10,30 @@ import (
 
 // Config contains app runtime configuration.
 type Config struct {
-	Port          string
-	LogLevel      string
-	OpenAIBaseURL string
-	OpenAIAPIKey  string
-	OpenAIModel   string
+	LogLevel string
+	OpenAI   OpenAIConfig
+	Server   ServerConfig
+}
+
+// OpenAIConfig contains OpenAI-compatible provider settings.
+type OpenAIConfig struct {
+	BaseURL string
+	APIKey  string
+	Model   string
+}
+
+// ServerConfig contains HTTP server-specific settings.
+type ServerConfig struct {
+	Port   string
+	GitHub GitHubConfig
+}
+
+// GitHubConfig contains GitHub webhook/app integration settings.
+type GitHubConfig struct {
+	WebhookSecret string
+	AppID         string
+	AppPrivateKey string
+	APIBaseURL    string
 }
 
 // Load reads configuration from environment variables.
@@ -24,11 +43,21 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		Port:          envOrDefault("PORT", "8080"),
-		LogLevel:      envOrDefault("LOG_LEVEL", "info"),
-		OpenAIBaseURL: envOrDefault("OPENAI_BASE_URL", "gemini"),
-		OpenAIAPIKey:  os.Getenv("OPENAI_API_KEY"),
-		OpenAIModel:   envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite"),
+		LogLevel: envOrDefault("LOG_LEVEL", "info"),
+		OpenAI: OpenAIConfig{
+			BaseURL: envOrDefault("OPENAI_BASE_URL", "gemini"),
+			APIKey:  os.Getenv("OPENAI_API_KEY"),
+			Model:   envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite"),
+		},
+		Server: ServerConfig{
+			Port: envOrDefault("PORT", "8080"),
+			GitHub: GitHubConfig{
+				WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+				AppID:         os.Getenv("GITHUB_APP_ID"),
+				AppPrivateKey: os.Getenv("GITHUB_APP_PRIVATE_KEY"),
+				APIBaseURL:    envOrDefault("GITHUB_API_BASE_URL", "https://api.github.com"),
+			},
+		},
 	}
 	return cfg, nil
 }
