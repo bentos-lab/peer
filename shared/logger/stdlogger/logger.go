@@ -47,6 +47,11 @@ func (l *Logger) Infof(format string, args ...any) {
 	l.logf("[INFO]", LevelInfo, format, args...)
 }
 
+// Warnf writes a warning-level message.
+func (l *Logger) Warnf(format string, args ...any) {
+	l.logf("[WARN]", LevelWarning, format, args...)
+}
+
 // Debugf writes a debug-level message.
 func (l *Logger) Debugf(format string, args ...any) {
 	l.logf("[DEBUG]", LevelDebug, format, args...)
@@ -89,14 +94,16 @@ func (l *Logger) logf(label string, eventLevel Level, format string, args ...any
 func (l *Logger) shouldLog(eventLevel Level) bool {
 	switch l.level {
 	case LevelTrace, LevelDebug:
-		return eventLevel == LevelDebug || eventLevel == LevelInfo || eventLevel == LevelError
+		return eventLevel == LevelDebug || eventLevel == LevelInfo || eventLevel == LevelWarning || eventLevel == LevelError
 	case LevelInfo:
-		return eventLevel == LevelInfo || eventLevel == LevelError
-	case LevelWarning, LevelError:
+		return eventLevel == LevelInfo || eventLevel == LevelWarning || eventLevel == LevelError
+	case LevelWarning:
+		return eventLevel == LevelWarning || eventLevel == LevelError
+	case LevelError:
 		return eventLevel == LevelError
 	case LevelSilence:
 		return false
 	default:
-		return eventLevel == LevelInfo || eventLevel == LevelError
+		return eventLevel == LevelInfo || eventLevel == LevelWarning || eventLevel == LevelError
 	}
 }

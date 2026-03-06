@@ -29,6 +29,9 @@ go test ./...
 Global:
 
 - `LOG_LEVEL` (default: `info`)
+- `OVERVIEW_ENABLED` (optional bool)
+  - Server default when unset: `true`
+  - CLI default when unset: `false`
 
 OpenAI:
 
@@ -97,7 +100,7 @@ For each trigger, the service:
 1. Loads changed files from GitHub.
 2. Runs LLM review.
 3. Posts inline review comments.
-4. Posts one summary comment.
+4. Posts one overview comment only for `opened`, and only when `OVERVIEW_ENABLED=true` (or unset, because server default is enabled).
 
 ## Run CLI Reviewer
 
@@ -106,14 +109,20 @@ go run ./cmd/cli
 go run ./cmd/cli --all
 go run ./cmd/cli --untracked
 go run ./cmd/cli --changed-files file1.go,file2.go
+go run ./cmd/cli --overview
 go run ./cmd/cli --gh-pr 123
+go run ./cmd/cli --gh-pr 123 --overview
 go run ./cmd/cli --gh-pr 123 --comment-on-pr
+go run ./cmd/cli --gh-pr 123 --comment-on-pr --overview
 ```
 
 CLI notes:
 
 - GitHub PR mode in CLI still uses authenticated GitHub CLI (`gh auth login`).
 - GitHub App auth is for server webhook flow.
+- `--overview` always generates overview and sends it to the mode's configured overview publisher/output.
+- If `--overview` is not provided, CLI uses `OVERVIEW_ENABLED` when set; otherwise overview is disabled by default.
+- Explicit CLI flag value (`--overview` or `--overview=false`) takes precedence over `OVERVIEW_ENABLED`.
 
 ## Troubleshooting
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 
@@ -22,7 +23,7 @@ type Publisher struct {
 // NewPublisher creates a GitLab publisher.
 func NewPublisher(client NoteClient, logger usecase.Logger) *Publisher {
 	if logger == nil {
-		logger = usecase.NopLogger
+		logger = stdlogger.Nop()
 	}
 	return &Publisher{client: client, logger: logger}
 }

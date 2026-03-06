@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 
@@ -12,13 +13,13 @@ func RunReviewAsync(
 	logger usecase.Logger,
 	providerName string,
 	action string,
-	request usecase.ReviewRequest,
+	request usecase.ChangeRequestRequest,
 	timeout time.Duration,
 	decorateContext func(context.Context) context.Context,
-	execute func(context.Context, usecase.ReviewRequest) error,
+	execute func(context.Context, usecase.ChangeRequestRequest) error,
 ) {
 	if logger == nil {
-		logger = usecase.NopLogger
+		logger = stdlogger.Nop()
 	}
 	if decorateContext == nil {
 		decorateContext = func(ctx context.Context) context.Context { return ctx }

@@ -39,13 +39,13 @@ func (f *fakeChangeDetector) ListUntracked(_ context.Context) ([]string, error) 
 	return f.untracked, nil
 }
 
-func TestProvider_LoadReviewInputManualOverride(t *testing.T) {
+func TestProvider_LoadChangeSnapshotManualOverride(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.go")
 	require.NoError(t, os.WriteFile(path, []byte("package a"), 0o644))
 
 	provider := NewProvider(&fakeChangeDetector{})
-	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
+	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Repository: "org/repo",
 		Metadata: map[string]string{
 			MetadataKeyChangedFiles: path,
@@ -56,7 +56,7 @@ func TestProvider_LoadReviewInputManualOverride(t *testing.T) {
 	require.Equal(t, path, result.ChangedFiles[0].Path)
 }
 
-func TestProvider_LoadReviewInputAutoDefaultStagedOnly(t *testing.T) {
+func TestProvider_LoadChangeSnapshotAutoDefaultStagedOnly(t *testing.T) {
 	dir := t.TempDir()
 	staged := filepath.Join(dir, "staged.go")
 	require.NoError(t, os.WriteFile(staged, []byte("package staged"), 0o644))
@@ -64,7 +64,7 @@ func TestProvider_LoadReviewInputAutoDefaultStagedOnly(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{
 		staged: []string{staged},
 	})
-	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
+	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{},
 	})
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestProvider_LoadReviewInputAutoDefaultStagedOnly(t *testing.T) {
 	require.Equal(t, staged, result.ChangedFiles[0].Path)
 }
 
-func TestProvider_LoadReviewInputAutoAllIncludesUnstaged(t *testing.T) {
+func TestProvider_LoadChangeSnapshotAutoAllIncludesUnstaged(t *testing.T) {
 	dir := t.TempDir()
 	staged := filepath.Join(dir, "staged.go")
 	unstaged := filepath.Join(dir, "unstaged.go")
@@ -83,7 +83,7 @@ func TestProvider_LoadReviewInputAutoAllIncludesUnstaged(t *testing.T) {
 		staged:   []string{staged},
 		unstaged: []string{unstaged},
 	})
-	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
+	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
 			MetadataKeyAutoIncludeAll: "true",
 		},
@@ -92,7 +92,7 @@ func TestProvider_LoadReviewInputAutoAllIncludesUnstaged(t *testing.T) {
 	require.Len(t, result.ChangedFiles, 2)
 }
 
-func TestProvider_LoadReviewInputAutoIncludesUntracked(t *testing.T) {
+func TestProvider_LoadChangeSnapshotAutoIncludesUntracked(t *testing.T) {
 	dir := t.TempDir()
 	staged := filepath.Join(dir, "staged.go")
 	untracked := filepath.Join(dir, "untracked.go")
@@ -103,7 +103,7 @@ func TestProvider_LoadReviewInputAutoIncludesUntracked(t *testing.T) {
 		staged:    []string{staged},
 		untracked: []string{untracked},
 	})
-	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
+	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
 			MetadataKeyAutoIncludeUntracked: "true",
 		},
@@ -112,7 +112,7 @@ func TestProvider_LoadReviewInputAutoIncludesUntracked(t *testing.T) {
 	require.Len(t, result.ChangedFiles, 2)
 }
 
-func TestProvider_LoadReviewInputAutoAllAndUntrackedDedupes(t *testing.T) {
+func TestProvider_LoadChangeSnapshotAutoAllAndUntrackedDedupes(t *testing.T) {
 	dir := t.TempDir()
 	staged := filepath.Join(dir, "staged.go")
 	unstaged := filepath.Join(dir, "unstaged.go")
@@ -126,7 +126,7 @@ func TestProvider_LoadReviewInputAutoAllAndUntrackedDedupes(t *testing.T) {
 		unstaged:  []string{unstaged},
 		untracked: []string{untracked},
 	})
-	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
+	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
 			MetadataKeyAutoIncludeAll:       "true",
 			MetadataKeyAutoIncludeUntracked: "true",
@@ -136,7 +136,7 @@ func TestProvider_LoadReviewInputAutoAllAndUntrackedDedupes(t *testing.T) {
 	require.Len(t, result.ChangedFiles, 3)
 }
 
-func TestProvider_LoadReviewInputAutoSkipsDeletedFiles(t *testing.T) {
+func TestProvider_LoadChangeSnapshotAutoSkipsDeletedFiles(t *testing.T) {
 	dir := t.TempDir()
 	existing := filepath.Join(dir, "exists.go")
 	deleted := filepath.Join(dir, "deleted.go")
@@ -145,22 +145,22 @@ func TestProvider_LoadReviewInputAutoSkipsDeletedFiles(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{
 		staged: []string{existing, deleted},
 	})
-	result, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{})
+	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{})
 	require.NoError(t, err)
 	require.Len(t, result.ChangedFiles, 1)
 	require.Equal(t, existing, result.ChangedFiles[0].Path)
 }
 
-func TestProvider_LoadReviewInputAutoEmptyReturnsError(t *testing.T) {
+func TestProvider_LoadChangeSnapshotAutoEmptyReturnsError(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{})
-	_, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{})
+	_, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, errNoChangedFiles)
 }
 
-func TestProvider_LoadReviewInputManualMissingFileReturnsError(t *testing.T) {
+func TestProvider_LoadChangeSnapshotManualMissingFileReturnsError(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{})
-	_, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{
+	_, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
 			MetadataKeyChangedFiles: "missing.go",
 		},
@@ -168,9 +168,9 @@ func TestProvider_LoadReviewInputManualMissingFileReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestProvider_LoadReviewInputReturnsDetectorError(t *testing.T) {
+func TestProvider_LoadChangeSnapshotReturnsDetectorError(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{err: errors.New("detector failed")})
-	_, err := provider.LoadReviewInput(context.Background(), usecase.ReviewRequest{})
+	_, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "detector failed")
 }

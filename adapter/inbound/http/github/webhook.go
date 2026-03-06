@@ -15,6 +15,7 @@ import (
 
 	"bentos-backend/adapter/inbound/http/background"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 
@@ -43,20 +44,22 @@ type pullRequestEvent struct {
 
 // Handler receives GitHub webhook events and triggers review.
 type Handler struct {
-	reviewer      usecase.ReviewUseCase
-	logger        usecase.Logger
-	webhookSecret string
+	reviewer       usecase.ChangeRequestUseCase
+	logger         usecase.Logger
+	webhookSecret  string
+	enableOverview bool
 }
 
 // NewHandler creates a GitHub webhook handler.
-func NewHandler(reviewer usecase.ReviewUseCase, logger usecase.Logger, webhookSecret string) *Handler {
+func NewHandler(changeRequestUseCase usecase.ChangeRequestUseCase, logger usecase.Logger, webhookSecret string, enableOverview bool) *Handler {
 	if logger == nil {
-		logger = usecase.NopLogger
+		logger = stdlogger.Nop()
 	}
 	return &Handler{
-		reviewer:      reviewer,
-		logger:        logger,
-		webhookSecret: strings.TrimSpace(webhookSecret),
+		reviewer:       changeRequestUseCase,
+		logger:         logger,
+		webhookSecret:  strings.TrimSpace(webhookSecret),
+		enableOverview: enableOverview,
 	}
 }
 
@@ -99,13 +102,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	request := usecase.ReviewRequest{
+	request := usecase.ChangeRequestRequest{
 		Repository:          event.Repository.FullName,
 		ChangeRequestNumber: event.PullRequest.Number,
 		Title:               event.PullRequest.Title,
 		Description:         event.PullRequest.Body,
 		BaseRef:             event.PullRequest.Base.Ref,
 		HeadRef:             event.PullRequest.Head.Ref,
+		EnableOverview:      h.enableOverview && isInitialPROpenedAction(event.Action),
 		Metadata: map[string]string{
 			"action": event.Action,
 		},
@@ -121,7 +125,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		func(ctx context.Context) context.Context {
 			return githubvcs.WithInstallationID(ctx, strconv.FormatInt(installationID, 10))
 		},
-		func(ctx context.Context, req usecase.ReviewRequest) error {
+		func(ctx context.Context, req usecase.ChangeRequestRequest) error {
 			_, err := h.reviewer.Execute(ctx, req)
 			return err
 		},
@@ -147,6 +151,10 @@ func isReviewTriggerAction(action string) bool {
 	default:
 		return false
 	}
+}
+
+func isInitialPROpenedAction(action string) bool {
+	return strings.EqualFold(strings.TrimSpace(action), "opened")
 }
 
 func (h *Handler) verifySignature(signatureHeader string, body []byte) bool {

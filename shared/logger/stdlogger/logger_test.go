@@ -29,6 +29,16 @@ func TestLoggerDebugfWritesFormattedMessage(t *testing.T) {
 	require.Contains(t, output, "[DEBUG] Using local provider.")
 }
 
+func TestLoggerWarnfWritesFormattedMessage(t *testing.T) {
+	var buffer bytes.Buffer
+	logger := New(log.New(&buffer, "", 0))
+
+	logger.Warnf("Skipped one comment because the anchor is invalid.")
+
+	output := buffer.String()
+	require.Contains(t, output, "[WARN] Skipped one comment because the anchor is invalid.")
+}
+
 func TestLoggerErrorfWritesFormattedMessage(t *testing.T) {
 	var buffer bytes.Buffer
 	logger := New(log.New(&buffer, "", 0))
@@ -46,25 +56,45 @@ func TestLoggerFiltersEventsByLevel(t *testing.T) {
 
 	logger.Debugf("debug detail")
 	logger.Infof("review started")
+	logger.Warnf("review warning")
 	logger.Errorf("stage failed")
 
 	output := buffer.String()
 	require.NotContains(t, output, "[DEBUG] debug detail")
 	require.NotContains(t, output, "[INFO] review started")
+	require.Contains(t, output, "[WARN] review warning")
 	require.Contains(t, output, "[ERROR] stage failed")
 }
 
-func TestLoggerDebugLevelIncludesDebugInfoAndError(t *testing.T) {
+func TestLoggerDebugLevelIncludesDebugInfoWarnAndError(t *testing.T) {
 	var buffer bytes.Buffer
 	logger := NewWithLevel(log.New(&buffer, "", 0), LevelDebug)
 
 	logger.Debugf("debug detail")
 	logger.Infof("info detail")
+	logger.Warnf("warn detail")
 	logger.Errorf("error detail")
 
 	output := buffer.String()
 	require.Contains(t, output, "[DEBUG] debug detail")
 	require.Contains(t, output, "[INFO] info detail")
+	require.Contains(t, output, "[WARN] warn detail")
+	require.Contains(t, output, "[ERROR] error detail")
+}
+
+func TestLoggerInfoLevelIncludesInfoWarnAndError(t *testing.T) {
+	var buffer bytes.Buffer
+	logger := NewWithLevel(log.New(&buffer, "", 0), LevelInfo)
+
+	logger.Debugf("debug detail")
+	logger.Infof("info detail")
+	logger.Warnf("warn detail")
+	logger.Errorf("error detail")
+
+	output := buffer.String()
+	require.NotContains(t, output, "[DEBUG] debug detail")
+	require.Contains(t, output, "[INFO] info detail")
+	require.Contains(t, output, "[WARN] warn detail")
 	require.Contains(t, output, "[ERROR] error detail")
 }
 
@@ -74,6 +104,7 @@ func TestLoggerSilenceDropsAllEvents(t *testing.T) {
 
 	logger.Debugf("debug detail")
 	logger.Infof("review started")
+	logger.Warnf("review warning")
 	logger.Errorf("stage failed")
 
 	require.Empty(t, buffer.String())

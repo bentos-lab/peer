@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"bentos-backend/adapter/inbound/http/background"
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 
@@ -30,16 +31,16 @@ type mergeRequestEvent struct {
 
 // Handler receives GitLab webhook events and triggers review.
 type Handler struct {
-	reviewer usecase.ReviewUseCase
+	reviewer usecase.ChangeRequestUseCase
 	logger   usecase.Logger
 }
 
 // NewHandler creates a GitLab webhook handler.
-func NewHandler(reviewer usecase.ReviewUseCase, logger usecase.Logger) *Handler {
+func NewHandler(changeRequestUseCase usecase.ChangeRequestUseCase, logger usecase.Logger) *Handler {
 	if logger == nil {
-		logger = usecase.NopLogger
+		logger = stdlogger.Nop()
 	}
-	return &Handler{reviewer: reviewer, logger: logger}
+	return &Handler{reviewer: changeRequestUseCase, logger: logger}
 }
 
 // ServeHTTP handles merge request events and starts review usecase.
@@ -55,13 +56,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	request := usecase.ReviewRequest{
+	request := usecase.ChangeRequestRequest{
 		Repository:          event.Project.PathWithNamespace,
 		ChangeRequestNumber: event.ObjectAttributes.IID,
 		Title:               event.ObjectAttributes.Title,
 		Description:         event.ObjectAttributes.Description,
 		BaseRef:             event.ObjectAttributes.TargetBranch,
 		HeadRef:             event.ObjectAttributes.SourceBranch,
+		EnableOverview:      false,
 		Metadata: map[string]string{
 			"action": event.ObjectAttributes.Action,
 		},
@@ -74,7 +76,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		request,
 		backgroundReviewTimeout,
 		func(ctx context.Context) context.Context { return ctx },
-		func(ctx context.Context, req usecase.ReviewRequest) error {
+		func(ctx context.Context, req usecase.ChangeRequestRequest) error {
 			_, err := h.reviewer.Execute(ctx, req)
 			return err
 		},

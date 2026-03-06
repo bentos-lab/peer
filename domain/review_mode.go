@@ -1,21 +1,21 @@
 package domain
 
-// ReviewInputProvider identifies the source provider for review input.
-type ReviewInputProvider string
+// ChangeRequestInputProvider identifies the source provider for change snapshot input.
+type ChangeRequestInputProvider string
 
 const (
-	// ReviewInputProviderLocal loads review input from the local repository.
-	ReviewInputProviderLocal ReviewInputProvider = "local"
-	// ReviewInputProviderGitHub loads review input from a GitHub pull request.
-	ReviewInputProviderGitHub ReviewInputProvider = "github"
+	// ChangeRequestInputProviderLocal loads input from the local repository.
+	ChangeRequestInputProviderLocal ChangeRequestInputProvider = "local"
+	// ChangeRequestInputProviderGitHub loads input from a GitHub pull request.
+	ChangeRequestInputProviderGitHub ChangeRequestInputProvider = "github"
 )
 
-// ReviewPublishType identifies the delivery type for review results.
-type ReviewPublishType string
+// ChangeRequestPublishType identifies the delivery type for review results.
+type ChangeRequestPublishType string
 
 const (
-	// ReviewPublishTypePrint prints review results to standard output.
-	ReviewPublishTypePrint ReviewPublishType = "print"
-	// ReviewPublishTypeComment publishes review results as comments.
-	ReviewPublishTypeComment ReviewPublishType = "comment"
+	// ChangeRequestPublishTypePrint prints review results to standard output.
+	ChangeRequestPublishTypePrint ChangeRequestPublishType = "print"
+	// ChangeRequestPublishTypeComment publishes review results as comments.
+	ChangeRequestPublishTypeComment ChangeRequestPublishType = "comment"
 )

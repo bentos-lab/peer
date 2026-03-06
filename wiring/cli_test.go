@@ -11,44 +11,44 @@ import (
 func TestValidateCLISelection(t *testing.T) {
 	tests := []struct {
 		name        string
-		inputType   domain.ReviewInputProvider
-		publishType domain.ReviewPublishType
+		inputType   domain.ChangeRequestInputProvider
+		publishType domain.ChangeRequestPublishType
 		wantErr     bool
 	}{
 		{
 			name:        "local print",
-			inputType:   domain.ReviewInputProviderLocal,
-			publishType: domain.ReviewPublishTypePrint,
+			inputType:   domain.ChangeRequestInputProviderLocal,
+			publishType: domain.ChangeRequestPublishTypePrint,
 			wantErr:     false,
 		},
 		{
 			name:        "local comment",
-			inputType:   domain.ReviewInputProviderLocal,
-			publishType: domain.ReviewPublishTypeComment,
+			inputType:   domain.ChangeRequestInputProviderLocal,
+			publishType: domain.ChangeRequestPublishTypeComment,
 			wantErr:     true,
 		},
 		{
 			name:        "github print",
-			inputType:   domain.ReviewInputProviderGitHub,
-			publishType: domain.ReviewPublishTypePrint,
+			inputType:   domain.ChangeRequestInputProviderGitHub,
+			publishType: domain.ChangeRequestPublishTypePrint,
 			wantErr:     false,
 		},
 		{
 			name:        "github comment",
-			inputType:   domain.ReviewInputProviderGitHub,
-			publishType: domain.ReviewPublishTypeComment,
+			inputType:   domain.ChangeRequestInputProviderGitHub,
+			publishType: domain.ChangeRequestPublishTypeComment,
 			wantErr:     false,
 		},
 		{
 			name:        "unknown input",
-			inputType:   domain.ReviewInputProvider("unknown"),
-			publishType: domain.ReviewPublishTypePrint,
+			inputType:   domain.ChangeRequestInputProvider("unknown"),
+			publishType: domain.ChangeRequestPublishTypePrint,
 			wantErr:     true,
 		},
 		{
 			name:        "unknown publish for github",
-			inputType:   domain.ReviewInputProviderGitHub,
-			publishType: domain.ReviewPublishType("unknown"),
+			inputType:   domain.ChangeRequestInputProviderGitHub,
+			publishType: domain.ChangeRequestPublishType("unknown"),
 			wantErr:     true,
 		},
 	}
@@ -131,8 +131,8 @@ func TestBuildCLICommandRejectsUnsupportedSelection(t *testing.T) {
 	_, err := BuildCLICommand(
 		config.Config{},
 		CLILLMOptions{},
-		domain.ReviewInputProviderLocal,
-		domain.ReviewPublishTypeComment,
+		domain.ChangeRequestInputProviderLocal,
+		domain.ChangeRequestPublishTypeComment,
 		"",
 	)
 	require.Error(t, err)
@@ -149,23 +149,23 @@ func TestBuildCLICommandBuildsSupportedSelections(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		inputType   domain.ReviewInputProvider
-		publishType domain.ReviewPublishType
+		inputType   domain.ChangeRequestInputProvider
+		publishType domain.ChangeRequestPublishType
 	}{
 		{
 			name:        "local print",
-			inputType:   domain.ReviewInputProviderLocal,
-			publishType: domain.ReviewPublishTypePrint,
+			inputType:   domain.ChangeRequestInputProviderLocal,
+			publishType: domain.ChangeRequestPublishTypePrint,
 		},
 		{
 			name:        "github print",
-			inputType:   domain.ReviewInputProviderGitHub,
-			publishType: domain.ReviewPublishTypePrint,
+			inputType:   domain.ChangeRequestInputProviderGitHub,
+			publishType: domain.ChangeRequestPublishTypePrint,
 		},
 		{
 			name:        "github comment",
-			inputType:   domain.ReviewInputProviderGitHub,
-			publishType: domain.ReviewPublishTypeComment,
+			inputType:   domain.ChangeRequestInputProviderGitHub,
+			publishType: domain.ChangeRequestPublishTypeComment,
 		},
 	}
 
@@ -188,7 +188,7 @@ func TestBuildCLICommandRejectsInvalidLogLevel(t *testing.T) {
 		},
 	}
 
-	_, err := BuildCLICommand(cfg, CLILLMOptions{}, domain.ReviewInputProviderLocal, domain.ReviewPublishTypePrint, "")
+	_, err := BuildCLICommand(cfg, CLILLMOptions{}, domain.ChangeRequestInputProviderLocal, domain.ChangeRequestPublishTypePrint, "")
 	require.Error(t, err)
 }
 

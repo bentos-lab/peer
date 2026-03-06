@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"bentos-backend/domain"
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 )
@@ -54,7 +55,7 @@ func NewReviewer(generator contracts.LLMGenerator, logger usecase.Logger) (*Revi
 		return nil, fmt.Errorf("llm generator must not be nil")
 	}
 	if logger == nil {
-		logger = usecase.NopLogger
+		logger = stdlogger.Nop()
 	}
 	return &Reviewer{generator: generator, logger: logger}, nil
 }

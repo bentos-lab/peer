@@ -38,7 +38,8 @@ func isInvalidAnchorErrorText(text string) bool {
 		strings.Contains(normalized, "is outside the diff") ||
 		strings.Contains(normalized, "is not part of the diff") ||
 		strings.Contains(normalized, "pull_request_review_thread.path") ||
-		strings.Contains(normalized, "path is missing")
+		strings.Contains(normalized, "path is missing") ||
+		strings.Contains(normalized, "validation failed")
 }
 
 func isInvalidAnchorAPIError(err error) bool {

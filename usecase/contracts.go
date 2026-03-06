@@ -14,20 +14,21 @@ type RulePack struct {
 	Instructions []string
 }
 
-// ReviewRequest is the usecase input and is platform-neutral.
-type ReviewRequest struct {
+// ChangeRequestRequest is the shared orchestrator input and is platform-neutral.
+type ChangeRequestRequest struct {
 	Repository          string
 	ChangeRequestNumber int
 	Title               string
 	Description         string
 	BaseRef             string
 	HeadRef             string
+	EnableOverview      bool
 	Metadata            map[string]string
 }
 
-// ReviewInputProvider loads changed contents for the requested change.
-type ReviewInputProvider interface {
-	LoadReviewInput(ctx context.Context, request ReviewRequest) (domain.ReviewInput, error)
+// ChangeRequestInputProvider loads changed contents for the requested change.
+type ChangeRequestInputProvider interface {
+	LoadChangeSnapshot(ctx context.Context, request ChangeRequestRequest) (domain.ChangeSnapshot, error)
 }
 
 // RulePackProvider returns hardcoded rule packs.
@@ -52,6 +53,22 @@ type LLMReviewer interface {
 	ReviewDiff(ctx context.Context, payload LLMReviewPayload) (LLMReviewResult, error)
 }
 
+// LLMOverviewPayload is the complete overview prompt payload.
+type LLMOverviewPayload struct {
+	Input domain.OverviewInput
+}
+
+// LLMOverviewResult is normalized LLM overview output.
+type LLMOverviewResult struct {
+	Categories   []domain.OverviewCategoryItem
+	Walkthroughs []domain.OverviewWalkthrough
+}
+
+// LLMOverviewGenerator creates a high-level overview from changed content.
+type LLMOverviewGenerator interface {
+	GenerateOverview(ctx context.Context, payload LLMOverviewPayload) (LLMOverviewResult, error)
+}
+
 // ReviewPublishResult is output passed to a concrete publisher.
 type ReviewPublishResult struct {
 	Target   domain.ReviewTarget
@@ -65,14 +82,59 @@ type ReviewResultPublisher interface {
 	Publish(ctx context.Context, result ReviewPublishResult) error
 }
 
+// OverviewPublishRequest is output passed to a concrete overview publisher.
+type OverviewPublishRequest struct {
+	Target   domain.OverviewTarget
+	Overview LLMOverviewResult
+	Metadata map[string]string
+}
+
+// OverviewPublisher publishes overview results.
+type OverviewPublisher interface {
+	PublishOverview(ctx context.Context, req OverviewPublishRequest) error
+}
+
+// ReviewRequest is the review-usecase input.
+type ReviewRequest struct {
+	Input domain.ReviewInput
+}
+
+// ReviewExecutionResult is the review-usecase output.
+type ReviewExecutionResult struct {
+	Messages []domain.ReviewMessage
+	Findings []domain.Finding
+	Summary  string
+}
+
 // ReviewUseCase defines review execution behavior.
 type ReviewUseCase interface {
 	Execute(ctx context.Context, request ReviewRequest) (ReviewExecutionResult, error)
 }
 
-// ReviewExecutionResult is the final usecase output.
-type ReviewExecutionResult struct {
+// OverviewRequest is the overview-usecase input.
+type OverviewRequest struct {
+	Input domain.OverviewInput
+}
+
+// OverviewExecutionResult is the overview-usecase output.
+type OverviewExecutionResult struct {
+	Overview LLMOverviewResult
+}
+
+// OverviewUseCase defines overview execution behavior.
+type OverviewUseCase interface {
+	Execute(ctx context.Context, request OverviewRequest) (OverviewExecutionResult, error)
+}
+
+// ChangeRequestExecutionResult is the orchestrator output.
+type ChangeRequestExecutionResult struct {
 	Messages []domain.ReviewMessage
 	Findings []domain.Finding
 	Summary  string
+	Overview LLMOverviewResult
+}
+
+// ChangeRequestUseCase defines shared orchestration behavior.
+type ChangeRequestUseCase interface {
+	Execute(ctx context.Context, request ChangeRequestRequest) (ChangeRequestExecutionResult, error)
 }

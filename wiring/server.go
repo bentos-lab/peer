@@ -11,8 +11,10 @@ import (
 	githubinput "bentos-backend/adapter/outbound/input/github"
 	gitlabinput "bentos-backend/adapter/outbound/input/gitlab"
 	openai "bentos-backend/adapter/outbound/llm/openai"
+	overviewllm "bentos-backend/adapter/outbound/overview/llm"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
 	gitlabpublisher "bentos-backend/adapter/outbound/publisher/gitlab"
+	nooppublisher "bentos-backend/adapter/outbound/publisher/noop"
 	reviewerllm "bentos-backend/adapter/outbound/reviewer/llm"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
@@ -33,6 +35,10 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	llmOverview, err := buildServerLLMOverview(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(cfg.Server.GitHub.WebhookSecret) == "" {
 		return nil, fmt.Errorf("github webhook secret is required")
 	}
@@ -45,8 +51,7 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	uc, err := usecase.NewReviewerUseCase(
-		githubinput.NewProvider(ghClient),
+	reviewUseCase, err := usecase.NewReviewUseCase(
 		rulepack.NewCoreRulePackProvider(),
 		llmReviewer,
 		githubpublisher.NewPublisher(ghClient, logger),
@@ -55,7 +60,24 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return githubinbound.NewHandler(uc, logger, cfg.Server.GitHub.WebhookSecret), nil
+	overviewUseCase, err := usecase.NewOverviewUseCase(
+		llmOverview,
+		githubpublisher.NewOverviewPublisher(ghClient, logger),
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
+		githubinput.NewProvider(ghClient),
+		reviewUseCase,
+		overviewUseCase,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return githubinbound.NewHandler(changeRequestUseCase, logger, cfg.Server.GitHub.WebhookSecret, resolveServerOverviewEnabled(cfg)), nil
 }
 
 // BuildGitLabHandler wires dependencies for GitLab webhook flow.
@@ -68,9 +90,12 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	llmOverview, err := buildServerLLMOverview(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
 	glClient := gitlabvcs.NewClient()
-	uc, err := usecase.NewReviewerUseCase(
-		gitlabinput.NewProvider(glClient),
+	reviewUseCase, err := usecase.NewReviewUseCase(
 		rulepack.NewCoreRulePackProvider(),
 		llmReviewer,
 		gitlabpublisher.NewPublisher(glClient, logger),
@@ -79,7 +104,24 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return gitlabinbound.NewHandler(uc, logger), nil
+	overviewUseCase, err := usecase.NewOverviewUseCase(
+		llmOverview,
+		nooppublisher.NewOverviewPublisher(),
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
+		gitlabinput.NewProvider(glClient),
+		reviewUseCase,
+		overviewUseCase,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return gitlabinbound.NewHandler(changeRequestUseCase, logger), nil
 }
 
 func buildServerLLMReviewer(cfg config.Config, logger usecase.Logger) (*reviewerllm.Reviewer, error) {
@@ -90,6 +132,16 @@ func buildServerLLMReviewer(cfg config.Config, logger usecase.Logger) (*reviewer
 	}
 	llmClient := openai.NewClient(httpClient, openAIConfig)
 	return reviewerllm.NewReviewer(llmClient, logger)
+}
+
+func buildServerLLMOverview(cfg config.Config, logger usecase.Logger) (*overviewllm.OverviewGenerator, error) {
+	httpClient := &http.Client{Timeout: serverLLMTimeout}
+	openAIConfig, err := buildOpenAIClientConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	llmClient := openai.NewClient(httpClient, openAIConfig)
+	return overviewllm.NewOverviewGenerator(llmClient, logger)
 }
 
 func buildOpenAIClientConfig(cfg config.Config) (openai.ClientConfig, error) {
@@ -103,4 +155,11 @@ func buildOpenAIClientConfig(cfg config.Config) (openai.ClientConfig, error) {
 		APIKey:  cfg.OpenAI.APIKey,
 		Model:   effectiveConfig.Model,
 	}, nil
+}
+
+func resolveServerOverviewEnabled(cfg config.Config) bool {
+	if cfg.OverviewEnabled == nil {
+		return true
+	}
+	return *cfg.OverviewEnabled
 }

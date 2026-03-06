@@ -11,6 +11,7 @@ import (
 func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	unsetEnv(t, "PORT")
 	unsetEnv(t, "LOG_LEVEL")
+	unsetEnv(t, "OVERVIEW_ENABLED")
 	unsetEnv(t, "OPENAI_BASE_URL")
 	unsetEnv(t, "OPENAI_API_KEY")
 	unsetEnv(t, "OPENAI_MODEL")
@@ -30,6 +31,7 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, "info", cfg.LogLevel)
+	require.Nil(t, cfg.OverviewEnabled)
 	require.Equal(t, "gemini", cfg.OpenAI.BaseURL)
 	require.Equal(t, "gemini-2.5-flash-lite", cfg.OpenAI.Model)
 	require.Equal(t, "8080", cfg.Server.Port)
@@ -45,6 +47,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	unsetEnv(t, "OPENAI_API_KEY")
 	unsetEnv(t, "PORT")
 	unsetEnv(t, "LOG_LEVEL")
+	unsetEnv(t, "OVERVIEW_ENABLED")
 	unsetEnv(t, "GITHUB_WEBHOOK_SECRET")
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
@@ -67,6 +70,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	require.Equal(t, "my-model", cfg.OpenAI.Model)
 	require.Equal(t, "env-key", cfg.OpenAI.APIKey)
 	require.Equal(t, "warning", cfg.LogLevel)
+	require.Nil(t, cfg.OverviewEnabled)
 	require.Equal(t, "9090", cfg.Server.Port)
 	require.Equal(t, "whsec", cfg.Server.GitHub.WebhookSecret)
 	require.Equal(t, "12345", cfg.Server.GitHub.AppID)
@@ -80,6 +84,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "env-key")
 	t.Setenv("PORT", "7777")
 	t.Setenv("LOG_LEVEL", "error")
+	t.Setenv("OVERVIEW_ENABLED", "true")
 	t.Setenv("GITHUB_WEBHOOK_SECRET", "set-secret")
 	t.Setenv("GITHUB_APP_ID", "set-app-id")
 	t.Setenv("GITHUB_APP_PRIVATE_KEY", "set-private-key")
@@ -102,6 +107,8 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	require.Equal(t, "from-env", cfg.OpenAI.Model)
 	require.Equal(t, "env-key", cfg.OpenAI.APIKey)
 	require.Equal(t, "error", cfg.LogLevel)
+	require.NotNil(t, cfg.OverviewEnabled)
+	require.True(t, *cfg.OverviewEnabled)
 	require.Equal(t, "7777", cfg.Server.Port)
 	require.Equal(t, "set-secret", cfg.Server.GitHub.WebhookSecret)
 	require.Equal(t, "set-app-id", cfg.Server.GitHub.AppID)
@@ -115,6 +122,7 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 	unsetEnv(t, "OPENAI_API_KEY")
 	unsetEnv(t, "PORT")
 	unsetEnv(t, "LOG_LEVEL")
+	unsetEnv(t, "OVERVIEW_ENABLED")
 	unsetEnv(t, "GITHUB_WEBHOOK_SECRET")
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
@@ -133,6 +141,57 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 
 	_, err = Load()
 	require.Error(t, err)
+}
+
+func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
+	unsetEnv(t, "OPENAI_BASE_URL")
+	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "OPENAI_API_KEY")
+	unsetEnv(t, "PORT")
+	unsetEnv(t, "LOG_LEVEL")
+	unsetEnv(t, "GITHUB_WEBHOOK_SECRET")
+	unsetEnv(t, "GITHUB_APP_ID")
+	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
+	unsetEnv(t, "GITHUB_API_BASE_URL")
+	t.Setenv("OVERVIEW_ENABLED", "false")
+
+	tmp := t.TempDir()
+	originalWD, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tmp))
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg.OverviewEnabled)
+	require.False(t, *cfg.OverviewEnabled)
+}
+
+func TestLoadReturnsErrorForInvalidOverviewEnabled(t *testing.T) {
+	unsetEnv(t, "OPENAI_BASE_URL")
+	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "OPENAI_API_KEY")
+	unsetEnv(t, "PORT")
+	unsetEnv(t, "LOG_LEVEL")
+	unsetEnv(t, "GITHUB_WEBHOOK_SECRET")
+	unsetEnv(t, "GITHUB_APP_ID")
+	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
+	unsetEnv(t, "GITHUB_API_BASE_URL")
+	t.Setenv("OVERVIEW_ENABLED", "not-a-bool")
+
+	tmp := t.TempDir()
+	originalWD, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tmp))
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	_, err = Load()
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid OVERVIEW_ENABLED")
 }
 
 func unsetEnv(t *testing.T, key string) {

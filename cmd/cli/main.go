@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
-	stdlogger "bentos-backend/adapter/outbound/logger/stdlogger"
 	"bentos-backend/config"
 	"bentos-backend/domain"
+	stdlogger "bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/wiring"
 
 	"github.com/spf13/cobra"
@@ -41,7 +41,7 @@ func main() {
 		context.Background(),
 		os.Args[1:],
 		config.Load,
-		func(cfg config.Config, opts wiring.CLILLMOptions, provider domain.ReviewInputProvider, publishType domain.ReviewPublishType, logLevelOverride string) (*cliinbound.Command, error) {
+		func(cfg config.Config, opts wiring.CLILLMOptions, provider domain.ChangeRequestInputProvider, publishType domain.ChangeRequestPublishType, logLevelOverride string) (*cliinbound.Command, error) {
 			return wiring.BuildCLICommand(cfg, opts, provider, publishType, logLevelOverride)
 		},
 	); err != nil {
@@ -56,7 +56,7 @@ func runCLI(
 	ctx context.Context,
 	args []string,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ReviewInputProvider, domain.ReviewPublishType, string) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ChangeRequestInputProvider, domain.ChangeRequestPublishType, string) (*cliinbound.Command, error),
 ) error {
 	root := newRootCommand(ctx, loadConfig, buildCommand)
 	root.SetArgs(args)
@@ -66,7 +66,7 @@ func runCLI(
 func newRootCommand(
 	ctx context.Context,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ReviewInputProvider, domain.ReviewPublishType, string) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ChangeRequestInputProvider, domain.ChangeRequestPublishType, string) (*cliinbound.Command, error),
 ) *cobra.Command {
 	var openAIBaseURL string
 	var openAIModel string
@@ -76,6 +76,7 @@ func newRootCommand(
 	var includeUntracked bool
 	var githubPRNumber int
 	var commentOnPR bool
+	var overview bool
 	var logLevel string
 
 	var cmd *cobra.Command
@@ -121,6 +122,12 @@ func newRootCommand(
 			if err != nil {
 				return cliConfigLoadError{cause: err}
 			}
+			effectiveOverview := false
+			if cmd.Flags().Changed("overview") {
+				effectiveOverview = overview
+			} else if cfg.OverviewEnabled != nil {
+				effectiveOverview = *cfg.OverviewEnabled
+			}
 			startupLogger, err := wiring.BuildLogger(cfg, logLevel)
 			if err != nil {
 				return err
@@ -147,6 +154,7 @@ func newRootCommand(
 				IncludeUnstaged:  includeUnstaged,
 				IncludeUntracked: includeUntracked,
 				PRNumber:         githubPRNumber,
+				Overview:         effectiveOverview,
 			})
 		},
 	}
@@ -160,6 +168,7 @@ func newRootCommand(
 	flags.BoolVarP(&includeUntracked, "untracked", "u", false, "include untracked files")
 	flags.IntVar(&githubPRNumber, "gh-pr", 0, "GitHub pull request number to review")
 	flags.BoolVar(&commentOnPR, "comment-on-pr", false, "post review result as comments on the GitHub pull request")
+	flags.BoolVar(&overview, "overview", false, "generate and publish/print high-level overview output")
 	flags.StringVar(&logLevel, "log-level", "", "log level override: trace|debug|info|warning|error|silence")
 
 	return cmd
@@ -202,15 +211,15 @@ func validateReviewModeFlags(cmd *cobra.Command, githubPRNumber int, commentOnPR
 	return nil
 }
 
-func resolveCLISelection(githubPRNumber int, commentOnPR bool) (domain.ReviewInputProvider, domain.ReviewPublishType) {
-	provider := domain.ReviewInputProviderLocal
-	publishType := domain.ReviewPublishTypePrint
+func resolveCLISelection(githubPRNumber int, commentOnPR bool) (domain.ChangeRequestInputProvider, domain.ChangeRequestPublishType) {
+	provider := domain.ChangeRequestInputProviderLocal
+	publishType := domain.ChangeRequestPublishTypePrint
 
 	if githubPRNumber > 0 {
-		provider = domain.ReviewInputProviderGitHub
+		provider = domain.ChangeRequestInputProviderGitHub
 	}
 	if commentOnPR {
-		publishType = domain.ReviewPublishTypeComment
+		publishType = domain.ChangeRequestPublishTypeComment
 	}
 
 	return provider, publishType

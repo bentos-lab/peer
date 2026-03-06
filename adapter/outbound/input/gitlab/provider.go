@@ -22,21 +22,21 @@ func NewProvider(client DiffClient) *Provider {
 	return &Provider{client: client}
 }
 
-// LoadReviewInput loads changed contents from a GitLab merge request.
-func (p *Provider) LoadReviewInput(ctx context.Context, request usecase.ReviewRequest) (domain.ReviewInput, error) {
+// LoadChangeSnapshot loads changed contents from a GitLab merge request.
+func (p *Provider) LoadChangeSnapshot(ctx context.Context, request usecase.ChangeRequestRequest) (domain.ChangeSnapshot, error) {
 	files, err := p.client.GetMergeRequestChangedFiles(ctx, request.Repository, request.ChangeRequestNumber)
 	if err != nil {
-		return domain.ReviewInput{}, err
+		return domain.ChangeSnapshot{}, err
 	}
-	return domain.ReviewInput{
-		Target: domain.ReviewTarget{
+	return domain.ChangeSnapshot{
+		Context: domain.ChangeRequestContext{
 			Repository:          request.Repository,
 			ChangeRequestNumber: request.ChangeRequestNumber,
+			Title:               request.Title,
+			Description:         request.Description,
+			Metadata:            request.Metadata,
 		},
-		Title:        request.Title,
-		Description:  request.Description,
 		ChangedFiles: files,
 		Language:     "English",
-		Metadata:     request.Metadata,
 	}, nil
 }

@@ -3,6 +3,8 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
@@ -32,6 +34,26 @@ func (f *fakeClient) CreateReviewComment(_ context.Context, _ string, _ int, inp
 	}
 	f.reviewInputs = append(f.reviewInputs, input)
 	return nil
+}
+
+type spyLogger struct {
+	events []string
+}
+
+func (s *spyLogger) Debugf(format string, args ...any) {
+	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
+}
+
+func (s *spyLogger) Infof(format string, args ...any) {
+	s.events = append(s.events, "info:"+fmt.Sprintf(format, args...))
+}
+
+func (s *spyLogger) Warnf(format string, args ...any) {
+	s.events = append(s.events, "warn:"+fmt.Sprintf(format, args...))
+}
+
+func (s *spyLogger) Errorf(format string, args ...any) {
+	s.events = append(s.events, "error:"+fmt.Sprintf(format, args...))
 }
 
 func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
@@ -76,7 +98,8 @@ func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 
 func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
 	client := &fakeClient{}
-	pub := NewPublisher(client, nil)
+	logger := &spyLogger{}
+	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -99,13 +122,15 @@ func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, client.reviewInputs)
 	require.Len(t, client.bodies, 1)
+	require.True(t, containsEvent(logger.events, "warn:Skipped one GitHub review comment because its anchor is invalid."))
 }
 
 func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
 	client := &fakeClient{
 		reviewErr: &githubvcs.InvalidAnchorError{Message: "invalid review comment anchor"},
 	}
-	pub := NewPublisher(client, nil)
+	logger := &spyLogger{}
+	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -127,6 +152,7 @@ func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
+	require.True(t, containsEvent(logger.events, "warn:Skipped one GitHub review comment because its anchor is invalid."))
 }
 
 func TestPublisher_PublishFailsForNonAnchorError(t *testing.T) {
@@ -172,4 +198,13 @@ func TestPublisher_PublishPostsOnlySummaryWhenNoFindings(t *testing.T) {
 	require.Empty(t, client.reviewInputs)
 	require.Len(t, client.bodies, 1)
 	require.Contains(t, client.bodies[0], "No significant review findings")
+}
+
+func containsEvent(events []string, target string) bool {
+	for _, event := range events {
+		if strings.Contains(event, target) {
+			return true
+		}
+	}
+	return false
 }

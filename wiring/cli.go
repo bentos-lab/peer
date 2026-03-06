@@ -11,6 +11,7 @@ import (
 	cliinput "bentos-backend/adapter/outbound/input/cli"
 	githubinput "bentos-backend/adapter/outbound/input/github"
 	openai "bentos-backend/adapter/outbound/llm/openai"
+	overviewllm "bentos-backend/adapter/outbound/overview/llm"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
 	reviewerllm "bentos-backend/adapter/outbound/reviewer/llm"
@@ -29,7 +30,7 @@ type CLILLMOptions struct {
 }
 
 // BuildCLICommand wires dependencies for a single CLI review mode.
-func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.ReviewInputProvider, publishType domain.ReviewPublishType, logLevelOverride string) (*cliinbound.Command, error) {
+func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.ChangeRequestInputProvider, publishType domain.ChangeRequestPublishType, logLevelOverride string) (*cliinbound.Command, error) {
 	if err := validateCLISelection(provider, publishType); err != nil {
 		return nil, err
 	}
@@ -49,82 +50,102 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Revi
 	if err != nil {
 		return nil, err
 	}
+	llmOverview, err := overviewllm.NewOverviewGenerator(llmClient, logger)
+	if err != nil {
+		return nil, err
+	}
 	ruleProvider := rulepack.NewCoreRulePackProvider()
 
 	inputProvider, providerName, providerClient, err := buildInputProvider(provider)
 	if err != nil {
 		return nil, err
 	}
-	publisher, err := buildPublisher(publishType, provider, providerClient, logger)
+	reviewPublisher, overviewPublisher, err := buildPublishers(publishType, provider, providerClient, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	useCase, err := usecase.NewReviewerUseCase(
-		inputProvider,
+	reviewUseCase, err := usecase.NewReviewUseCase(
 		ruleProvider,
 		llmReviewer,
-		publisher,
+		reviewPublisher,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+	overviewUseCase, err := usecase.NewOverviewUseCase(
+		llmOverview,
+		overviewPublisher,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
+		inputProvider,
+		reviewUseCase,
+		overviewUseCase,
 		logger,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return buildCLIInboundCommand(providerName, useCase, logger)
+	return buildCLIInboundCommand(providerName, changeRequestUseCase, logger)
 }
 
-func buildInputProvider(provider domain.ReviewInputProvider) (usecase.ReviewInputProvider, domain.ReviewInputProvider, any, error) {
+func buildInputProvider(provider domain.ChangeRequestInputProvider) (usecase.ChangeRequestInputProvider, domain.ChangeRequestInputProvider, any, error) {
 	switch provider {
-	case domain.ReviewInputProviderLocal:
-		return cliinput.NewProvider(cliinput.NewGitChangeDetector()), domain.ReviewInputProviderLocal, nil, nil
-	case domain.ReviewInputProviderGitHub:
+	case domain.ChangeRequestInputProviderLocal:
+		return cliinput.NewProvider(cliinput.NewGitChangeDetector()), domain.ChangeRequestInputProviderLocal, nil, nil
+	case domain.ChangeRequestInputProviderGitHub:
 		providerClient := githubvcs.NewCLIClient()
-		return githubinput.NewProvider(providerClient), domain.ReviewInputProviderGitHub, providerClient, nil
+		return githubinput.NewProvider(providerClient), domain.ChangeRequestInputProviderGitHub, providerClient, nil
 	default:
 		return nil, "", nil, fmt.Errorf("unsupported review input provider: %s", provider)
 	}
 }
 
-func buildPublisher(publishType domain.ReviewPublishType, provider domain.ReviewInputProvider, providerClient any, logger usecase.Logger) (usecase.ReviewResultPublisher, error) {
+func buildPublishers(publishType domain.ChangeRequestPublishType, provider domain.ChangeRequestInputProvider, providerClient any, logger usecase.Logger) (usecase.ReviewResultPublisher, usecase.OverviewPublisher, error) {
 	switch publishType {
-	case domain.ReviewPublishTypePrint:
-		return clipublisher.NewPublisher(os.Stdout), nil
-	case domain.ReviewPublishTypeComment:
+	case domain.ChangeRequestPublishTypePrint:
+		return clipublisher.NewPublisher(os.Stdout), clipublisher.NewOverviewPublisher(os.Stdout), nil
+	case domain.ChangeRequestPublishTypeComment:
 		switch provider {
-		case domain.ReviewInputProviderGitHub:
+		case domain.ChangeRequestInputProviderGitHub:
 			githubClient, ok := providerClient.(*githubvcs.CLIClient)
 			if !ok || githubClient == nil {
-				return nil, fmt.Errorf("provider client is not configured for provider: %s", provider)
+				return nil, nil, fmt.Errorf("provider client is not configured for provider: %s", provider)
 			}
-			return githubpublisher.NewPublisher(githubClient, logger), nil
+			return githubpublisher.NewPublisher(githubClient, logger), githubpublisher.NewOverviewPublisher(githubClient, logger), nil
 		default:
-			return nil, fmt.Errorf("publish type %q is not supported with provider %q", publishType, provider)
+			return nil, nil, fmt.Errorf("publish type %q is not supported with provider %q", publishType, provider)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported review publish type: %s", publishType)
+		return nil, nil, fmt.Errorf("unsupported review publish type: %s", publishType)
 	}
 }
 
-func buildCLIInboundCommand(providerName domain.ReviewInputProvider, reviewUseCase usecase.ReviewUseCase, logger usecase.Logger) (*cliinbound.Command, error) {
+func buildCLIInboundCommand(providerName domain.ChangeRequestInputProvider, changeRequestUseCase usecase.ChangeRequestUseCase, logger usecase.Logger) (*cliinbound.Command, error) {
 	switch providerName {
-	case domain.ReviewInputProviderLocal:
-		return cliinbound.NewLocalCommand(reviewUseCase, logger), nil
-	case domain.ReviewInputProviderGitHub:
-		return cliinbound.NewGitHubPRCommand(reviewUseCase, logger), nil
+	case domain.ChangeRequestInputProviderLocal:
+		return cliinbound.NewLocalCommand(changeRequestUseCase, logger), nil
+	case domain.ChangeRequestInputProviderGitHub:
+		return cliinbound.NewGitHubPRCommand(changeRequestUseCase, logger), nil
 	default:
 		return nil, fmt.Errorf("unsupported review input provider: %s", providerName)
 	}
 }
 
-func validateCLISelection(provider domain.ReviewInputProvider, publishType domain.ReviewPublishType) error {
-	allowedPublishTypesByProvider := map[domain.ReviewInputProvider]map[domain.ReviewPublishType]struct{}{
-		domain.ReviewInputProviderLocal: {
-			domain.ReviewPublishTypePrint: {},
+func validateCLISelection(provider domain.ChangeRequestInputProvider, publishType domain.ChangeRequestPublishType) error {
+	allowedPublishTypesByProvider := map[domain.ChangeRequestInputProvider]map[domain.ChangeRequestPublishType]struct{}{
+		domain.ChangeRequestInputProviderLocal: {
+			domain.ChangeRequestPublishTypePrint: {},
 		},
-		domain.ReviewInputProviderGitHub: {
-			domain.ReviewPublishTypePrint:   {},
-			domain.ReviewPublishTypeComment: {},
+		domain.ChangeRequestInputProviderGitHub: {
+			domain.ChangeRequestPublishTypePrint:   {},
+			domain.ChangeRequestPublishTypeComment: {},
 		},
 	}
 

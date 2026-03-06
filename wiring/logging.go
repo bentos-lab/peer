@@ -5,8 +5,8 @@ import (
 	"log"
 	"strings"
 
-	stdlogger "bentos-backend/adapter/outbound/logger/stdlogger"
 	"bentos-backend/config"
+	stdlogger "bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 

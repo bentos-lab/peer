@@ -9,20 +9,21 @@ import (
 
 	cliinput "bentos-backend/adapter/outbound/input/cli"
 	"bentos-backend/domain"
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeReviewUseCase struct {
-	lastRequest usecase.ReviewRequest
+	lastRequest usecase.ChangeRequestRequest
 	executed    bool
 	err         error
 }
 
-func (f *fakeReviewUseCase) Execute(_ context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
+func (f *fakeReviewUseCase) Execute(_ context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
 	f.executed = true
 	f.lastRequest = request
-	return usecase.ReviewExecutionResult{}, f.err
+	return usecase.ChangeRequestExecutionResult{}, f.err
 }
 
 type spyLogger struct {
@@ -37,6 +38,10 @@ func (s *spyLogger) Debugf(format string, args ...any) {
 	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
 }
 
+func (s *spyLogger) Warnf(format string, args ...any) {
+	s.events = append(s.events, "warn:"+fmt.Sprintf(format, args...))
+}
+
 func (s *spyLogger) Errorf(format string, args ...any) {
 	s.events = append(s.events, "error:"+fmt.Sprintf(format, args...))
 }
@@ -49,6 +54,7 @@ func TestCommand_RunMapsParamsToMetadata(t *testing.T) {
 	err := command.Run(context.Background(), RunParams{
 		IncludeUnstaged:  true,
 		IncludeUntracked: true,
+		Overview:         true,
 	})
 	require.NoError(t, err)
 	require.True(t, fakeUC.executed)
@@ -56,6 +62,7 @@ func TestCommand_RunMapsParamsToMetadata(t *testing.T) {
 	require.Equal(t, "true", fakeUC.lastRequest.Metadata[cliinput.MetadataKeyAutoIncludeAll])
 	require.Equal(t, "true", fakeUC.lastRequest.Metadata[cliinput.MetadataKeyAutoIncludeUntracked])
 	require.Equal(t, "", fakeUC.lastRequest.Metadata[cliinput.MetadataKeyChangedFiles])
+	require.True(t, fakeUC.lastRequest.EnableOverview)
 	require.True(t, containsEvent(logger.events, "info:CLI review started."))
 	require.True(t, containsEvent(logger.events, "info:CLI review completed."))
 }
@@ -78,20 +85,22 @@ func TestCommand_RunGitHubPRMapsRequest(t *testing.T) {
 
 	err := command.Run(context.Background(), RunParams{
 		PRNumber: 7,
+		Overview: true,
 	})
 	require.NoError(t, err)
 	require.True(t, fakeUC.executed)
 	require.Equal(t, 7, fakeUC.lastRequest.ChangeRequestNumber)
 	require.Equal(t, "", fakeUC.lastRequest.Repository)
 	require.Empty(t, fakeUC.lastRequest.Metadata)
+	require.True(t, fakeUC.lastRequest.EnableOverview)
 }
 
 func TestCommand_RunReturnsErrorWhenProviderIsNotConfigured(t *testing.T) {
 	fakeUC := &fakeReviewUseCase{}
 	command := &Command{
-		reviewer:     fakeUC,
-		providerName: domain.ReviewInputProvider("unknown"),
-		logger:       usecase.NopLogger,
+		changeRequestUseCase: fakeUC,
+		providerName:         domain.ChangeRequestInputProvider("unknown"),
+		logger:               stdlogger.Nop(),
 	}
 
 	err := command.Run(context.Background(), RunParams{})

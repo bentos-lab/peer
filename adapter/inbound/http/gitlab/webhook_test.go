@@ -15,13 +15,13 @@ import (
 )
 
 type mockUseCase struct {
-	requestCh chan usecase.ReviewRequest
+	requestCh chan usecase.ChangeRequestRequest
 	proceedCh chan struct{}
 	err       error
 	panicVal  any
 }
 
-func (m *mockUseCase) Execute(_ context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
+func (m *mockUseCase) Execute(_ context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
 	if m.panicVal != nil {
 		panic(m.panicVal)
 	}
@@ -31,7 +31,7 @@ func (m *mockUseCase) Execute(_ context.Context, request usecase.ReviewRequest) 
 	if m.proceedCh != nil {
 		<-m.proceedCh
 	}
-	return usecase.ReviewExecutionResult{}, m.err
+	return usecase.ChangeRequestExecutionResult{}, m.err
 }
 
 type spyLogger struct {
@@ -46,12 +46,16 @@ func (s *spyLogger) Debugf(format string, args ...any) {
 	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
 }
 
+func (s *spyLogger) Warnf(format string, args ...any) {
+	s.events = append(s.events, "warn:"+fmt.Sprintf(format, args...))
+}
+
 func (s *spyLogger) Errorf(format string, args ...any) {
 	s.events = append(s.events, "error:"+fmt.Sprintf(format, args...))
 }
 
 func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
 	logger := &spyLogger{}
 	handler := NewHandler(uc, logger)
 	payload := `{
@@ -82,7 +86,7 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 }
 
 func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
 	handler := NewHandler(uc, nil)
 	req := httptest.NewRequest(http.MethodPost, "/gitlab/webhook", strings.NewReader(`{`))
 	resp := httptest.NewRecorder()
@@ -94,7 +98,7 @@ func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
 	handler := NewHandler(uc, nil)
 	payload := `{
 		"object_kind":"merge_request",
@@ -119,7 +123,7 @@ func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) 
 
 func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		proceedCh: make(chan struct{}),
 	}
 	handler := NewHandler(uc, nil)
@@ -161,7 +165,7 @@ func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 
 func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		err:       errors.New("review failed"),
 	}
 	logger := &spyLogger{}
@@ -196,7 +200,7 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 
 func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		panicVal:  "boom",
 	}
 	logger := &spyLogger{}

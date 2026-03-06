@@ -2,17 +2,21 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 // Config contains app runtime configuration.
 type Config struct {
-	LogLevel string
-	OpenAI   OpenAIConfig
-	Server   ServerConfig
+	LogLevel        string
+	OverviewEnabled *bool
+	OpenAI          OpenAIConfig
+	Server          ServerConfig
 }
 
 // OpenAIConfig contains OpenAI-compatible provider settings.
@@ -42,8 +46,14 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	overviewEnabled, err := optionalBoolEnv("OVERVIEW_ENABLED")
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
-		LogLevel: envOrDefault("LOG_LEVEL", "info"),
+		LogLevel:        envOrDefault("LOG_LEVEL", "info"),
+		OverviewEnabled: overviewEnabled,
 		OpenAI: OpenAIConfig{
 			BaseURL: envOrDefault("OPENAI_BASE_URL", "gemini"),
 			APIKey:  os.Getenv("OPENAI_API_KEY"),
@@ -67,4 +77,18 @@ func envOrDefault(key string, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func optionalBoolEnv(key string) (*bool, error) {
+	rawValue, exists := os.LookupEnv(key)
+	if !exists {
+		return nil, nil
+	}
+
+	parsedValue, err := strconv.ParseBool(strings.TrimSpace(rawValue))
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", key, err)
+	}
+
+	return &parsedValue, nil
 }

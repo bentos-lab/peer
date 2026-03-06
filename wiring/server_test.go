@@ -72,6 +72,45 @@ func TestBuildGitHubHandlerBuildsWithRequiredConfig(t *testing.T) {
 	require.NotNil(t, handler)
 }
 
+func TestResolveServerOverviewEnabled(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    config.Config
+		expected bool
+	}{
+		{
+			name:     "defaults to true when unset",
+			input:    config.Config{},
+			expected: true,
+		},
+		{
+			name: "uses configured true",
+			input: config.Config{
+				OverviewEnabled: boolPointer(true),
+			},
+			expected: true,
+		},
+		{
+			name: "uses configured false",
+			input: config.Config{
+				OverviewEnabled: boolPointer(false),
+			},
+			expected: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := resolveServerOverviewEnabled(testCase.input)
+			require.Equal(t, testCase.expected, actual)
+		})
+	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
+}
+
 func mustGeneratePrivateKeyPEM(t *testing.T) string {
 	t.Helper()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)

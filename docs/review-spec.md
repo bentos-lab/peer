@@ -62,6 +62,26 @@ Current reviewer adapter (`adapter/outbound/reviewer/llm`) expects model output 
 }
 ```
 
+Overview adapter (`adapter/outbound/overview/llm`) uses an independent prompt and JSON contract:
+
+```json
+{
+  "categories": [
+    {
+      "category": "Logic Updates|Refactoring|Security Fixes|Test Changes|Documentation|Infrastructure/Config",
+      "summary": "string"
+    }
+  ],
+  "walkthroughs": [
+    {
+      "groupName": "string",
+      "files": ["path/to/file.go"],
+      "summary": "string"
+    }
+  ]
+}
+```
+
 ## Output Strategy
 
 For each review:
@@ -73,5 +93,7 @@ For each review:
 
 - GitHub/GitLab: publish comments/notes only
 - CLI: print grouped messages + summary
+- When overview is enabled, generation and publishing run in one flow.
+- GitHub overview comment is posted only on initial PR creation (`opened`).
 
 No merge-blocking logic is implemented in current version.

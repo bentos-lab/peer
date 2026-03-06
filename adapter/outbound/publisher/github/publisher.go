@@ -8,6 +8,7 @@ import (
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 
@@ -26,7 +27,7 @@ type Publisher struct {
 // NewPublisher creates a GitHub publisher.
 func NewPublisher(client CommentClient, logger usecase.Logger) *Publisher {
 	if logger == nil {
-		logger = usecase.NopLogger
+		logger = stdlogger.Nop()
 	}
 	return &Publisher{client: client, logger: logger}
 }
@@ -41,7 +42,7 @@ func (p *Publisher) Publish(ctx context.Context, result usecase.ReviewPublishRes
 	for _, finding := range result.Findings {
 		if err := p.publishFinding(ctx, result.Target, finding); err != nil {
 			if githubvcs.IsInvalidAnchorError(err) {
-				p.logger.Infof("Skipped one GitHub review comment because its anchor is invalid.")
+				p.logger.Warnf("Skipped one GitHub review comment because its anchor is invalid.")
 				p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
 				p.logger.Debugf("The skipped finding used line range %d to %d.", finding.StartLine, finding.EndLine)
 				p.logger.Debugf("Failure details: %v.", err)

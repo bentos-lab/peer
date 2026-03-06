@@ -42,15 +42,15 @@ func NewProvider(changeDetector ChangeDetector) *Provider {
 	return &Provider{changeDetector: changeDetector}
 }
 
-// LoadReviewInput loads changed content from metadata file paths.
-func (p *Provider) LoadReviewInput(ctx context.Context, request usecase.ReviewRequest) (domain.ReviewInput, error) {
+// LoadChangeSnapshot loads changed content from metadata file paths.
+func (p *Provider) LoadChangeSnapshot(ctx context.Context, request usecase.ChangeRequestRequest) (domain.ChangeSnapshot, error) {
 	pathsCSV := strings.TrimSpace(request.Metadata[MetadataKeyChangedFiles])
 	paths := splitCSV(pathsCSV)
 	autoMode := pathsCSV == ""
 	if autoMode {
 		autoPaths, err := p.detectAutoPaths(ctx, request.Metadata)
 		if err != nil {
-			return domain.ReviewInput{}, err
+			return domain.ChangeSnapshot{}, err
 		}
 		paths = autoPaths
 	}
@@ -62,7 +62,7 @@ func (p *Provider) LoadReviewInput(ctx context.Context, request usecase.ReviewRe
 			if autoMode && os.IsNotExist(err) {
 				continue
 			}
-			return domain.ReviewInput{}, err
+			return domain.ChangeSnapshot{}, err
 		}
 		files = append(files, domain.ChangedFile{
 			Path:    path,
@@ -70,19 +70,19 @@ func (p *Provider) LoadReviewInput(ctx context.Context, request usecase.ReviewRe
 		})
 	}
 	if autoMode && len(files) == 0 {
-		return domain.ReviewInput{}, errNoChangedFiles
+		return domain.ChangeSnapshot{}, errNoChangedFiles
 	}
 
-	return domain.ReviewInput{
-		Target: domain.ReviewTarget{
+	return domain.ChangeSnapshot{
+		Context: domain.ChangeRequestContext{
 			Repository:          request.Repository,
 			ChangeRequestNumber: request.ChangeRequestNumber,
+			Title:               request.Title,
+			Description:         request.Description,
+			Metadata:            request.Metadata,
 		},
-		Title:        request.Title,
-		Description:  request.Description,
 		ChangedFiles: files,
 		Language:     "English",
-		Metadata:     request.Metadata,
 	}, nil
 }
 

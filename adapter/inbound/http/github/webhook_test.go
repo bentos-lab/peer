@@ -21,14 +21,14 @@ import (
 const testWebhookSecret = "test-secret"
 
 type mockUseCase struct {
-	requestCh chan usecase.ReviewRequest
+	requestCh chan usecase.ChangeRequestRequest
 	ctxCh     chan context.Context
 	proceedCh chan struct{}
 	err       error
 	panicVal  any
 }
 
-func (m *mockUseCase) Execute(ctx context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
+func (m *mockUseCase) Execute(ctx context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
 	if m.panicVal != nil {
 		panic(m.panicVal)
 	}
@@ -41,7 +41,7 @@ func (m *mockUseCase) Execute(ctx context.Context, request usecase.ReviewRequest
 	if m.proceedCh != nil {
 		<-m.proceedCh
 	}
-	return usecase.ReviewExecutionResult{}, m.err
+	return usecase.ChangeRequestExecutionResult{}, m.err
 }
 
 type spyLogger struct {
@@ -56,17 +56,21 @@ func (s *spyLogger) Debugf(format string, args ...any) {
 	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
 }
 
+func (s *spyLogger) Warnf(format string, args ...any) {
+	s.events = append(s.events, "warn:"+fmt.Sprintf(format, args...))
+}
+
 func (s *spyLogger) Errorf(format string, args ...any) {
 	s.events = append(s.events, "error:"+fmt.Sprintf(format, args...))
 }
 
 func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		ctxCh:     make(chan context.Context, 1),
 	}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret)
+	handler := NewHandler(uc, logger, testWebhookSecret, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -90,6 +94,7 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 		require.Equal(t, "org/repo", reviewRequest.Repository)
 		require.Equal(t, 7, reviewRequest.ChangeRequestNumber)
 		require.Equal(t, "opened", reviewRequest.Metadata["action"])
+		require.True(t, reviewRequest.EnableOverview)
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
@@ -103,8 +108,8 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 }
 
 func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	payload := `{
 		"action":"synchronize",
 		"installation":{"id":321},
@@ -124,15 +129,45 @@ func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
 
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	select {
-	case <-uc.requestCh:
+	case reviewRequest := <-uc.requestCh:
+		require.False(t, reviewRequest.EnableOverview)
+	case <-time.After(time.Second):
+		t.Fatal("expected review usecase execution")
+	}
+}
+
+func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(t *testing.T) {
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, false)
+	payload := `{
+		"action":"opened",
+		"installation":{"id":321},
+		"repository":{"full_name":"org/repo"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := signedRequest(t, payload, "pull_request", testWebhookSecret)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	select {
+	case reviewRequest := <-uc.requestCh:
+		require.False(t, reviewRequest.EnableOverview)
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
 }
 
 func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	payload := `{
 		"action":"edited",
 		"installation":{"id":321},
@@ -155,8 +190,8 @@ func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	resp := httptest.NewRecorder()
@@ -168,8 +203,8 @@ func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	req.Header.Set("X-Hub-Signature-256", "sha256=deadbeef")
@@ -182,8 +217,8 @@ func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	req := signedRequest(t, `{`, "pull_request", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -194,8 +229,8 @@ func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -218,9 +253,9 @@ func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) 
 }
 
 func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret)
+	handler := NewHandler(uc, logger, testWebhookSecret, true)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":"org/repo"},
@@ -245,8 +280,8 @@ func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) 
 }
 
 func TestHandler_ServeHTTP_NonPullRequestEventIsIgnored(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	req := signedRequest(t, `{"action":"opened"}`, "issues", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -258,10 +293,10 @@ func TestHandler_ServeHTTP_NonPullRequestEventIsIgnored(t *testing.T) {
 
 func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		proceedCh: make(chan struct{}),
 	}
-	handler := NewHandler(uc, nil, testWebhookSecret)
+	handler := NewHandler(uc, nil, testWebhookSecret, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -300,11 +335,11 @@ func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 
 func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		err:       errors.New("review failed"),
 	}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret)
+	handler := NewHandler(uc, logger, testWebhookSecret, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -335,11 +370,11 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 
 func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 	uc := &mockUseCase{
-		requestCh: make(chan usecase.ReviewRequest, 1),
+		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		panicVal:  "boom",
 	}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret)
+	handler := NewHandler(uc, logger, testWebhookSecret, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
