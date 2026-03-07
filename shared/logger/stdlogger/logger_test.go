@@ -29,6 +29,16 @@ func TestLoggerDebugfWritesFormattedMessage(t *testing.T) {
 	require.Contains(t, output, "[DEBUG] Using local provider.")
 }
 
+func TestLoggerTracefWritesFormattedMessage(t *testing.T) {
+	var buffer bytes.Buffer
+	logger := NewWithLevel(log.New(&buffer, "", 0), LevelTrace)
+
+	logger.Tracef("llm output: %s", "{\"ok\":true}")
+
+	output := buffer.String()
+	require.Contains(t, output, "[TRACE] llm output: {\"ok\":true}")
+}
+
 func TestLoggerWarnfWritesFormattedMessage(t *testing.T) {
 	var buffer bytes.Buffer
 	logger := New(log.New(&buffer, "", 0))
@@ -70,12 +80,32 @@ func TestLoggerDebugLevelIncludesDebugInfoWarnAndError(t *testing.T) {
 	var buffer bytes.Buffer
 	logger := NewWithLevel(log.New(&buffer, "", 0), LevelDebug)
 
+	logger.Tracef("trace detail")
 	logger.Debugf("debug detail")
 	logger.Infof("info detail")
 	logger.Warnf("warn detail")
 	logger.Errorf("error detail")
 
 	output := buffer.String()
+	require.NotContains(t, output, "[TRACE] trace detail")
+	require.Contains(t, output, "[DEBUG] debug detail")
+	require.Contains(t, output, "[INFO] info detail")
+	require.Contains(t, output, "[WARN] warn detail")
+	require.Contains(t, output, "[ERROR] error detail")
+}
+
+func TestLoggerTraceLevelIncludesTraceDebugInfoWarnAndError(t *testing.T) {
+	var buffer bytes.Buffer
+	logger := NewWithLevel(log.New(&buffer, "", 0), LevelTrace)
+
+	logger.Tracef("trace detail")
+	logger.Debugf("debug detail")
+	logger.Infof("info detail")
+	logger.Warnf("warn detail")
+	logger.Errorf("error detail")
+
+	output := buffer.String()
+	require.Contains(t, output, "[TRACE] trace detail")
 	require.Contains(t, output, "[DEBUG] debug detail")
 	require.Contains(t, output, "[INFO] info detail")
 	require.Contains(t, output, "[WARN] warn detail")
@@ -102,6 +132,7 @@ func TestLoggerSilenceDropsAllEvents(t *testing.T) {
 	var buffer bytes.Buffer
 	logger := NewWithLevel(log.New(&buffer, "", 0), LevelSilence)
 
+	logger.Tracef("trace detail")
 	logger.Debugf("debug detail")
 	logger.Infof("review started")
 	logger.Warnf("review warning")

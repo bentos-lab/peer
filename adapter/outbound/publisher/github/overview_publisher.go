@@ -40,17 +40,25 @@ func (p *OverviewPublisher) PublishOverview(ctx context.Context, req usecase.Ove
 
 	body := formatOverviewMarkdown(req.Overview)
 	if err := p.client.CreateComment(ctx, req.Target.Repository, req.Target.ChangeRequestNumber, body); err != nil {
+		p.logOverviewPayload("failed", req, body)
 		p.logger.Errorf("Publishing GitHub overview failed.")
 		p.logger.Debugf("Repository is %q and change request number is %d.", req.Target.Repository, req.Target.ChangeRequestNumber)
 		p.logger.Debugf("The publish operation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
 		p.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
+	p.logOverviewPayload("success", req, body)
 
 	p.logger.Infof("Publishing GitHub overview completed.")
 	p.logger.Debugf("Repository is %q and change request number is %d.", req.Target.Repository, req.Target.ChangeRequestNumber)
 	p.logger.Debugf("The publish operation completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
+}
+
+func (p *OverviewPublisher) logOverviewPayload(state string, req usecase.OverviewPublishRequest, body string) {
+	p.logger.Debugf("GitHub overview comment metadata state=%q repo=%q pr=%d action=%q categories=%d walkthroughs=%d.",
+		state, req.Target.Repository, req.Target.ChangeRequestNumber, req.Metadata["action"], len(req.Overview.Categories), len(req.Overview.Walkthroughs))
+	p.logger.Tracef("GitHub overview comment content state=%q body=%q.", state, body)
 }
 
 func shouldPublishOverviewForAction(action string) bool {

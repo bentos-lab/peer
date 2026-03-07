@@ -16,11 +16,11 @@ import (
 	"bentos-backend/usecase/contracts"
 )
 
-//go:embed system.md
-var systemPromptTemplateRaw string
+//go:embed overview_system.md
+var overviewSystemPromptTemplateRaw string
 
-//go:embed input.md
-var userPromptTemplateRaw string
+//go:embed overview_input.md
+var overviewUserPromptTemplateRaw string
 
 // OverviewGenerator implements usecase.LLMOverviewGenerator via a generic LLM generator.
 type OverviewGenerator struct {
@@ -187,7 +187,7 @@ func overviewResponseSchema() map[string]any {
 }
 
 func renderOverviewSystemPrompt() (string, error) {
-	parsedTemplate, err := template.New("overview_system_prompt").Parse(systemPromptTemplateRaw)
+	parsedTemplate, err := template.New("overview_system_prompt").Parse(overviewSystemPromptTemplateRaw)
 	if err != nil {
 		return "", err
 	}
@@ -216,7 +216,7 @@ func renderOverviewUserPrompt(input domain.OverviewInput) (string, error) {
 		})
 	}
 
-	parsedTemplate, err := template.New("overview_user_prompt").Parse(userPromptTemplateRaw)
+	parsedTemplate, err := template.New("overview_user_prompt").Parse(overviewUserPromptTemplateRaw)
 	if err != nil {
 		return "", err
 	}

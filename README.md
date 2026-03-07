@@ -110,6 +110,8 @@ go run ./cmd/cli --all
 go run ./cmd/cli --untracked
 go run ./cmd/cli --changed-files file1.go,file2.go
 go run ./cmd/cli --overview
+go run ./cmd/cli --suggested-changes
+go run ./cmd/cli --suggested-changes=false
 go run ./cmd/cli --gh-pr 123
 go run ./cmd/cli --gh-pr 123 --overview
 go run ./cmd/cli --gh-pr 123 --comment-on-pr
@@ -123,6 +125,8 @@ CLI notes:
 - `--overview` always generates overview and sends it to the mode's configured overview publisher/output.
 - If `--overview` is not provided, CLI uses `OVERVIEW_ENABLED` when set; otherwise overview is disabled by default.
 - Explicit CLI flag value (`--overview` or `--overview=false`) takes precedence over `OVERVIEW_ENABLED`.
+- If `--suggested-changes` is not provided, CLI uses `REVIEW_SUGGESTED_CHANGES_ENABLED`.
+- Explicit CLI flag value (`--suggested-changes` or `--suggested-changes=false`) takes precedence over `REVIEW_SUGGESTED_CHANGES_ENABLED`.
 
 ## Troubleshooting
 

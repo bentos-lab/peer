@@ -25,7 +25,8 @@ func (f *fakeOverviewClient) CreateComment(_ context.Context, _ string, _ int, b
 
 func TestOverviewPublisher_PublishOverview_PostsMarkdown(t *testing.T) {
 	client := &fakeOverviewClient{}
-	publisher := NewOverviewPublisher(client, nil)
+	logger := &spyLogger{}
+	publisher := NewOverviewPublisher(client, logger)
 
 	err := publisher.PublishOverview(context.Background(), usecase.OverviewPublishRequest{
 		Target: domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 11},
@@ -44,6 +45,8 @@ func TestOverviewPublisher_PublishOverview_PostsMarkdown(t *testing.T) {
 	require.Contains(t, client.bodies[0], "## Summary")
 	require.Contains(t, client.bodies[0], "## Walkthroughs")
 	require.Contains(t, client.bodies[0], "| Group | Summary |")
+	require.True(t, containsEvent(logger.events, "debug:GitHub overview comment metadata state=\"success\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub overview comment content state=\"success\""))
 }
 
 func TestOverviewPublisher_PublishOverview_SkipsNonOpenedAction(t *testing.T) {
@@ -61,7 +64,8 @@ func TestOverviewPublisher_PublishOverview_SkipsNonOpenedAction(t *testing.T) {
 
 func TestOverviewPublisher_PublishOverview_FailsWhenClientFails(t *testing.T) {
 	client := &fakeOverviewClient{err: errors.New("network")}
-	publisher := NewOverviewPublisher(client, nil)
+	logger := &spyLogger{}
+	publisher := NewOverviewPublisher(client, logger)
 
 	err := publisher.PublishOverview(context.Background(), usecase.OverviewPublishRequest{
 		Target: domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 11},
@@ -71,4 +75,6 @@ func TestOverviewPublisher_PublishOverview_FailsWhenClientFails(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "network")
+	require.True(t, containsEvent(logger.events, "debug:GitHub overview comment metadata state=\"failed\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub overview comment content state=\"failed\""))
 }

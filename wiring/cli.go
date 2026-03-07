@@ -11,6 +11,7 @@ import (
 	cliinput "bentos-backend/adapter/outbound/input/cli"
 	githubinput "bentos-backend/adapter/outbound/input/github"
 	openai "bentos-backend/adapter/outbound/llm/openai"
+	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewllm "bentos-backend/adapter/outbound/overview/llm"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
@@ -46,11 +47,12 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Chan
 
 	httpClient := &http.Client{Timeout: 600 * time.Second}
 	llmClient := openai.NewClient(httpClient, llmConfig)
-	llmReviewer, err := reviewerllm.NewReviewer(llmClient, logger)
+	tracedLLMClient := llmtracing.NewGenerator(llmClient, logger)
+	llmReviewer, err := reviewerllm.NewReviewer(tracedLLMClient, logger)
 	if err != nil {
 		return nil, err
 	}
-	llmOverview, err := overviewllm.NewOverviewGenerator(llmClient, logger)
+	llmOverview, err := overviewllm.NewOverviewGenerator(tracedLLMClient, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -64,12 +66,17 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Chan
 	if err != nil {
 		return nil, err
 	}
+	reviewOptions, err := reviewUseCaseOptionsFromConfig(cfg, llmReviewer)
+	if err != nil {
+		return nil, err
+	}
 
 	reviewUseCase, err := usecase.NewReviewUseCase(
 		ruleProvider,
 		llmReviewer,
 		reviewPublisher,
 		logger,
+		reviewOptions...,
 	)
 	if err != nil {
 		return nil, err

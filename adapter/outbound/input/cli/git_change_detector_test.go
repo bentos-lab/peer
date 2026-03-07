@@ -43,6 +43,25 @@ func TestGitChangeDetector_ListParsesOutput(t *testing.T) {
 	require.NoError(t, runner.VerifyDone())
 }
 
+func TestGitChangeDetector_GetDiffForPath_CombinesStagedAndUnstaged(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"diff", "--cached", "--", "a.go"}},
+		Result:   commandrunner.Result{Stdout: []byte("@@ -1 +1 @@\n-old\n+new-staged\n")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"diff", "--", "a.go"}},
+		Result:   commandrunner.Result{Stdout: []byte("@@ -2 +2 @@\n-old2\n+new-unstaged\n")},
+	})
+
+	detector := newGitChangeDetectorWithRunner(runner)
+	diff, err := detector.GetDiffForPath(context.Background(), "a.go")
+	require.NoError(t, err)
+	require.Contains(t, diff, "+new-staged")
+	require.Contains(t, diff, "+new-unstaged")
+	require.NoError(t, runner.VerifyDone())
+}
+
 func TestGitChangeDetector_ListPropagatesErrors(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 	runner.Enqueue(commandrunner.CommandStep{
@@ -55,6 +74,22 @@ func TestGitChangeDetector_ListPropagatesErrors(t *testing.T) {
 	_, err := detector.ListStaged(context.Background())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "git diff --cached --name-only --diff-filter=ACMRTUXB failed")
+	require.Contains(t, err.Error(), "fatal")
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestGitChangeDetector_GetDiffForPath_PropagatesErrors(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"diff", "--cached", "--", "a.go"}},
+		Result:   commandrunner.Result{Stderr: []byte("fatal")},
+		Err:      errors.New("exit status 1"),
+	})
+	detector := newGitChangeDetectorWithRunner(runner)
+
+	_, err := detector.GetDiffForPath(context.Background(), "a.go")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "git diff --cached -- a.go failed")
 	require.Contains(t, err.Error(), "fatal")
 	require.NoError(t, runner.VerifyDone())
 }

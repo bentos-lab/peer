@@ -77,6 +77,7 @@ func newRootCommand(
 	var githubPRNumber int
 	var commentOnPR bool
 	var overview bool
+	var suggestedChanges bool
 	var logLevel string
 
 	var cmd *cobra.Command
@@ -128,6 +129,9 @@ func newRootCommand(
 			} else if cfg.OverviewEnabled != nil {
 				effectiveOverview = *cfg.OverviewEnabled
 			}
+			if cmd.Flags().Changed("suggested-changes") {
+				cfg.SuggestedChanges.Enabled = suggestedChanges
+			}
 			startupLogger, err := wiring.BuildLogger(cfg, logLevel)
 			if err != nil {
 				return err
@@ -169,6 +173,7 @@ func newRootCommand(
 	flags.IntVar(&githubPRNumber, "gh-pr", 0, "GitHub pull request number to review")
 	flags.BoolVar(&commentOnPR, "comment-on-pr", false, "post review result as comments on the GitHub pull request")
 	flags.BoolVar(&overview, "overview", false, "generate and publish/print high-level overview output")
+	flags.BoolVar(&suggestedChanges, "suggested-changes", false, "enable/disable suggested changes for this run (overrides REVIEW_SUGGESTED_CHANGES_ENABLED when set)")
 	flags.StringVar(&logLevel, "log-level", "", "log level override: trace|debug|info|warning|error|silence")
 
 	return cmd

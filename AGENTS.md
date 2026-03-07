@@ -28,6 +28,7 @@
 - Docs content must be generic: no personal device names/hostnames/paths; use placeholders like `user@gateway-host` and "gateway host".
 - Exception: Keep `README.md`, `AGENTS.md` in root of this repo.
 - Section cross-references: use anchors on root-relative paths (example: `[Hooks](/configuration#hooks)`).
+- Always add new environments to `.env.example`.
 
 ## Build, Test, and Development Commands
 

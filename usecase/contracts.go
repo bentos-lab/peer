@@ -50,7 +50,68 @@ type LLMReviewResult struct {
 
 // LLMReviewer reviews changed content and returns findings.
 type LLMReviewer interface {
-	ReviewDiff(ctx context.Context, payload LLMReviewPayload) (LLMReviewResult, error)
+	Review(ctx context.Context, payload LLMReviewPayload) (LLMReviewResult, error)
+}
+
+// SuggestionFindingCandidate is one finding candidate passed to grouping/suggest stages.
+type SuggestionFindingCandidate struct {
+	Key         string
+	Finding     domain.Finding
+	DiffSnippet string
+}
+
+// SuggestionFindingGroup is one LLM-produced finding group.
+type SuggestionFindingGroup struct {
+	GroupID     string
+	Rationale   string
+	FindingKeys []string
+}
+
+// LLMSuggestionGroupingPayload is the complete grouping prompt payload.
+type LLMSuggestionGroupingPayload struct {
+	Input        domain.ReviewInput
+	Candidates   []SuggestionFindingCandidate
+	MaxGroupSize int
+}
+
+// LLMSuggestionGroupingResult is normalized grouping output.
+type LLMSuggestionGroupingResult struct {
+	Groups []SuggestionFindingGroup
+}
+
+// LLMSuggestionGrouping groups findings into suggestion batches.
+type LLMSuggestionGrouping interface {
+	GroupFindings(ctx context.Context, payload LLMSuggestionGroupingPayload) (LLMSuggestionGroupingResult, error)
+}
+
+// LLMSuggestedChangePayload is the complete suggested-change prompt payload.
+type LLMSuggestedChangePayload struct {
+	Input      domain.ReviewInput
+	Group      SuggestionFindingGroup
+	Candidates []SuggestionFindingCandidate
+	GroupDiffs []GroupFileDiffContext
+}
+
+// GroupFileDiffContext contains group-scoped diff context for suggestion generation.
+type GroupFileDiffContext struct {
+	FilePath    string
+	DiffSnippet string
+}
+
+// FindingSuggestedChange is one suggested change keyed to a finding.
+type FindingSuggestedChange struct {
+	FindingKey      string
+	SuggestedChange domain.SuggestedChange
+}
+
+// LLMSuggestedChangeResult is normalized suggested change output.
+type LLMSuggestedChangeResult struct {
+	Suggestions []FindingSuggestedChange
+}
+
+// LLMSuggestedChangeGenerator generates suggested changes per finding group.
+type LLMSuggestedChangeGenerator interface {
+	GenerateSuggestedChanges(ctx context.Context, payload LLMSuggestedChangePayload) (LLMSuggestedChangeResult, error)
 }
 
 // LLMOverviewPayload is the complete overview prompt payload.

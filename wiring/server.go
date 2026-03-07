@@ -11,6 +11,7 @@ import (
 	githubinput "bentos-backend/adapter/outbound/input/github"
 	gitlabinput "bentos-backend/adapter/outbound/input/gitlab"
 	openai "bentos-backend/adapter/outbound/llm/openai"
+	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewllm "bentos-backend/adapter/outbound/overview/llm"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
 	gitlabpublisher "bentos-backend/adapter/outbound/publisher/gitlab"
@@ -51,11 +52,16 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	reviewOptions, err := reviewUseCaseOptionsFromConfig(cfg, llmReviewer)
+	if err != nil {
+		return nil, err
+	}
 	reviewUseCase, err := usecase.NewReviewUseCase(
 		rulepack.NewCoreRulePackProvider(),
 		llmReviewer,
 		githubpublisher.NewPublisher(ghClient, logger),
 		logger,
+		reviewOptions...,
 	)
 	if err != nil {
 		return nil, err
@@ -95,11 +101,16 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
 		return nil, err
 	}
 	glClient := gitlabvcs.NewClient()
+	reviewOptions, err := reviewUseCaseOptionsFromConfig(cfg, llmReviewer)
+	if err != nil {
+		return nil, err
+	}
 	reviewUseCase, err := usecase.NewReviewUseCase(
 		rulepack.NewCoreRulePackProvider(),
 		llmReviewer,
 		gitlabpublisher.NewPublisher(glClient, logger),
 		logger,
+		reviewOptions...,
 	)
 	if err != nil {
 		return nil, err
@@ -131,7 +142,7 @@ func buildServerLLMReviewer(cfg config.Config, logger usecase.Logger) (*reviewer
 		return nil, err
 	}
 	llmClient := openai.NewClient(httpClient, openAIConfig)
-	return reviewerllm.NewReviewer(llmClient, logger)
+	return reviewerllm.NewReviewer(llmtracing.NewGenerator(llmClient, logger), logger)
 }
 
 func buildServerLLMOverview(cfg config.Config, logger usecase.Logger) (*overviewllm.OverviewGenerator, error) {
@@ -141,7 +152,7 @@ func buildServerLLMOverview(cfg config.Config, logger usecase.Logger) (*overview
 		return nil, err
 	}
 	llmClient := openai.NewClient(httpClient, openAIConfig)
-	return overviewllm.NewOverviewGenerator(llmClient, logger)
+	return overviewllm.NewOverviewGenerator(llmtracing.NewGenerator(llmClient, logger), logger)
 }
 
 func buildOpenAIClientConfig(cfg config.Config) (openai.ClientConfig, error) {

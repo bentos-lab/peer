@@ -2,6 +2,8 @@ package usecase
 
 // Logger is the logging contract used by usecases and adapters.
 type Logger interface {
+	// Tracef writes a trace-level message.
+	Tracef(format string, args ...any)
 	// Debugf writes a debug-level message.
 	Debugf(format string, args ...any)
 	// Infof writes an info-level message.

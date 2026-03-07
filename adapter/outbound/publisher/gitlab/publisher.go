@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
@@ -38,16 +39,24 @@ func (p *Publisher) Publish(ctx context.Context, result usecase.ReviewPublishRes
 	for _, message := range result.Messages {
 		body := fmt.Sprintf("%s\n\n%s", message.Title, message.Body)
 		if err := p.client.CreateMergeRequestNote(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, body); err != nil {
+			p.logMessagePayload("failed", result.Target.Repository, result.Target.ChangeRequestNumber, message, body)
 			p.logger.Errorf("Publishing GitLab review result failed.")
 			p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
 			p.logger.Debugf("The publish operation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
 			p.logger.Debugf("Failure details: %v.", err)
 			return err
 		}
+		p.logMessagePayload("success", result.Target.Repository, result.Target.ChangeRequestNumber, message, body)
 	}
 
 	p.logger.Infof("Publishing GitLab review result completed.")
 	p.logger.Debugf("Repository is %q and change request number is %d.", result.Target.Repository, result.Target.ChangeRequestNumber)
 	p.logger.Debugf("The publish operation completed in %d ms and published %d messages.", time.Since(startedAt).Milliseconds(), len(result.Messages))
 	return nil
+}
+
+func (p *Publisher) logMessagePayload(state, repository string, changeRequestNumber int, message domain.ReviewMessage, body string) {
+	p.logger.Debugf("GitLab review note metadata state=%q repo=%q mr=%d type=%q title=%q file=%q findingCount=%d.",
+		state, repository, changeRequestNumber, message.Type, message.Title, message.FilePath, message.FindingCount)
+	p.logger.Tracef("GitLab review note content state=%q body=%q.", state, body)
 }

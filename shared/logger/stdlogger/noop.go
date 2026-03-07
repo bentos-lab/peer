@@ -8,6 +8,9 @@ func Nop() *noopLogger {
 	return &noopLogger{}
 }
 
+// Tracef discards trace-level log messages.
+func (*noopLogger) Tracef(_ string, _ ...any) {}
+
 // Debugf discards debug-level log messages.
 func (*noopLogger) Debugf(_ string, _ ...any) {}
 

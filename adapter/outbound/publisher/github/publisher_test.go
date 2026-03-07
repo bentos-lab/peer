@@ -40,6 +40,10 @@ type spyLogger struct {
 	events []string
 }
 
+func (s *spyLogger) Tracef(format string, args ...any) {
+	s.events = append(s.events, "trace:"+fmt.Sprintf(format, args...))
+}
+
 func (s *spyLogger) Debugf(format string, args ...any) {
 	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
 }
@@ -58,7 +62,8 @@ func (s *spyLogger) Errorf(format string, args ...any) {
 
 func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 	client := &fakeClient{}
-	pub := NewPublisher(client, nil)
+	logger := &spyLogger{}
+	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -94,6 +99,70 @@ func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 	require.Len(t, client.bodies, 1)
 	require.Contains(t, client.bodies[0], "Review summary")
 	require.Contains(t, client.bodies[0], "2 findings.")
+	require.True(t, containsEvent(logger.events, "debug:GitHub review comment metadata state=\"success\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub review comment content state=\"success\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub review summary content state=\"success\""))
+}
+
+func TestPublisher_PublishRendersReplaceSuggestedChangeBlock(t *testing.T) {
+	client := &fakeClient{}
+	pub := NewPublisher(client, nil)
+
+	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
+		Target: domain.ReviewTarget{
+			Repository:          "org/repo",
+			ChangeRequestNumber: 11,
+		},
+		Findings: []domain.Finding{
+			{
+				FilePath:  "a.go",
+				StartLine: 7,
+				EndLine:   7,
+				Severity:  domain.FindingSeverityMajor,
+				Title:     "Nil risk",
+				Detail:    "Potential nil dereference.",
+				SuggestedChange: &domain.SuggestedChange{
+					Kind:        domain.SuggestedChangeKindReplace,
+					Replacement: "if value == nil {\n\treturn err\n}",
+				},
+			},
+		},
+		Summary: "done",
+	})
+	require.NoError(t, err)
+	require.Len(t, client.reviewInputs, 1)
+	require.Contains(t, client.reviewInputs[0].Body, "```suggestion")
+	require.Contains(t, client.reviewInputs[0].Body, "if value == nil")
+}
+
+func TestPublisher_PublishRendersDeleteSuggestedChangeBlock(t *testing.T) {
+	client := &fakeClient{}
+	pub := NewPublisher(client, nil)
+
+	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
+		Target: domain.ReviewTarget{
+			Repository:          "org/repo",
+			ChangeRequestNumber: 11,
+		},
+		Findings: []domain.Finding{
+			{
+				FilePath:  "a.go",
+				StartLine: 7,
+				EndLine:   7,
+				Severity:  domain.FindingSeverityMajor,
+				Title:     "Dead code",
+				Detail:    "Remove dead branch.",
+				SuggestedChange: &domain.SuggestedChange{
+					Kind:        domain.SuggestedChangeKindDelete,
+					Replacement: "",
+				},
+			},
+		},
+		Summary: "done",
+	})
+	require.NoError(t, err)
+	require.Len(t, client.reviewInputs, 1)
+	require.Contains(t, client.reviewInputs[0].Body, "```suggestion\n\n```")
 }
 
 func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
@@ -123,6 +192,8 @@ func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
 	require.Empty(t, client.reviewInputs)
 	require.Len(t, client.bodies, 1)
 	require.True(t, containsEvent(logger.events, "warn:Skipped one GitHub review comment because its anchor is invalid."))
+	require.True(t, containsEvent(logger.events, "debug:GitHub review comment metadata state=\"skipped_invalid_anchor\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub review comment content state=\"skipped_invalid_anchor\""))
 }
 
 func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
@@ -153,13 +224,16 @@ func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
 	require.True(t, containsEvent(logger.events, "warn:Skipped one GitHub review comment because its anchor is invalid."))
+	require.True(t, containsEvent(logger.events, "debug:GitHub review comment metadata state=\"skipped_invalid_anchor\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub review comment content state=\"skipped_invalid_anchor\""))
 }
 
 func TestPublisher_PublishFailsForNonAnchorError(t *testing.T) {
 	client := &fakeClient{
 		reviewErr: errors.New("network fail"),
 	}
-	pub := NewPublisher(client, nil)
+	logger := &spyLogger{}
+	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
 		Target: domain.ReviewTarget{
@@ -181,6 +255,28 @@ func TestPublisher_PublishFailsForNonAnchorError(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "network fail")
+	require.True(t, containsEvent(logger.events, "debug:GitHub review comment metadata state=\"failed\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub review comment content state=\"failed\""))
+}
+
+func TestPublisher_PublishFailsForSummaryError(t *testing.T) {
+	client := &fakeClient{
+		commentErr: errors.New("summary fail"),
+	}
+	logger := &spyLogger{}
+	pub := NewPublisher(client, logger)
+
+	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
+		Target: domain.ReviewTarget{
+			Repository:          "org/repo",
+			ChangeRequestNumber: 11,
+		},
+		Summary: "done",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "summary fail")
+	require.True(t, containsEvent(logger.events, "debug:GitHub review summary metadata state=\"failed\""))
+	require.True(t, containsEvent(logger.events, "trace:GitHub review summary content state=\"failed\""))
 }
 
 func TestPublisher_PublishPostsOnlySummaryWhenNoFindings(t *testing.T) {

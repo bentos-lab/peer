@@ -15,6 +15,7 @@ type fakeChangeDetector struct {
 	staged    []string
 	unstaged  []string
 	untracked []string
+	diffs     map[string]string
 	err       error
 }
 
@@ -39,6 +40,16 @@ func (f *fakeChangeDetector) ListUntracked(_ context.Context) ([]string, error) 
 	return f.untracked, nil
 }
 
+func (f *fakeChangeDetector) GetDiffForPath(_ context.Context, path string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	if f.diffs == nil {
+		return "", nil
+	}
+	return f.diffs[path], nil
+}
+
 func TestProvider_LoadChangeSnapshotManualOverride(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.go")
@@ -54,6 +65,7 @@ func TestProvider_LoadChangeSnapshotManualOverride(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.ChangedFiles, 1)
 	require.Equal(t, path, result.ChangedFiles[0].Path)
+	require.Equal(t, "", result.ChangedFiles[0].DiffSnippet)
 }
 
 func TestProvider_LoadChangeSnapshotAutoDefaultStagedOnly(t *testing.T) {
@@ -63,6 +75,9 @@ func TestProvider_LoadChangeSnapshotAutoDefaultStagedOnly(t *testing.T) {
 
 	provider := NewProvider(&fakeChangeDetector{
 		staged: []string{staged},
+		diffs: map[string]string{
+			staged: "@@ -1 +1 @@\n-old\n+new",
+		},
 	})
 	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{},
@@ -70,6 +85,7 @@ func TestProvider_LoadChangeSnapshotAutoDefaultStagedOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.ChangedFiles, 1)
 	require.Equal(t, staged, result.ChangedFiles[0].Path)
+	require.Contains(t, result.ChangedFiles[0].DiffSnippet, "@@ -1 +1 @@")
 }
 
 func TestProvider_LoadChangeSnapshotAutoAllIncludesUnstaged(t *testing.T) {
@@ -82,6 +98,10 @@ func TestProvider_LoadChangeSnapshotAutoAllIncludesUnstaged(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{
 		staged:   []string{staged},
 		unstaged: []string{unstaged},
+		diffs: map[string]string{
+			staged:   "@@ -1 +1 @@\n-old\n+new",
+			unstaged: "@@ -2 +2 @@\n-old2\n+new2",
+		},
 	})
 	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
@@ -102,6 +122,9 @@ func TestProvider_LoadChangeSnapshotAutoIncludesUntracked(t *testing.T) {
 	provider := NewProvider(&fakeChangeDetector{
 		staged:    []string{staged},
 		untracked: []string{untracked},
+		diffs: map[string]string{
+			staged: "@@ -1 +1 @@\n-old\n+new",
+		},
 	})
 	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
@@ -110,6 +133,10 @@ func TestProvider_LoadChangeSnapshotAutoIncludesUntracked(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, result.ChangedFiles, 2)
+	require.Equal(t, staged, result.ChangedFiles[0].Path)
+	require.Contains(t, result.ChangedFiles[0].DiffSnippet, "@@ -1 +1 @@")
+	require.Equal(t, untracked, result.ChangedFiles[1].Path)
+	require.Contains(t, result.ChangedFiles[1].DiffSnippet, "@@ -0,0 +1,1 @@")
 }
 
 func TestProvider_LoadChangeSnapshotAutoAllAndUntrackedDedupes(t *testing.T) {
@@ -125,6 +152,11 @@ func TestProvider_LoadChangeSnapshotAutoAllAndUntrackedDedupes(t *testing.T) {
 		staged:    []string{staged, unstaged},
 		unstaged:  []string{unstaged},
 		untracked: []string{untracked},
+		diffs: map[string]string{
+			staged:    "@@ -1 +1 @@\n-old\n+new",
+			unstaged:  "@@ -2 +2 @@\n-old2\n+new2",
+			untracked: "@@ -0,0 +1,1 @@\n+package untracked",
+		},
 	})
 	result, err := provider.LoadChangeSnapshot(context.Background(), usecase.ChangeRequestRequest{
 		Metadata: map[string]string{
@@ -134,6 +166,9 @@ func TestProvider_LoadChangeSnapshotAutoAllAndUntrackedDedupes(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, result.ChangedFiles, 3)
+	require.Contains(t, result.ChangedFiles[0].DiffSnippet, "@@ -1 +1 @@")
+	require.Contains(t, result.ChangedFiles[1].DiffSnippet, "@@ -2 +2 @@")
+	require.Contains(t, result.ChangedFiles[2].DiffSnippet, "@@ -0,0 +1,1 @@")
 }
 
 func TestProvider_LoadChangeSnapshotAutoSkipsDeletedFiles(t *testing.T) {

@@ -30,6 +30,8 @@ type ChangeDetector interface {
 	ListUnstaged(ctx context.Context) ([]string, error)
 	// ListUntracked returns untracked file paths.
 	ListUntracked(ctx context.Context) ([]string, error)
+	// GetDiffForPath returns unified diff content for one file path.
+	GetDiffForPath(ctx context.Context, path string) (string, error)
 }
 
 // Provider loads review input from local files for CLI mode.
@@ -47,12 +49,20 @@ func (p *Provider) LoadChangeSnapshot(ctx context.Context, request usecase.Chang
 	pathsCSV := strings.TrimSpace(request.Metadata[MetadataKeyChangedFiles])
 	paths := splitCSV(pathsCSV)
 	autoMode := pathsCSV == ""
+	untrackedSet := map[string]struct{}{}
 	if autoMode {
 		autoPaths, err := p.detectAutoPaths(ctx, request.Metadata)
 		if err != nil {
 			return domain.ChangeSnapshot{}, err
 		}
 		paths = autoPaths
+	}
+	if p.changeDetector != nil {
+		untrackedPaths, err := p.changeDetector.ListUntracked(ctx)
+		if err != nil {
+			return domain.ChangeSnapshot{}, err
+		}
+		untrackedSet = toSet(untrackedPaths)
 	}
 
 	files := make([]domain.ChangedFile, 0, len(paths))
@@ -64,9 +74,23 @@ func (p *Provider) LoadChangeSnapshot(ctx context.Context, request usecase.Chang
 			}
 			return domain.ChangeSnapshot{}, err
 		}
+
+		diffSnippet := ""
+		if p.changeDetector != nil {
+			diffSnippet, err = p.changeDetector.GetDiffForPath(ctx, path)
+			if err != nil {
+				return domain.ChangeSnapshot{}, err
+			}
+		}
+		if strings.TrimSpace(diffSnippet) == "" {
+			if _, ok := untrackedSet[path]; ok {
+				diffSnippet = buildSyntheticNewFileDiff(path, string(raw))
+			}
+		}
 		files = append(files, domain.ChangedFile{
-			Path:    path,
-			Content: string(raw),
+			Path:        path,
+			Content:     string(raw),
+			DiffSnippet: diffSnippet,
 		})
 	}
 	if autoMode && len(files) == 0 {
@@ -141,4 +165,39 @@ func dedupe(paths []string) []string {
 		result = append(result, path)
 	}
 	return result
+}
+
+func toSet(values []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		result[trimmed] = struct{}{}
+	}
+	return result
+}
+
+func buildSyntheticNewFileDiff(path string, content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	lineCount := len(lines)
+	if lineCount == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("@@ -0,0 +1,")
+	builder.WriteString(strconv.Itoa(lineCount))
+	builder.WriteString(" @@\n")
+	for _, line := range lines {
+		builder.WriteString("+")
+		builder.WriteString(line)
+		builder.WriteString("\n")
+	}
+	return strings.TrimRight(builder.String(), "\n")
 }

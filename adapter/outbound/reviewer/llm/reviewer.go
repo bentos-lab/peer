@@ -16,11 +16,11 @@ import (
 	"bentos-backend/usecase/contracts"
 )
 
-//go:embed system.md
-var systemPromptTemplateRaw string
+//go:embed review_system.md
+var reviewSystemPromptTemplateRaw string
 
-//go:embed input.md
-var userPromptTemplateRaw string
+//go:embed review_input.md
+var reviewUserPromptTemplateRaw string
 
 // Reviewer implements usecase.LLMReviewer via a generic LLM generator.
 type Reviewer struct {
@@ -49,6 +49,8 @@ type reviewUserPromptFileData struct {
 	ChangedText string
 }
 
+const maxSplitFindingsPerOriginal = 3
+
 // NewReviewer creates an outbound reviewer adapter backed by a generic LLM client.
 func NewReviewer(generator contracts.LLMGenerator, logger usecase.Logger) (*Reviewer, error) {
 	if generator == nil {
@@ -60,8 +62,8 @@ func NewReviewer(generator contracts.LLMGenerator, logger usecase.Logger) (*Revi
 	return &Reviewer{generator: generator, logger: logger}, nil
 }
 
-// ReviewDiff generates findings from changed content by calling an LLM provider.
-func (r *Reviewer) ReviewDiff(ctx context.Context, payload usecase.LLMReviewPayload) (usecase.LLMReviewResult, error) {
+// Review generates findings from changed content by calling an LLM provider.
+func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload) (usecase.LLMReviewResult, error) {
 	startedAt := time.Now()
 	r.logger.Infof("LLM review started.")
 	r.logger.Debugf("The review input includes %d changed files.", len(payload.Input.ChangedFiles))
@@ -141,14 +143,16 @@ func (r *Reviewer) ReviewDiff(ctx context.Context, payload usecase.LLMReviewPayl
 		}
 		resultFindings = append(resultFindings, finding)
 	}
+	changedRangesByFile := buildChangedRangesByFile(payload.Input.ChangedFiles, r.logger)
+	filteredFindings := splitFindingsByChangedRanges(resultFindings, changedRangesByFile, r.logger)
 
 	r.logger.Infof("LLM review completed.")
 	r.logger.Debugf("The LLM review completed in %d ms.", time.Since(startedAt).Milliseconds())
-	r.logger.Debugf("The LLM review produced %d findings.", len(resultFindings))
+	r.logger.Debugf("The LLM review produced %d findings after changed-line alignment.", len(filteredFindings))
 
 	return usecase.LLMReviewResult{
 		Summary:  decoded.Summary,
-		Findings: resultFindings,
+		Findings: filteredFindings,
 	}, nil
 }
 
@@ -213,7 +217,7 @@ func reviewResponseSchema() map[string]any {
 }
 
 func renderSystemPrompt(rulePackText string) (string, error) {
-	parsedTemplate, err := template.New("reviewer_system_prompt").Parse(systemPromptTemplateRaw)
+	parsedTemplate, err := template.New("reviewer_system_prompt").Parse(reviewSystemPromptTemplateRaw)
 	if err != nil {
 		return "", err
 	}
@@ -249,7 +253,7 @@ func renderUserPrompt(input domain.ReviewInput) (string, error) {
 		language = "English"
 	}
 
-	parsedTemplate, err := template.New("reviewer_user_prompt").Parse(userPromptTemplateRaw)
+	parsedTemplate, err := template.New("reviewer_user_prompt").Parse(reviewUserPromptTemplateRaw)
 	if err != nil {
 		return "", err
 	}

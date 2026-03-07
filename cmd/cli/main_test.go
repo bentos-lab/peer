@@ -143,6 +143,90 @@ func TestRunCLIDoesNotOverrideOpenAIEnvWhenFlagsNotProvided(t *testing.T) {
 	require.True(t, fakeUC.executed)
 }
 
+func TestRunCLISuggestedChangesFlagTrueOverridesEnvFalse(t *testing.T) {
+	fakeUC := &fakeMainReviewUseCase{}
+	var capturedCfg config.Config
+
+	err := runCLI(
+		context.Background(),
+		[]string{"--suggested-changes"},
+		func() (config.Config, error) {
+			cfg := validCLIConfig()
+			cfg.SuggestedChanges.Enabled = false
+			return cfg, nil
+		},
+		func(cfg config.Config, _ wiring.CLILLMOptions, _ domain.ChangeRequestInputProvider, _ domain.ChangeRequestPublishType, _ string) (*cliinbound.Command, error) {
+			capturedCfg = cfg
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, fakeUC.executed)
+	require.True(t, capturedCfg.SuggestedChanges.Enabled)
+}
+
+func TestRunCLISuggestedChangesFlagFalseOverridesEnvTrue(t *testing.T) {
+	fakeUC := &fakeMainReviewUseCase{}
+	var capturedCfg config.Config
+
+	err := runCLI(
+		context.Background(),
+		[]string{"--suggested-changes=false"},
+		func() (config.Config, error) {
+			cfg := validCLIConfig()
+			cfg.SuggestedChanges.Enabled = true
+			return cfg, nil
+		},
+		func(cfg config.Config, _ wiring.CLILLMOptions, _ domain.ChangeRequestInputProvider, _ domain.ChangeRequestPublishType, _ string) (*cliinbound.Command, error) {
+			capturedCfg = cfg
+			return cliinbound.NewLocalCommand(fakeUC, nil), nil
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, fakeUC.executed)
+	require.False(t, capturedCfg.SuggestedChanges.Enabled)
+}
+
+func TestRunCLISuggestedChangesFlagMissingKeepsEnvValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{
+			name:    "env_false",
+			enabled: false,
+		},
+		{
+			name:    "env_true",
+			enabled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeUC := &fakeMainReviewUseCase{}
+			var capturedCfg config.Config
+
+			err := runCLI(
+				context.Background(),
+				[]string{"--all"},
+				func() (config.Config, error) {
+					cfg := validCLIConfig()
+					cfg.SuggestedChanges.Enabled = tt.enabled
+					return cfg, nil
+				},
+				func(cfg config.Config, _ wiring.CLILLMOptions, _ domain.ChangeRequestInputProvider, _ domain.ChangeRequestPublishType, _ string) (*cliinbound.Command, error) {
+					capturedCfg = cfg
+					return cliinbound.NewLocalCommand(fakeUC, nil), nil
+				},
+			)
+			require.NoError(t, err)
+			require.True(t, fakeUC.executed)
+			require.Equal(t, tt.enabled, capturedCfg.SuggestedChanges.Enabled)
+		})
+	}
+}
+
 func TestRunCLIParsesGitHubPRFlags(t *testing.T) {
 	fakeUC := &fakeMainReviewUseCase{}
 	var capturedInputType domain.ChangeRequestInputProvider

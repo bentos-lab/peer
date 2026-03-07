@@ -48,6 +48,10 @@ type spyLogger struct {
 	events []string
 }
 
+func (s *spyLogger) Tracef(format string, args ...any) {
+	s.events = append(s.events, "trace:"+fmt.Sprintf(format, args...))
+}
+
 func (s *spyLogger) Infof(format string, args ...any) {
 	s.events = append(s.events, "info:"+fmt.Sprintf(format, args...))
 }

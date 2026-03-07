@@ -57,6 +57,11 @@ func (l *Logger) Debugf(format string, args ...any) {
 	l.logf("[DEBUG]", LevelDebug, format, args...)
 }
 
+// Tracef writes a trace-level message.
+func (l *Logger) Tracef(format string, args ...any) {
+	l.logf("[TRACE]", LevelTrace, format, args...)
+}
+
 // Errorf writes an error-level message.
 func (l *Logger) Errorf(format string, args ...any) {
 	l.logf("[ERROR]", LevelError, format, args...)
@@ -93,7 +98,9 @@ func (l *Logger) logf(label string, eventLevel Level, format string, args ...any
 
 func (l *Logger) shouldLog(eventLevel Level) bool {
 	switch l.level {
-	case LevelTrace, LevelDebug:
+	case LevelTrace:
+		return eventLevel == LevelTrace || eventLevel == LevelDebug || eventLevel == LevelInfo || eventLevel == LevelWarning || eventLevel == LevelError
+	case LevelDebug:
 		return eventLevel == LevelDebug || eventLevel == LevelInfo || eventLevel == LevelWarning || eventLevel == LevelError
 	case LevelInfo:
 		return eventLevel == LevelInfo || eventLevel == LevelWarning || eventLevel == LevelError

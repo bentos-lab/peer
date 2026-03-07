@@ -5,15 +5,55 @@ import (
 	"errors"
 	"time"
 
+	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 )
 
 // reviewUseCase is the concrete ReviewUseCase implementation.
 type reviewUseCase struct {
-	ruleProvider RulePackProvider
-	llmReviewer  LLMReviewer
-	publisher    ReviewResultPublisher
-	logger       Logger
+	ruleProvider             RulePackProvider
+	llmReviewer              LLMReviewer
+	publisher                ReviewResultPublisher
+	suggestedChangesEnabled  bool
+	suggestedChangesConfig   SuggestedChangesConfig
+	suggestionGrouping       LLMSuggestionGrouping
+	suggestedChangeGenerator LLMSuggestedChangeGenerator
+	logger                   Logger
+}
+
+// SuggestedChangesConfig defines runtime behavior for the suggest-phase pipeline.
+type SuggestedChangesConfig struct {
+	MinSeverity     domain.FindingSeverityEnum
+	MaxCandidates   int
+	MaxGroupSize    int
+	MaxWorkers      int
+	GroupTimeout    time.Duration
+	GenerateTimeout time.Duration
+}
+
+// ReviewUseCaseOption configures optional review usecase behavior.
+type ReviewUseCaseOption interface {
+	applyReviewUseCase(*reviewUseCase)
+}
+
+type reviewUseCaseOptionFunc func(*reviewUseCase)
+
+func (f reviewUseCaseOptionFunc) applyReviewUseCase(u *reviewUseCase) {
+	f(u)
+}
+
+// WithSuggestedChanges enables the post-review suggested changes pipeline.
+func WithSuggestedChanges(
+	cfg SuggestedChangesConfig,
+	grouping LLMSuggestionGrouping,
+	generator LLMSuggestedChangeGenerator,
+) ReviewUseCaseOption {
+	return reviewUseCaseOptionFunc(func(u *reviewUseCase) {
+		u.suggestedChangesEnabled = true
+		u.suggestedChangesConfig = normalizeSuggestedChangesConfig(cfg)
+		u.suggestionGrouping = grouping
+		u.suggestedChangeGenerator = generator
+	})
 }
 
 // NewReviewUseCase constructs a review-only usecase.
@@ -22,6 +62,7 @@ func NewReviewUseCase(
 	llmReviewer LLMReviewer,
 	publisher ReviewResultPublisher,
 	logger Logger,
+	options ...ReviewUseCaseOption,
 ) (ReviewUseCase, error) {
 	if ruleProvider == nil || llmReviewer == nil || publisher == nil {
 		return nil, errors.New("review usecase dependencies must not be nil")
@@ -29,12 +70,20 @@ func NewReviewUseCase(
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
-	return &reviewUseCase{
-		ruleProvider: ruleProvider,
-		llmReviewer:  llmReviewer,
-		publisher:    publisher,
-		logger:       logger,
-	}, nil
+	u := &reviewUseCase{
+		ruleProvider:           ruleProvider,
+		llmReviewer:            llmReviewer,
+		publisher:              publisher,
+		suggestedChangesConfig: normalizeSuggestedChangesConfig(SuggestedChangesConfig{}),
+		logger:                 logger,
+	}
+	for _, option := range options {
+		if option != nil {
+			option.applyReviewUseCase(u)
+		}
+	}
+
+	return u, nil
 }
 
 // Execute runs the review flow and publishes review messages.
@@ -54,7 +103,7 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	u.logger.Debugf("Loading the rule pack took %d ms and returned %d instructions.", time.Since(loadRulePackStartedAt).Milliseconds(), len(pack.Instructions))
 
 	reviewDiffStartedAt := time.Now()
-	llmResult, err := u.llmReviewer.ReviewDiff(ctx, LLMReviewPayload{
+	llmResult, err := u.llmReviewer.Review(ctx, LLMReviewPayload{
 		Input:    request.Input,
 		RulePack: pack,
 	})
@@ -65,6 +114,14 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	u.logger.Infof("LLM review completed.")
 	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "review_diff", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	u.logger.Debugf("The LLM review produced %d findings.", len(llmResult.Findings))
+
+	if u.suggestedChangesEnabled {
+		withSuggestionsStartedAt := time.Now()
+		findingsWithSuggestions := u.attachSuggestedChanges(ctx, request.Input, llmResult.Findings)
+		u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "generate_suggested_changes", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+		u.logger.Debugf("Generating suggested changes took %d ms.", time.Since(withSuggestionsStartedAt).Milliseconds())
+		llmResult.Findings = findingsWithSuggestions
+	}
 
 	publishStartedAt := time.Now()
 	messages := BuildMessages(llmResult.Findings, llmResult.Summary)

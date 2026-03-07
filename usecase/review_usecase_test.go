@@ -38,7 +38,7 @@ type mockLLM struct {
 	calls  int
 }
 
-func (m *mockLLM) ReviewDiff(_ context.Context, payload LLMReviewPayload) (LLMReviewResult, error) {
+func (m *mockLLM) Review(_ context.Context, payload LLMReviewPayload) (LLMReviewResult, error) {
 	m.calls++
 	if payload.RulePack.ID == "" {
 		return LLMReviewResult{}, errors.New("missing rule pack")
@@ -75,6 +75,38 @@ type mockOverviewPublisher struct {
 func (m *mockOverviewPublisher) PublishOverview(_ context.Context, req OverviewPublishRequest) error {
 	m.last = req
 	return m.err
+}
+
+type mockSuggestionGrouping struct {
+	result      LLMSuggestionGroupingResult
+	err         error
+	calls       int
+	lastPayload LLMSuggestionGroupingPayload
+}
+
+func (m *mockSuggestionGrouping) GroupFindings(_ context.Context, payload LLMSuggestionGroupingPayload) (LLMSuggestionGroupingResult, error) {
+	m.calls++
+	m.lastPayload = payload
+	return m.result, m.err
+}
+
+type mockSuggestedChangeGenerator struct {
+	byGroupID   map[string]LLMSuggestedChangeResult
+	errByGroup  map[string]error
+	calls       int
+	lastPayload LLMSuggestedChangePayload
+}
+
+func (m *mockSuggestedChangeGenerator) GenerateSuggestedChanges(_ context.Context, payload LLMSuggestedChangePayload) (LLMSuggestedChangeResult, error) {
+	m.calls++
+	m.lastPayload = payload
+	if err := m.errByGroup[payload.Group.GroupID]; err != nil {
+		return LLMSuggestedChangeResult{}, err
+	}
+	if result, ok := m.byGroupID[payload.Group.GroupID]; ok {
+		return result, nil
+	}
+	return LLMSuggestedChangeResult{}, nil
 }
 
 type blockingOverviewUseCase struct {
@@ -118,6 +150,10 @@ type spyLogEvent struct {
 
 type spyLogger struct {
 	events []spyLogEvent
+}
+
+func (s *spyLogger) Tracef(format string, args ...any) {
+	s.events = append(s.events, spyLogEvent{level: "trace", msg: fmt.Sprintf(format, args...)})
 }
 
 func (s *spyLogger) Infof(format string, args ...any) {
@@ -329,4 +365,399 @@ func containsUsecaseEvent(events []spyLogEvent, level string, target string) boo
 		}
 	}
 	return false
+}
+
+func TestReviewUseCase_ExecuteAttachesSuggestedChanges(t *testing.T) {
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "service.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Handle error",
+					Detail:    "Error should be wrapped.",
+				},
+			},
+		},
+	}
+	pub := &mockPublisher{}
+	grouping := &mockSuggestionGrouping{
+		result: LLMSuggestionGroupingResult{
+			Groups: []SuggestionFindingGroup{
+				{GroupID: "g1", FindingKeys: []string{suggestionCandidateKey(0)}},
+			},
+		},
+	}
+	generator := &mockSuggestedChangeGenerator{
+		byGroupID: map[string]LLMSuggestedChangeResult{
+			"g1": {
+				Suggestions: []FindingSuggestedChange{
+					{
+						FindingKey: suggestionCandidateKey(0),
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindReplace,
+							Replacement: "return fmt.Errorf(\"wrap: %w\", err)",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	uc, err := NewReviewUseCase(
+		mockRuleProvider{pack: RulePack{ID: "core", Instructions: []string{"review"}}},
+		llm,
+		pub,
+		&spyLogger{},
+		WithSuggestedChanges(SuggestedChangesConfig{
+			MinSeverity: domain.FindingSeverityMajor,
+		}, grouping, generator),
+	)
+	require.NoError(t, err)
+
+	result, err := uc.Execute(context.Background(), ReviewRequest{
+		Input: domain.ReviewInput{
+			Target: domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+			ChangedFiles: []domain.ChangedFile{
+				{Path: "service.go", DiffSnippet: "@@ -10,1 +10,1 @@"},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Findings, 1)
+	require.NotNil(t, result.Findings[0].SuggestedChange)
+	require.Equal(t, domain.SuggestedChangeKindReplace, result.Findings[0].SuggestedChange.Kind)
+	require.Equal(t, 1, grouping.calls)
+	require.Equal(t, 1, generator.calls)
+	require.Contains(t, grouping.lastPayload.Candidates[0].DiffSnippet, "@@ -10,1 +10,1 @@")
+	require.Len(t, generator.lastPayload.GroupDiffs, 1)
+	require.Equal(t, "service.go", generator.lastPayload.GroupDiffs[0].FilePath)
+	require.Contains(t, generator.lastPayload.GroupDiffs[0].DiffSnippet, "@@ -10,1 +10,1 @@")
+}
+
+func TestReviewUseCase_ExecuteUsesDeterministicGroupingFallbackWhenGroupingFails(t *testing.T) {
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "service.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "First",
+					Detail:    "Issue one.",
+				},
+				{
+					FilePath:  "service.go",
+					StartLine: 12,
+					EndLine:   12,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Second",
+					Detail:    "Issue two.",
+				},
+			},
+		},
+	}
+	pub := &mockPublisher{}
+	grouping := &mockSuggestionGrouping{err: errors.New("grouping failed")}
+	generator := &mockSuggestedChangeGenerator{
+		byGroupID: map[string]LLMSuggestedChangeResult{
+			"group-1": {
+				Suggestions: []FindingSuggestedChange{
+					{
+						FindingKey: suggestionCandidateKey(0),
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindReplace,
+							Replacement: "fix one",
+						},
+					},
+					{
+						FindingKey: suggestionCandidateKey(1),
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindReplace,
+							Replacement: "fix two",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	uc, err := NewReviewUseCase(
+		mockRuleProvider{pack: RulePack{ID: "core", Instructions: []string{"review"}}},
+		llm,
+		pub,
+		&spyLogger{},
+		WithSuggestedChanges(SuggestedChangesConfig{
+			MinSeverity:  domain.FindingSeverityMajor,
+			MaxGroupSize: 5,
+		}, grouping, generator),
+	)
+	require.NoError(t, err)
+
+	result, err := uc.Execute(context.Background(), ReviewRequest{
+		Input: domain.ReviewInput{
+			Target:       domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+			ChangedFiles: []domain.ChangedFile{{Path: "service.go", DiffSnippet: "@@"}},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Findings[0].SuggestedChange)
+	require.NotNil(t, result.Findings[1].SuggestedChange)
+}
+
+func TestReviewUseCase_ExecutePassesOnlyGroupFileDiffsToSuggestedChangeGenerator(t *testing.T) {
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "a.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "A",
+					Detail:    "Issue A",
+				},
+			},
+		},
+	}
+	pub := &mockPublisher{}
+	grouping := &mockSuggestionGrouping{
+		result: LLMSuggestionGroupingResult{
+			Groups: []SuggestionFindingGroup{
+				{GroupID: "g1", FindingKeys: []string{suggestionCandidateKey(0)}},
+			},
+		},
+	}
+	generator := &mockSuggestedChangeGenerator{
+		byGroupID: map[string]LLMSuggestedChangeResult{
+			"g1": {
+				Suggestions: []FindingSuggestedChange{
+					{
+						FindingKey: suggestionCandidateKey(0),
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindReplace,
+							Replacement: "fix a",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	uc, err := NewReviewUseCase(
+		mockRuleProvider{pack: RulePack{ID: "core", Instructions: []string{"review"}}},
+		llm,
+		pub,
+		&spyLogger{},
+		WithSuggestedChanges(SuggestedChangesConfig{}, grouping, generator),
+	)
+	require.NoError(t, err)
+
+	_, err = uc.Execute(context.Background(), ReviewRequest{
+		Input: domain.ReviewInput{
+			Target: domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+			ChangedFiles: []domain.ChangedFile{
+				{Path: "a.go", DiffSnippet: "@@ -10,1 +10,1 @@\n-old\n+new"},
+				{Path: "b.go", DiffSnippet: "@@ -20,1 +20,1 @@\n-oldb\n+newb"},
+				{Path: "c.go", DiffSnippet: "@@ -30,1 +30,1 @@\n-oldc\n+newc"},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, generator.lastPayload.GroupDiffs, 1)
+	require.Equal(t, "a.go", generator.lastPayload.GroupDiffs[0].FilePath)
+	require.Contains(t, generator.lastPayload.GroupDiffs[0].DiffSnippet, "@@ -10,1 +10,1 @@")
+}
+
+func TestReviewUseCase_ExecuteSkipsInvalidSuggestedChangesAndContinues(t *testing.T) {
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "service.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Delete dead code",
+					Detail:    "Unused block can be removed.",
+				},
+			},
+		},
+	}
+	pub := &mockPublisher{}
+	grouping := &mockSuggestionGrouping{
+		result: LLMSuggestionGroupingResult{
+			Groups: []SuggestionFindingGroup{
+				{GroupID: "g1", FindingKeys: []string{suggestionCandidateKey(0)}},
+			},
+		},
+	}
+	generator := &mockSuggestedChangeGenerator{
+		byGroupID: map[string]LLMSuggestedChangeResult{
+			"g1": {
+				Suggestions: []FindingSuggestedChange{
+					{
+						FindingKey: suggestionCandidateKey(0),
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindDelete,
+							Replacement: "must be empty",
+						},
+					},
+				},
+			},
+		},
+	}
+	uc, err := NewReviewUseCase(
+		mockRuleProvider{pack: RulePack{ID: "core", Instructions: []string{"review"}}},
+		llm,
+		pub,
+		&spyLogger{},
+		WithSuggestedChanges(SuggestedChangesConfig{}, grouping, generator),
+	)
+	require.NoError(t, err)
+
+	result, err := uc.Execute(context.Background(), ReviewRequest{
+		Input: domain.ReviewInput{
+			Target:       domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+			ChangedFiles: []domain.ChangedFile{{Path: "service.go", DiffSnippet: "@@"}},
+		},
+	})
+	require.NoError(t, err)
+	require.Nil(t, result.Findings[0].SuggestedChange)
+}
+
+func TestReviewUseCase_ExecuteAcceptsLegacySuggestionKeyFallbackWhenUnique(t *testing.T) {
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "service.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Handle error",
+					Detail:    "Error should be wrapped.",
+				},
+			},
+		},
+	}
+	pub := &mockPublisher{}
+	grouping := &mockSuggestionGrouping{
+		result: LLMSuggestionGroupingResult{
+			Groups: []SuggestionFindingGroup{
+				{GroupID: "g1", FindingKeys: []string{suggestionCandidateKey(0)}},
+			},
+		},
+	}
+	generator := &mockSuggestedChangeGenerator{
+		byGroupID: map[string]LLMSuggestedChangeResult{
+			"g1": {
+				Suggestions: []FindingSuggestedChange{
+					{
+						FindingKey: "service.go:10:10:Handle error",
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindReplace,
+							Replacement: "return fmt.Errorf(\"wrap: %w\", err)",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	uc, err := NewReviewUseCase(
+		mockRuleProvider{pack: RulePack{ID: "core", Instructions: []string{"review"}}},
+		llm,
+		pub,
+		&spyLogger{},
+		WithSuggestedChanges(SuggestedChangesConfig{}, grouping, generator),
+	)
+	require.NoError(t, err)
+
+	result, err := uc.Execute(context.Background(), ReviewRequest{
+		Input: domain.ReviewInput{
+			Target:       domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+			ChangedFiles: []domain.ChangedFile{{Path: "service.go", DiffSnippet: "@@"}},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Findings[0].SuggestedChange)
+	require.Equal(t, domain.SuggestedChangeKindReplace, result.Findings[0].SuggestedChange.Kind)
+}
+
+func TestReviewUseCase_ExecuteDropsAmbiguousAnchorOnlySuggestionKey(t *testing.T) {
+	llm := &mockLLM{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "service.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "First issue",
+					Detail:    "Issue one.",
+				},
+				{
+					FilePath:  "service.go",
+					StartLine: 10,
+					EndLine:   10,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Second issue",
+					Detail:    "Issue two.",
+				},
+			},
+		},
+	}
+	pub := &mockPublisher{}
+	grouping := &mockSuggestionGrouping{
+		result: LLMSuggestionGroupingResult{
+			Groups: []SuggestionFindingGroup{
+				{GroupID: "g1", FindingKeys: []string{suggestionCandidateKey(0), suggestionCandidateKey(1)}},
+			},
+		},
+	}
+	generator := &mockSuggestedChangeGenerator{
+		byGroupID: map[string]LLMSuggestedChangeResult{
+			"g1": {
+				Suggestions: []FindingSuggestedChange{
+					{
+						FindingKey: "service.go:10:10",
+						SuggestedChange: domain.SuggestedChange{
+							Kind:        domain.SuggestedChangeKindReplace,
+							Replacement: "ambiguous",
+						},
+					},
+				},
+			},
+		},
+	}
+	logger := &spyLogger{}
+	uc, err := NewReviewUseCase(
+		mockRuleProvider{pack: RulePack{ID: "core", Instructions: []string{"review"}}},
+		llm,
+		pub,
+		logger,
+		WithSuggestedChanges(SuggestedChangesConfig{}, grouping, generator),
+	)
+	require.NoError(t, err)
+
+	result, err := uc.Execute(context.Background(), ReviewRequest{
+		Input: domain.ReviewInput{
+			Target:       domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+			ChangedFiles: []domain.ChangedFile{{Path: "service.go", DiffSnippet: "@@"}},
+		},
+	})
+	require.NoError(t, err)
+	require.Nil(t, result.Findings[0].SuggestedChange)
+	require.Nil(t, result.Findings[1].SuggestedChange)
+	require.True(t, containsUsecaseEvent(logger.events, "debug", "dropped_ambiguous_key=1"))
 }
