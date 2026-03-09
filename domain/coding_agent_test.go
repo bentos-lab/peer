@@ -13,6 +13,13 @@ func TestCodingAgentRunOptionsZeroValue(t *testing.T) {
 	require.Equal(t, "", options.Model)
 }
 
+func TestCodingAgentSetupOptionsZeroValue(t *testing.T) {
+	var options CodingAgentSetupOptions
+
+	require.Equal(t, "", options.Agent)
+	require.Equal(t, "", options.Ref)
+}
+
 func TestCodingAgentRunResultZeroValue(t *testing.T) {
 	var result CodingAgentRunResult
 

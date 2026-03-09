@@ -7,53 +7,16 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // reviewUseCase is the concrete ReviewUseCase implementation.
 type reviewUseCase struct {
-	ruleProvider             RulePackProvider
-	llmReviewer              LLMReviewer
-	publisher                ReviewResultPublisher
-	suggestedChangesEnabled  bool
-	suggestedChangesConfig   SuggestedChangesConfig
-	suggestionGrouping       LLMSuggestionGrouping
-	suggestedChangeGenerator LLMSuggestedChangeGenerator
-	logger                   Logger
-}
-
-// SuggestedChangesConfig defines runtime behavior for the suggest-phase pipeline.
-type SuggestedChangesConfig struct {
-	MinSeverity     domain.FindingSeverityEnum
-	MaxCandidates   int
-	MaxGroupSize    int
-	MaxWorkers      int
-	GroupTimeout    time.Duration
-	GenerateTimeout time.Duration
-}
-
-// ReviewUseCaseOption configures optional review usecase behavior.
-type ReviewUseCaseOption interface {
-	applyReviewUseCase(*reviewUseCase)
-}
-
-type reviewUseCaseOptionFunc func(*reviewUseCase)
-
-func (f reviewUseCaseOptionFunc) applyReviewUseCase(u *reviewUseCase) {
-	f(u)
-}
-
-// WithSuggestedChanges enables the post-review suggested changes pipeline.
-func WithSuggestedChanges(
-	cfg SuggestedChangesConfig,
-	grouping LLMSuggestionGrouping,
-	generator LLMSuggestedChangeGenerator,
-) ReviewUseCaseOption {
-	return reviewUseCaseOptionFunc(func(u *reviewUseCase) {
-		u.suggestedChangesEnabled = true
-		u.suggestedChangesConfig = normalizeSuggestedChangesConfig(cfg)
-		u.suggestionGrouping = grouping
-		u.suggestedChangeGenerator = generator
-	})
+	ruleProvider RulePackProvider
+	llmReviewer  LLMReviewer
+	publisher    ReviewResultPublisher
+	envFactory   uccontracts.CodeEnvironmentFactory
+	logger       Logger
 }
 
 // NewReviewUseCase constructs a review-only usecase.
@@ -61,28 +24,22 @@ func NewReviewUseCase(
 	ruleProvider RulePackProvider,
 	llmReviewer LLMReviewer,
 	publisher ReviewResultPublisher,
+	envFactory uccontracts.CodeEnvironmentFactory,
 	logger Logger,
-	options ...ReviewUseCaseOption,
 ) (ReviewUseCase, error) {
-	if ruleProvider == nil || llmReviewer == nil || publisher == nil {
+	if ruleProvider == nil || llmReviewer == nil || publisher == nil || envFactory == nil {
 		return nil, errors.New("review usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	u := &reviewUseCase{
-		ruleProvider:           ruleProvider,
-		llmReviewer:            llmReviewer,
-		publisher:              publisher,
-		suggestedChangesConfig: normalizeSuggestedChangesConfig(SuggestedChangesConfig{}),
-		logger:                 logger,
+		ruleProvider: ruleProvider,
+		llmReviewer:  llmReviewer,
+		publisher:    publisher,
+		envFactory:   envFactory,
+		logger:       logger,
 	}
-	for _, option := range options {
-		if option != nil {
-			option.applyReviewUseCase(u)
-		}
-	}
-
 	return u, nil
 }
 
@@ -102,10 +59,24 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "load_rule_pack", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	u.logger.Debugf("Loading the rule pack took %d ms and returned %d instructions.", time.Since(loadRulePackStartedAt).Milliseconds(), len(pack.Instructions))
 
+	initializeEnvironmentStartedAt := time.Now()
+	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+		RepoURL: request.Input.RepoURL,
+	})
+	if err != nil {
+		u.logStageFailure(request, "initialize_code_environment", initializeEnvironmentStartedAt, err)
+		return ReviewExecutionResult{}, err
+	}
+	u.logger.Infof("Code environment initialized.")
+	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "initialize_code_environment", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())
+
 	reviewDiffStartedAt := time.Now()
 	llmResult, err := u.llmReviewer.Review(ctx, LLMReviewPayload{
-		Input:    request.Input,
-		RulePack: pack,
+		Input:       request.Input,
+		RulePack:    pack,
+		Environment: environment,
+		Suggestions: request.Suggestions,
 	})
 	if err != nil {
 		u.logStageFailure(request, "review_diff", reviewDiffStartedAt, err)
@@ -114,14 +85,6 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	u.logger.Infof("LLM review completed.")
 	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "review_diff", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	u.logger.Debugf("The LLM review produced %d findings.", len(llmResult.Findings))
-
-	if u.suggestedChangesEnabled {
-		withSuggestionsStartedAt := time.Now()
-		findingsWithSuggestions := u.attachSuggestedChanges(ctx, request.Input, llmResult.Findings)
-		u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "generate_suggested_changes", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-		u.logger.Debugf("Generating suggested changes took %d ms.", time.Since(withSuggestionsStartedAt).Milliseconds())
-		llmResult.Findings = findingsWithSuggestions
-	}
 
 	publishStartedAt := time.Now()
 	messages := BuildMessages(llmResult.Findings, llmResult.Summary)

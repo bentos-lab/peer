@@ -51,3 +51,55 @@ func TestDummyCommandRunner_VerifyDoneDetectsLeftoverSteps(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unconsumed command steps")
 }
+
+func TestDummyCommandRunner_RunStreamUsesScriptedEvents(t *testing.T) {
+	runner := NewDummyCommandRunner()
+	runner.Enqueue(CommandStep{
+		Expected: CommandCall{Name: "cmd", Args: []string{"arg"}},
+		Stream: []StreamChunk{
+			{Type: StreamTypeStdout, Data: []byte("out-1")},
+			{Type: StreamTypeStderr, Data: []byte("err-1")},
+			{Type: StreamTypeStdout, Data: []byte("out-2")},
+		},
+		Result: Result{
+			Stdout: []byte("out-1out-2"),
+			Stderr: []byte("err-1"),
+		},
+	})
+
+	var chunks []StreamChunk
+	result, err := runner.RunStream(context.Background(), func(chunk StreamChunk) {
+		chunks = append(chunks, chunk)
+	}, "cmd", "arg")
+	require.NoError(t, err)
+	require.Equal(t, "out-1out-2", string(result.Stdout))
+	require.Equal(t, "err-1", string(result.Stderr))
+	require.Equal(t, []StreamChunk{
+		{Type: StreamTypeStdout, Data: []byte("out-1")},
+		{Type: StreamTypeStderr, Data: []byte("err-1")},
+		{Type: StreamTypeStdout, Data: []byte("out-2")},
+	}, chunks)
+}
+
+func TestDummyCommandRunner_RunStreamFallsBackToResultBuffers(t *testing.T) {
+	runner := NewDummyCommandRunner()
+	runner.Enqueue(CommandStep{
+		Expected: CommandCall{Name: "cmd"},
+		Result: Result{
+			Stdout: []byte("out"),
+			Stderr: []byte("err"),
+		},
+	})
+
+	var chunks []StreamChunk
+	result, err := runner.RunStream(context.Background(), func(chunk StreamChunk) {
+		chunks = append(chunks, chunk)
+	}, "cmd")
+	require.NoError(t, err)
+	require.Equal(t, "out", string(result.Stdout))
+	require.Equal(t, "err", string(result.Stderr))
+	require.Equal(t, []StreamChunk{
+		{Type: StreamTypeStdout, Data: []byte("out")},
+		{Type: StreamTypeStderr, Data: []byte("err")},
+	}, chunks)
+}

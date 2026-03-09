@@ -16,11 +16,12 @@ type ReviewTarget struct {
 
 // ReviewInput is the complete input for the review engine.
 type ReviewInput struct {
-	Target        ReviewTarget
-	Title         string
-	Description   string
-	ChangedFiles  []ChangedFile
-	Language      string
-	Metadata      map[string]string
-	SourceContext string
+	Target      ReviewTarget
+	RepoURL     string
+	Base        string
+	Head        string
+	Title       string
+	Description string
+	Language    string
+	Metadata    map[string]string
 }

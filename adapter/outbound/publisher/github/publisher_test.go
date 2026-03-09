@@ -122,6 +122,8 @@ func TestPublisher_PublishRendersReplaceSuggestedChangeBlock(t *testing.T) {
 				Title:     "Nil risk",
 				Detail:    "Potential nil dereference.",
 				SuggestedChange: &domain.SuggestedChange{
+					StartLine:   15,
+					EndLine:     18,
 					Kind:        domain.SuggestedChangeKindReplace,
 					Replacement: "if value == nil {\n\treturn err\n}",
 				},
@@ -131,6 +133,8 @@ func TestPublisher_PublishRendersReplaceSuggestedChangeBlock(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, client.reviewInputs, 1)
+	require.Equal(t, 15, client.reviewInputs[0].StartLine)
+	require.Equal(t, 18, client.reviewInputs[0].EndLine)
 	require.Contains(t, client.reviewInputs[0].Body, "```suggestion")
 	require.Contains(t, client.reviewInputs[0].Body, "if value == nil")
 }
@@ -153,6 +157,8 @@ func TestPublisher_PublishRendersDeleteSuggestedChangeBlock(t *testing.T) {
 				Title:     "Dead code",
 				Detail:    "Remove dead branch.",
 				SuggestedChange: &domain.SuggestedChange{
+					StartLine:   8,
+					EndLine:     8,
 					Kind:        domain.SuggestedChangeKindDelete,
 					Replacement: "",
 				},
@@ -162,7 +168,43 @@ func TestPublisher_PublishRendersDeleteSuggestedChangeBlock(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, client.reviewInputs, 1)
+	require.Equal(t, 8, client.reviewInputs[0].StartLine)
+	require.Equal(t, 8, client.reviewInputs[0].EndLine)
 	require.Contains(t, client.reviewInputs[0].Body, "```suggestion\n\n```")
+}
+
+func TestPublisher_PublishSkipsFindingWhenSuggestedChangeRangeIsInvalid(t *testing.T) {
+	client := &fakeClient{}
+	logger := &spyLogger{}
+	pub := NewPublisher(client, logger)
+
+	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
+		Target: domain.ReviewTarget{
+			Repository:          "org/repo",
+			ChangeRequestNumber: 11,
+		},
+		Findings: []domain.Finding{
+			{
+				FilePath:  "a.go",
+				StartLine: 7,
+				EndLine:   7,
+				Severity:  domain.FindingSeverityMajor,
+				Title:     "Nil risk",
+				Detail:    "Potential nil dereference.",
+				SuggestedChange: &domain.SuggestedChange{
+					StartLine:   20,
+					EndLine:     19,
+					Kind:        domain.SuggestedChangeKindReplace,
+					Replacement: "if value == nil {\n\treturn err\n}",
+				},
+			},
+		},
+		Summary: "done",
+	})
+	require.NoError(t, err)
+	require.Empty(t, client.reviewInputs)
+	require.Len(t, client.bodies, 1)
+	require.True(t, containsEvent(logger.events, "warn:Skipped one GitHub review comment because its anchor is invalid."))
 }
 
 func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {

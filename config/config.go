@@ -17,6 +17,7 @@ type Config struct {
 	OverviewEnabled  *bool
 	SuggestedChanges SuggestedChangesConfig
 	OpenAI           OpenAIConfig
+	CodingAgent      CodingAgentConfig
 	Server           ServerConfig
 }
 
@@ -36,6 +37,13 @@ type OpenAIConfig struct {
 	BaseURL string
 	APIKey  string
 	Model   string
+}
+
+// CodingAgentConfig contains coding-agent runtime settings.
+type CodingAgentConfig struct {
+	Agent    string
+	Provider string
+	Model    string
 }
 
 // ServerConfig contains HTTP server-specific settings.
@@ -79,6 +87,11 @@ func Load() (Config, error) {
 			BaseURL: envOrDefault("OPENAI_BASE_URL", "gemini"),
 			APIKey:  os.Getenv("OPENAI_API_KEY"),
 			Model:   envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite"),
+		},
+		CodingAgent: CodingAgentConfig{
+			Agent:    envOrDefault("CODING_AGENT_NAME", "opencode"),
+			Provider: envOrDefault("CODING_AGENT_PROVIDER", "openai"),
+			Model:    envOrDefault("CODING_AGENT_MODEL", envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite")),
 		},
 		Server: ServerConfig{
 			Port: envOrDefault("PORT", "8080"),

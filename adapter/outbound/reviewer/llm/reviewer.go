@@ -66,8 +66,19 @@ func NewReviewer(generator contracts.LLMGenerator, logger usecase.Logger) (*Revi
 func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload) (usecase.LLMReviewResult, error) {
 	startedAt := time.Now()
 	r.logger.Infof("LLM review started.")
-	r.logger.Debugf("The review input includes %d changed files.", len(payload.Input.ChangedFiles))
 	r.logger.Debugf("The rule pack includes %d instructions.", len(payload.RulePack.Instructions))
+	if payload.Environment == nil {
+		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")
+	}
+
+	changedFiles, err := payload.Environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: payload.Input.Base,
+		Head: payload.Input.Head,
+	})
+	if err != nil {
+		return usecase.LLMReviewResult{}, err
+	}
+	r.logger.Debugf("The review input includes %d changed files.", len(changedFiles))
 
 	systemPrompt, err := renderSystemPrompt(strings.Join(payload.RulePack.Instructions, "\n\n"))
 	if err != nil {
@@ -77,7 +88,7 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		return usecase.LLMReviewResult{}, err
 	}
 
-	userPrompt, err := renderUserPrompt(payload.Input)
+	userPrompt, err := renderUserPrompt(payload.Input, changedFiles)
 	if err != nil {
 		r.logger.Errorf("LLM review failed while rendering the user prompt.")
 		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
@@ -143,7 +154,7 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		}
 		resultFindings = append(resultFindings, finding)
 	}
-	changedRangesByFile := buildChangedRangesByFile(payload.Input.ChangedFiles, r.logger)
+	changedRangesByFile := buildChangedRangesByFile(changedFiles, r.logger)
 	filteredFindings := splitFindingsByChangedRanges(resultFindings, changedRangesByFile, r.logger)
 
 	r.logger.Infof("LLM review completed.")
@@ -232,9 +243,9 @@ func renderSystemPrompt(rulePackText string) (string, error) {
 	return rendered.String(), nil
 }
 
-func renderUserPrompt(input domain.ReviewInput) (string, error) {
-	files := make([]reviewUserPromptFileData, 0, len(input.ChangedFiles))
-	for _, file := range input.ChangedFiles {
+func renderUserPrompt(input domain.ReviewInput, changedFiles []domain.ChangedFile) (string, error) {
+	files := make([]reviewUserPromptFileData, 0, len(changedFiles))
+	for _, file := range changedFiles {
 		changedText := file.DiffSnippet
 		if changedText == "" {
 			changedText = file.Content

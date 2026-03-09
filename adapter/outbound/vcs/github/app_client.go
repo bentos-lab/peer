@@ -107,6 +107,15 @@ func (c *AppClient) GetPullRequestChangedFiles(ctx context.Context, repository s
 	return changedFiles, nil
 }
 
+// GetInstallationAccessToken resolves an installation token for the provided installation ID.
+func (c *AppClient) GetInstallationAccessToken(ctx context.Context, installationID string) (string, error) {
+	installationID = strings.TrimSpace(installationID)
+	if installationID == "" {
+		return "", fmt.Errorf("installation id is required")
+	}
+	return c.installationAccessToken(WithInstallationID(ctx, installationID))
+}
+
 // CreateComment posts a comment to GitHub.
 func (c *AppClient) CreateComment(ctx context.Context, repository string, pullRequestNumber int, body string) error {
 	if pullRequestNumber <= 0 {

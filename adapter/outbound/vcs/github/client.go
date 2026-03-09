@@ -24,6 +24,16 @@ type CreateReviewCommentInput struct {
 	EndLine   int
 }
 
+// PullRequestInfo contains normalized pull-request metadata.
+type PullRequestInfo struct {
+	Repository  string
+	Number      int
+	Title       string
+	Description string
+	BaseRef     string
+	HeadRef     string
+}
+
 // NewCLIClient creates a GitHub CLI API client.
 func NewCLIClient() *CLIClient {
 	return &CLIClient{
@@ -40,7 +50,7 @@ func (c *CLIClient) GetPullRequestChangedFiles(ctx context.Context, repository s
 		return nil, err
 	}
 
-	resolvedRepo, err := c.resolveRepository(ctx, repository)
+	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +78,7 @@ func (c *CLIClient) CreateComment(ctx context.Context, repository string, pullRe
 		return err
 	}
 
-	resolvedRepo, err := c.resolveRepository(ctx, repository)
+	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
 		return err
 	}
@@ -99,7 +109,7 @@ func (c *CLIClient) CreateReviewComment(ctx context.Context, repository string, 
 		return err
 	}
 
-	resolvedRepo, err := c.resolveRepository(ctx, repository)
+	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
 		return err
 	}
@@ -148,6 +158,72 @@ func (c *CLIClient) CreateReviewComment(ctx context.Context, repository string, 
 	}
 
 	return nil
+}
+
+// ResolveRepository resolves the effective GitHub repository slug.
+func (c *CLIClient) ResolveRepository(ctx context.Context, repository string) (string, error) {
+	return c.resolveRepository(ctx, repository)
+}
+
+// GetPullRequestInfo loads title/body/base/head for a pull request.
+func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (PullRequestInfo, error) {
+	if pullRequestNumber <= 0 {
+		return PullRequestInfo{}, fmt.Errorf("pull request number must be positive")
+	}
+	if err := c.ensureAuth(ctx); err != nil {
+		return PullRequestInfo{}, err
+	}
+	resolvedRepo, err := c.ResolveRepository(ctx, repository)
+	if err != nil {
+		return PullRequestInfo{}, err
+	}
+
+	result, err := c.runner.Run(
+		ctx,
+		"gh",
+		"api",
+		fmt.Sprintf("repos/%s/pulls/%d", resolvedRepo, pullRequestNumber),
+	)
+	if err != nil {
+		return PullRequestInfo{}, fmt.Errorf("failed to load pull request metadata: %w", formatCommandError(err, result))
+	}
+
+	var payload struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Base  struct {
+			Ref string `json:"ref"`
+			SHA string `json:"sha"`
+		} `json:"base"`
+		Head struct {
+			Ref string `json:"ref"`
+			SHA string `json:"sha"`
+		} `json:"head"`
+	}
+	if err := json.Unmarshal(result.Stdout, &payload); err != nil {
+		return PullRequestInfo{}, fmt.Errorf("failed to parse pull request metadata: %w", err)
+	}
+
+	base := strings.TrimSpace(payload.Base.SHA)
+	if base == "" {
+		base = strings.TrimSpace(payload.Base.Ref)
+	}
+	head := strings.TrimSpace(payload.Head.SHA)
+	if head == "" {
+		head = strings.TrimSpace(payload.Head.Ref)
+	}
+	if base == "" || head == "" {
+		return PullRequestInfo{}, fmt.Errorf("failed to resolve pull request base/head refs")
+	}
+
+	return PullRequestInfo{
+		Repository:  resolvedRepo,
+		Number:      pullRequestNumber,
+		Title:       strings.TrimSpace(payload.Title),
+		Description: strings.TrimSpace(payload.Body),
+		BaseRef:     base,
+		HeadRef:     head,
+	}, nil
 }
 
 func (c *CLIClient) getPullRequestHeadSHA(ctx context.Context, repository string, pullRequestNumber int) (string, error) {

@@ -11,7 +11,6 @@ import (
 
 // changeRequestUseCase is the concrete ChangeRequestUseCase implementation.
 type changeRequestUseCase struct {
-	inputProvider ChangeRequestInputProvider
 	reviewUseCase ReviewUseCase
 	overviewUC    OverviewUseCase
 	logger        Logger
@@ -19,19 +18,17 @@ type changeRequestUseCase struct {
 
 // NewChangeRequestUseCase constructs a platform-agnostic change request orchestrator usecase.
 func NewChangeRequestUseCase(
-	inputProvider ChangeRequestInputProvider,
 	reviewUseCase ReviewUseCase,
 	overviewUC OverviewUseCase,
 	logger Logger,
 ) (ChangeRequestUseCase, error) {
-	if inputProvider == nil || reviewUseCase == nil || overviewUC == nil {
+	if reviewUseCase == nil || overviewUC == nil {
 		return nil, errors.New("change request usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &changeRequestUseCase{
-		inputProvider: inputProvider,
 		reviewUseCase: reviewUseCase,
 		overviewUC:    overviewUC,
 		logger:        logger,
@@ -44,21 +41,12 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 	u.logger.Infof("Review execution started.")
 	u.logger.Debugf("Review target is repository %q with change request number %d.", request.Repository, request.ChangeRequestNumber)
 
-	loadInputStartedAt := time.Now()
-	snapshot, err := u.inputProvider.LoadChangeSnapshot(ctx, request)
-	if err != nil {
-		u.logStageFailure(request, "load_review_input", loadInputStartedAt, err)
-		return ChangeRequestExecutionResult{}, err
-	}
-	u.logger.Infof("Review input loaded.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "load_review_input", request.Repository, request.ChangeRequestNumber)
-	u.logger.Debugf("Loading review input took %d ms and found %d changed files.", time.Since(loadInputStartedAt).Milliseconds(), len(snapshot.ChangedFiles))
-
-	reviewInput := mapChangeSnapshotToReviewInput(snapshot)
-	overviewInput := mapChangeSnapshotToOverviewInput(snapshot)
+	reviewInput := mapChangeRequestToReviewInput(request)
+	overviewInput := mapChangeRequestToOverviewInput(request)
 
 	var reviewResult ReviewExecutionResult
 	var overviewResult OverviewExecutionResult
+	var err error
 
 	if request.EnableOverview {
 		overviewStartedAt := time.Now()
@@ -69,14 +57,20 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 		}
 
 		reviewStartedAt := time.Now()
-		reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{Input: reviewInput})
+		reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{
+			Input:       reviewInput,
+			Suggestions: request.EnableSuggestions,
+		})
 		if err != nil {
 			u.logStageFailure(request, "review_diff", reviewStartedAt, err)
 			return ChangeRequestExecutionResult{}, err
 		}
 	} else {
 		reviewStartedAt := time.Now()
-		reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{Input: reviewInput})
+		reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{
+			Input:       reviewInput,
+			Suggestions: request.EnableSuggestions,
+		})
 		if err != nil {
 			u.logStageFailure(request, "review_diff", reviewStartedAt, err)
 			return ChangeRequestExecutionResult{}, err
@@ -95,33 +89,35 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 	}, nil
 }
 
-func mapChangeSnapshotToReviewInput(snapshot domain.ChangeSnapshot) domain.ReviewInput {
+func mapChangeRequestToReviewInput(request ChangeRequestRequest) domain.ReviewInput {
 	return domain.ReviewInput{
 		Target: domain.ReviewTarget{
-			Repository:          snapshot.Context.Repository,
-			ChangeRequestNumber: snapshot.Context.ChangeRequestNumber,
+			Repository:          request.Repository,
+			ChangeRequestNumber: request.ChangeRequestNumber,
 		},
-		Title:         snapshot.Context.Title,
-		Description:   snapshot.Context.Description,
-		ChangedFiles:  snapshot.ChangedFiles,
-		Language:      snapshot.Language,
-		Metadata:      snapshot.Context.Metadata,
-		SourceContext: snapshot.SourceContext,
+		RepoURL:     request.RepoURL,
+		Base:        request.Base,
+		Head:        request.Head,
+		Title:       request.Title,
+		Description: request.Description,
+		Language:    "English",
+		Metadata:    request.Metadata,
 	}
 }
 
-func mapChangeSnapshotToOverviewInput(snapshot domain.ChangeSnapshot) domain.OverviewInput {
+func mapChangeRequestToOverviewInput(request ChangeRequestRequest) domain.OverviewInput {
 	return domain.OverviewInput{
 		Target: domain.OverviewTarget{
-			Repository:          snapshot.Context.Repository,
-			ChangeRequestNumber: snapshot.Context.ChangeRequestNumber,
+			Repository:          request.Repository,
+			ChangeRequestNumber: request.ChangeRequestNumber,
 		},
-		Title:         snapshot.Context.Title,
-		Description:   snapshot.Context.Description,
-		ChangedFiles:  snapshot.ChangedFiles,
-		Language:      snapshot.Language,
-		Metadata:      snapshot.Context.Metadata,
-		SourceContext: snapshot.SourceContext,
+		RepoURL:     request.RepoURL,
+		Base:        request.Base,
+		Head:        request.Head,
+		Title:       request.Title,
+		Description: request.Description,
+		Language:    "English",
+		Metadata:    request.Metadata,
 	}
 }
 

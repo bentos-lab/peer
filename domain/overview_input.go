@@ -8,11 +8,12 @@ type OverviewTarget struct {
 
 // OverviewInput is the complete input for overview generation.
 type OverviewInput struct {
-	Target        OverviewTarget
-	Title         string
-	Description   string
-	ChangedFiles  []ChangedFile
-	Language      string
-	Metadata      map[string]string
-	SourceContext string
+	Target      OverviewTarget
+	RepoURL     string
+	Base        string
+	Head        string
+	Title       string
+	Description string
+	Language    string
+	Metadata    map[string]string
 }

@@ -3,9 +3,12 @@ package domain
 // ChangeRequestContext identifies one pull/merge request context.
 type ChangeRequestContext struct {
 	Repository          string
+	RepoURL             string
 	ChangeRequestNumber int
 	Title               string
 	Description         string
+	Base                string
+	Head                string
 	Metadata            map[string]string
 }
 

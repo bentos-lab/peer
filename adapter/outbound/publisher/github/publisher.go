@@ -98,17 +98,23 @@ func (p *Publisher) buildReviewCommentInput(finding domain.Finding) (githubvcs.C
 	if filePath == "" {
 		return githubvcs.CreateReviewCommentInput{}, &githubvcs.InvalidAnchorError{Message: "invalid review comment anchor: file path is empty"}
 	}
-	if finding.StartLine <= 0 || finding.EndLine <= 0 || finding.StartLine > finding.EndLine {
+	startLine := finding.StartLine
+	endLine := finding.EndLine
+	if finding.SuggestedChange != nil {
+		startLine = finding.SuggestedChange.StartLine
+		endLine = finding.SuggestedChange.EndLine
+	}
+	if startLine <= 0 || endLine <= 0 || startLine > endLine {
 		return githubvcs.CreateReviewCommentInput{}, &githubvcs.InvalidAnchorError{
-			Message: fmt.Sprintf("invalid review comment anchor: invalid range startLine=%d endLine=%d", finding.StartLine, finding.EndLine),
+			Message: fmt.Sprintf("invalid review comment anchor: invalid range startLine=%d endLine=%d", startLine, endLine),
 		}
 	}
 
 	return githubvcs.CreateReviewCommentInput{
 		Body:      buildFindingCommentBody(finding),
 		Path:      filePath,
-		StartLine: finding.StartLine,
-		EndLine:   finding.EndLine,
+		StartLine: startLine,
+		EndLine:   endLine,
 	}, nil
 }
 

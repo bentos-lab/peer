@@ -24,21 +24,62 @@ func (d *DummyCommandRunner) Enqueue(step CommandStep) {
 
 // Run executes one scripted step and validates command order and arguments.
 func (d *DummyCommandRunner) Run(_ context.Context, name string, args ...string) (Result, error) {
+	step, err := d.consumeStep(name, args...)
+	if err != nil {
+		return Result{}, err
+	}
+	return step.Result, step.Err
+}
+
+// RunStream executes one scripted step and streams scripted chunks.
+func (d *DummyCommandRunner) RunStream(_ context.Context, onChunk func(StreamChunk), name string, args ...string) (Result, error) {
+	step, err := d.consumeStep(name, args...)
+	if err != nil {
+		return Result{}, err
+	}
+
+	events := step.Stream
+	if len(events) == 0 {
+		if len(step.Result.Stdout) > 0 {
+			events = append(events, StreamChunk{
+				Type: StreamTypeStdout,
+				Data: append([]byte(nil), step.Result.Stdout...),
+			})
+		}
+		if len(step.Result.Stderr) > 0 {
+			events = append(events, StreamChunk{
+				Type: StreamTypeStderr,
+				Data: append([]byte(nil), step.Result.Stderr...),
+			})
+		}
+	}
+	for _, chunk := range events {
+		if onChunk == nil {
+			continue
+		}
+		onChunk(StreamChunk{
+			Type: chunk.Type,
+			Data: append([]byte(nil), chunk.Data...),
+		})
+	}
+	return step.Result, step.Err
+}
+
+func (d *DummyCommandRunner) consumeStep(name string, args ...string) (CommandStep, error) {
 	call := CommandCall{Name: name, Args: append([]string(nil), args...)}
 	d.calls = append(d.calls, call)
 
 	if len(d.queue) == 0 {
-		return Result{}, fmt.Errorf("unexpected command call: %s", formatCall(call))
+		return CommandStep{}, fmt.Errorf("unexpected command call: %s", formatCall(call))
 	}
 
 	step := d.queue[0]
 	d.queue = d.queue[1:]
 
 	if step.Expected.Name != name || !sameArgs(step.Expected.Args, args) {
-		return Result{}, fmt.Errorf("unexpected command call: got %s, want %s", formatCall(call), formatCall(step.Expected))
+		return CommandStep{}, fmt.Errorf("unexpected command call: got %s, want %s", formatCall(call), formatCall(step.Expected))
 	}
-
-	return step.Result, step.Err
+	return step, nil
 }
 
 // VerifyDone returns an error when scripted steps are left unconsumed.

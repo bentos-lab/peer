@@ -1,0 +1,487 @@
+package host
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"bentos-backend/adapter/outbound/commandrunner"
+	"bentos-backend/domain"
+	"bentos-backend/shared/logger/stdlogger"
+	"bentos-backend/usecase"
+)
+
+// HostOpencodeAgent runs tasks through the opencode CLI on the host machine.
+type HostOpencodeAgent struct {
+	workspaceDir string
+	runner       commandrunner.StreamRunner
+	logger       usecase.Logger
+}
+
+// NewHostOpencodeAgent creates a host opencode coding agent.
+func NewHostOpencodeAgent(workspaceDir string, runner commandrunner.StreamRunner, logger usecase.Logger) *HostOpencodeAgent {
+	if runner == nil {
+		runner = commandrunner.NewOSStreamCommandRunner()
+	}
+	if logger == nil {
+		logger = stdlogger.Nop()
+	}
+	return &HostOpencodeAgent{
+		workspaceDir: workspaceDir,
+		runner:       runner,
+		logger:       logger,
+	}
+}
+
+// Run executes one coding task using opencode JSON output mode.
+func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.CodingAgentRunOptions) (domain.CodingAgentRunResult, error) {
+	task = strings.TrimSpace(task)
+	if task == "" {
+		return domain.CodingAgentRunResult{}, fmt.Errorf("task is required")
+	}
+
+	a.logger.Tracef("Open-code task: %s", task)
+
+	provider := strings.TrimSpace(opts.Provider)
+	if provider == "" {
+		return domain.CodingAgentRunResult{}, fmt.Errorf("provider is required")
+	}
+
+	model := strings.TrimSpace(opts.Model)
+	if model == "" {
+		return domain.CodingAgentRunResult{}, fmt.Errorf("model is required")
+	}
+
+	modelSpec := provider + "/" + model
+	parser := newOpencodeJSONStreamParser(a.logger)
+	stderrBuffer := newLineBuffer(func(line string) {
+		if strings.TrimSpace(line) == "" {
+			return
+		}
+		a.logger.Warnf("coding-agent opencode stderr: %s", line)
+	})
+
+	result, err := a.runner.RunStream(
+		ctx,
+		func(chunk commandrunner.StreamChunk) {
+			if len(chunk.Data) == 0 {
+				return
+			}
+			switch chunk.Type {
+			case commandrunner.StreamTypeStdout:
+				parser.Consume(chunk.Data)
+			case commandrunner.StreamTypeStderr:
+				stderrBuffer.Append(chunk.Data)
+			}
+		},
+		"opencode",
+		"run",
+		"--format",
+		"json",
+		"--dir",
+		a.workspaceDir,
+		"--model",
+		modelSpec,
+		task,
+	)
+	stderrBuffer.Flush()
+	if err != nil {
+		return domain.CodingAgentRunResult{}, fmt.Errorf("failed to run opencode task: %w", formatCommandError(err, result))
+	}
+
+	text, err := parser.Finalize()
+	if err != nil {
+		return domain.CodingAgentRunResult{}, err
+	}
+
+	return domain.CodingAgentRunResult{Text: text}, nil
+}
+
+const opencodeTraceTranscriptMaxChars = 4096
+
+type parsedOpencodeEvent struct {
+	Type   string
+	Text   string
+	Action string
+}
+
+type opencodeJSONStreamParser struct {
+	logger                usecase.Logger
+	stdoutLineBuffer      lineBuffer
+	finalText             string
+	assistantDelta        strings.Builder
+	parsedLineCount       int
+	assistantMessageCount int
+	assistantDeltaCount   int
+	lineNumber            int
+	firstError            error
+}
+
+func newOpencodeJSONStreamParser(logger usecase.Logger) *opencodeJSONStreamParser {
+	if logger == nil {
+		logger = stdlogger.Nop()
+	}
+
+	parser := &opencodeJSONStreamParser{
+		logger: logger,
+	}
+	parser.stdoutLineBuffer = newLineBuffer(parser.consumeLine)
+	return parser
+}
+
+// Consume processes one stdout chunk from opencode in real time.
+func (p *opencodeJSONStreamParser) Consume(stdoutChunk []byte) {
+	if p.firstError != nil || len(stdoutChunk) == 0 {
+		return
+	}
+	p.stdoutLineBuffer.Append(stdoutChunk)
+}
+
+// Finalize flushes any remaining buffered line and resolves final assistant text.
+func (p *opencodeJSONStreamParser) Finalize() (string, error) {
+	p.stdoutLineBuffer.Flush()
+	if p.firstError != nil {
+		return "", p.firstError
+	}
+
+	logTranscript := func(source string, text string) {
+		transcriptLineCount := strings.Count(text, "\n") + 1
+		truncated := truncateForTrace(text, opencodeTraceTranscriptMaxChars)
+		p.logger.Tracef(
+			"coding-agent trace action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
+			"agent finalized assistant transcript",
+			source,
+			p.parsedLineCount,
+			p.assistantMessageCount,
+			p.assistantDeltaCount,
+			len(text),
+			transcriptLineCount,
+			truncated,
+		)
+	}
+
+	p.finalText = strings.TrimSpace(p.finalText)
+	if p.finalText != "" {
+		logTranscript("assistant_message", p.finalText)
+		return p.finalText, nil
+	}
+
+	deltaText := strings.TrimSpace(p.assistantDelta.String())
+	if deltaText != "" {
+		logTranscript("assistant_delta", deltaText)
+		return deltaText, nil
+	}
+
+	return "", fmt.Errorf("no assistant output found in opencode response")
+}
+
+func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
+	if p.firstError != nil {
+		return
+	}
+	p.lineNumber++
+
+	line := strings.TrimSpace(rawLine)
+	if line == "" {
+		return
+	}
+	p.parsedLineCount++
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(line), &event); err != nil {
+		p.firstError = fmt.Errorf("failed to parse opencode json output at line %d: %w", p.lineNumber, err)
+		return
+	}
+
+	parsedEvent := extractParsedOpencodeEvent(event)
+	if strings.TrimSpace(parsedEvent.Action) != "" {
+		p.logger.Tracef("coding-agent trace action=%q line=%d", parsedEvent.Action, p.lineNumber)
+	}
+
+	candidate := parsedEvent.Text
+	if strings.TrimSpace(candidate) == "" {
+		return
+	}
+
+	if parsedEvent.Type == "assistant_delta" {
+		p.assistantDeltaCount++
+		p.assistantDelta.WriteString(candidate)
+		p.logger.Tracef(
+			"coding-agent trace action=%q line=%d index=%d chars=%d",
+			"agent streamed assistant delta",
+			p.lineNumber,
+			p.assistantDeltaCount,
+			len(candidate),
+		)
+		return
+	}
+
+	p.assistantMessageCount++
+	p.finalText = candidate
+	p.logger.Tracef(
+		"coding-agent trace action=%q line=%d index=%d chars=%d",
+		"agent produced assistant message",
+		p.lineNumber,
+		p.assistantMessageCount,
+		len(candidate),
+	)
+}
+
+type lineBuffer struct {
+	buffer      bytes.Buffer
+	consumeLine func(string)
+}
+
+func newLineBuffer(consumeLine func(string)) lineBuffer {
+	return lineBuffer{
+		consumeLine: consumeLine,
+	}
+}
+
+func (b *lineBuffer) Append(chunk []byte) {
+	if len(chunk) == 0 {
+		return
+	}
+	_, _ = b.buffer.Write(chunk)
+
+	for {
+		content := b.buffer.Bytes()
+		newlineIndex := bytes.IndexByte(content, '\n')
+		if newlineIndex < 0 {
+			return
+		}
+
+		line := string(content[:newlineIndex])
+		remaining := append([]byte(nil), content[newlineIndex+1:]...)
+		b.buffer.Reset()
+		_, _ = b.buffer.Write(remaining)
+		if b.consumeLine != nil {
+			b.consumeLine(line)
+		}
+	}
+}
+
+func (b *lineBuffer) Flush() {
+	if b.buffer.Len() == 0 {
+		return
+	}
+	line := b.buffer.String()
+	b.buffer.Reset()
+	if b.consumeLine != nil {
+		b.consumeLine(line)
+	}
+}
+
+func parseOpencodeJSONResponse(stdout []byte, logger usecase.Logger) (string, error) {
+	parser := newOpencodeJSONStreamParser(logger)
+	parser.Consume(stdout)
+	return parser.Finalize()
+}
+
+func extractParsedOpencodeEvent(event map[string]any) parsedOpencodeEvent {
+	eventType, _ := event["type"].(string)
+	eventType = strings.ToLower(strings.TrimSpace(eventType))
+
+	switch eventType {
+	case "step_start":
+		return parsedOpencodeEvent{
+			Type:   eventType,
+			Action: "agent started step",
+		}
+	case "step_finish":
+		action := "agent finished step"
+		if reason := extractStepFinishReason(event); reason != "" {
+			action = fmt.Sprintf("agent finished step reason=%s", reason)
+		}
+		return parsedOpencodeEvent{
+			Type:   eventType,
+			Action: action,
+		}
+	case "tool_use":
+		action := extractToolUseAction(event)
+		if action == "" {
+			action = "agent used tool"
+		}
+		return parsedOpencodeEvent{
+			Type:   eventType,
+			Action: action,
+		}
+	}
+
+	if eventType == "text" {
+		if part, ok := event["part"].(map[string]any); ok {
+			partType, _ := part["type"].(string)
+			if strings.EqualFold(strings.TrimSpace(partType), "text") {
+				if text, _ := part["text"].(string); strings.TrimSpace(text) != "" {
+					return parsedOpencodeEvent{
+						Type:   "assistant_message",
+						Text:   text,
+						Action: "agent produced assistant message",
+					}
+				}
+			}
+		}
+	}
+
+	if role, _ := event["role"].(string); strings.EqualFold(strings.TrimSpace(role), "assistant") {
+		if content := extractTextFromValue(event["content"]); strings.TrimSpace(content) != "" {
+			return parsedOpencodeEvent{
+				Type:   "assistant_message",
+				Text:   content,
+				Action: "agent produced assistant message",
+			}
+		}
+		if text := extractTextFromValue(event["text"]); strings.TrimSpace(text) != "" {
+			return parsedOpencodeEvent{
+				Type:   "assistant_message",
+				Text:   text,
+				Action: "agent produced assistant message",
+			}
+		}
+	}
+
+	if message, ok := event["message"].(map[string]any); ok {
+		if role, _ := message["role"].(string); strings.EqualFold(strings.TrimSpace(role), "assistant") {
+			if content := extractTextFromValue(message["content"]); strings.TrimSpace(content) != "" {
+				return parsedOpencodeEvent{
+					Type:   "assistant_message",
+					Text:   content,
+					Action: "agent produced assistant message",
+				}
+			}
+			if text := extractTextFromValue(message["text"]); strings.TrimSpace(text) != "" {
+				return parsedOpencodeEvent{
+					Type:   "assistant_message",
+					Text:   text,
+					Action: "agent produced assistant message",
+				}
+			}
+		}
+	}
+
+	if strings.Contains(eventType, "assistant") && strings.Contains(eventType, "delta") {
+		if delta, _ := event["delta"].(string); strings.TrimSpace(delta) != "" {
+			return parsedOpencodeEvent{
+				Type:   "assistant_delta",
+				Text:   delta,
+				Action: "agent streamed assistant delta",
+			}
+		}
+	}
+
+	return parsedOpencodeEvent{Type: "other"}
+}
+
+func extractStepFinishReason(event map[string]any) string {
+	if reason, _ := event["reason"].(string); strings.TrimSpace(reason) != "" {
+		return strings.TrimSpace(reason)
+	}
+	part, _ := event["part"].(map[string]any)
+	if part == nil {
+		return ""
+	}
+	if reason, _ := part["reason"].(string); strings.TrimSpace(reason) != "" {
+		return strings.TrimSpace(reason)
+	}
+	return ""
+}
+
+func extractToolUseAction(event map[string]any) string {
+	part, _ := event["part"].(map[string]any)
+	if part == nil {
+		return ""
+	}
+
+	toolName, _ := part["tool"].(string)
+	toolName = strings.TrimSpace(toolName)
+	if toolName == "" {
+		return ""
+	}
+
+	input := map[string]any{}
+	if state, ok := part["state"].(map[string]any); ok {
+		if typedInput, ok := state["input"].(map[string]any); ok {
+			input = typedInput
+		}
+	}
+
+	filePath := extractFirstNonEmptyString(input, "filePath", "path", "filename", "file")
+	command := extractFirstNonEmptyString(input, "command", "cmd", "script")
+	command = truncateForTrace(command, 256)
+
+	switch strings.ToLower(toolName) {
+	case "read":
+		if filePath != "" {
+			return fmt.Sprintf("agent read file %s", filePath)
+		}
+		return "agent read file"
+	case "edit", "write", "replace", "patch", "multi_edit":
+		if filePath != "" {
+			return fmt.Sprintf("agent edited file %s", filePath)
+		}
+		return "agent edited file"
+	case "bash", "shell", "run", "command", "exec", "execute", "terminal":
+		if command != "" {
+			return fmt.Sprintf("agent ran command %q", command)
+		}
+		return "agent ran command"
+	default:
+		if filePath != "" {
+			return fmt.Sprintf("agent used tool %s on file %s", toolName, filePath)
+		}
+		if command != "" {
+			return fmt.Sprintf("agent used tool %s with command %q", toolName, command)
+		}
+		return fmt.Sprintf("agent used tool %s", toolName)
+	}
+}
+
+func extractFirstNonEmptyString(source map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value := extractTextFromValue(source[key])
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func extractTextFromValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			part := strings.TrimSpace(extractTextFromValue(item))
+			if part != "" {
+				parts = append(parts, part)
+			}
+		}
+		return strings.Join(parts, "\n")
+	case map[string]any:
+		if text, _ := typed["text"].(string); strings.TrimSpace(text) != "" {
+			return text
+		}
+		if content := extractTextFromValue(typed["content"]); strings.TrimSpace(content) != "" {
+			return content
+		}
+		if delta, _ := typed["delta"].(string); strings.TrimSpace(delta) != "" {
+			return delta
+		}
+	}
+	return ""
+}
+
+func truncateForTrace(value string, maxChars int) string {
+	if maxChars <= 0 {
+		return ""
+	}
+	if len(value) <= maxChars {
+		return value
+	}
+	return strings.TrimSpace(value[:maxChars]) + " [truncated ...]"
+}

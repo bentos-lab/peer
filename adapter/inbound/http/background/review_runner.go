@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	inboundlogging "bentos-backend/adapter/inbound/logging"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
@@ -43,6 +44,7 @@ func RunReviewAsync(
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		ctx = decorateContext(ctx)
+		inboundlogging.LogChangeRequestInputSnapshot(logger, "webhook", action, request)
 
 		if err := execute(ctx, request); err != nil {
 			logger.Errorf("%s webhook background review failed.", providerName)

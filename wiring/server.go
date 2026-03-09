@@ -7,18 +7,13 @@ import (
 	"time"
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
-	gitlabinbound "bentos-backend/adapter/inbound/http/gitlab"
-	githubinput "bentos-backend/adapter/outbound/input/github"
-	gitlabinput "bentos-backend/adapter/outbound/input/gitlab"
+	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
 	openai "bentos-backend/adapter/outbound/llm/openai"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
-	overviewllm "bentos-backend/adapter/outbound/overview/llm"
+	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
-	gitlabpublisher "bentos-backend/adapter/outbound/publisher/gitlab"
-	nooppublisher "bentos-backend/adapter/outbound/publisher/noop"
-	reviewerllm "bentos-backend/adapter/outbound/reviewer/llm"
+	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
-	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/rulepack"
@@ -26,17 +21,40 @@ import (
 
 const serverLLMTimeout = 600 * time.Second
 
+type codingAgentRuntimeConfig struct {
+	Agent    string
+	Provider string
+	Model    string
+}
+
 // BuildGitHubHandler wires dependencies for GitHub webhook flow.
 func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	logger, err := buildLogger(cfg, "")
 	if err != nil {
 		return nil, err
 	}
-	llmReviewer, err := buildServerLLMReviewer(cfg, logger)
+	openAIConfig, err := buildOpenAIClientConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	llmOverview, err := buildServerLLMOverview(cfg, logger)
+	formatterClient := openai.NewClient(&http.Client{Timeout: serverLLMTimeout}, openAIConfig)
+	tracedFormatter := llmtracing.NewGenerator(formatterClient, logger)
+	codeEnvironmentFactory := codeenvhost.NewFactory(logger)
+	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
+
+	codingReviewer, err := reviewercodingagent.NewReviewer(tracedFormatter, reviewercodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
+	if err != nil {
+		return nil, err
+	}
+	codingOverview, err := overviewcodingagent.NewOverviewGenerator(tracedFormatter, overviewcodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -52,30 +70,26 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	reviewOptions, err := reviewUseCaseOptionsFromConfig(cfg, llmReviewer)
-	if err != nil {
-		return nil, err
-	}
 	reviewUseCase, err := usecase.NewReviewUseCase(
 		rulepack.NewCoreRulePackProvider(),
-		llmReviewer,
+		codingReviewer,
 		githubpublisher.NewPublisher(ghClient, logger),
+		codeEnvironmentFactory,
 		logger,
-		reviewOptions...,
 	)
 	if err != nil {
 		return nil, err
 	}
 	overviewUseCase, err := usecase.NewOverviewUseCase(
-		llmOverview,
+		codingOverview,
 		githubpublisher.NewOverviewPublisher(ghClient, logger),
+		codeEnvironmentFactory,
 		logger,
 	)
 	if err != nil {
 		return nil, err
 	}
 	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
-		githubinput.NewProvider(ghClient),
 		reviewUseCase,
 		overviewUseCase,
 		logger,
@@ -83,76 +97,14 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return githubinbound.NewHandler(changeRequestUseCase, logger, cfg.Server.GitHub.WebhookSecret, resolveServerOverviewEnabled(cfg)), nil
-}
-
-// BuildGitLabHandler wires dependencies for GitLab webhook flow.
-func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, error) {
-	logger, err := buildLogger(cfg, "")
-	if err != nil {
-		return nil, err
-	}
-	llmReviewer, err := buildServerLLMReviewer(cfg, logger)
-	if err != nil {
-		return nil, err
-	}
-	llmOverview, err := buildServerLLMOverview(cfg, logger)
-	if err != nil {
-		return nil, err
-	}
-	glClient := gitlabvcs.NewClient()
-	reviewOptions, err := reviewUseCaseOptionsFromConfig(cfg, llmReviewer)
-	if err != nil {
-		return nil, err
-	}
-	reviewUseCase, err := usecase.NewReviewUseCase(
-		rulepack.NewCoreRulePackProvider(),
-		llmReviewer,
-		gitlabpublisher.NewPublisher(glClient, logger),
+	return githubinbound.NewHandler(
+		changeRequestUseCase,
+		ghClient,
 		logger,
-		reviewOptions...,
-	)
-	if err != nil {
-		return nil, err
-	}
-	overviewUseCase, err := usecase.NewOverviewUseCase(
-		llmOverview,
-		nooppublisher.NewOverviewPublisher(),
-		logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
-		gitlabinput.NewProvider(glClient),
-		reviewUseCase,
-		overviewUseCase,
-		logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return gitlabinbound.NewHandler(changeRequestUseCase, logger), nil
-}
-
-func buildServerLLMReviewer(cfg config.Config, logger usecase.Logger) (*reviewerllm.Reviewer, error) {
-	httpClient := &http.Client{Timeout: serverLLMTimeout}
-	openAIConfig, err := buildOpenAIClientConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	llmClient := openai.NewClient(httpClient, openAIConfig)
-	return reviewerllm.NewReviewer(llmtracing.NewGenerator(llmClient, logger), logger)
-}
-
-func buildServerLLMOverview(cfg config.Config, logger usecase.Logger) (*overviewllm.OverviewGenerator, error) {
-	httpClient := &http.Client{Timeout: serverLLMTimeout}
-	openAIConfig, err := buildOpenAIClientConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-	llmClient := openai.NewClient(httpClient, openAIConfig)
-	return overviewllm.NewOverviewGenerator(llmtracing.NewGenerator(llmClient, logger), logger)
+		cfg.Server.GitHub.WebhookSecret,
+		resolveServerOverviewEnabled(cfg),
+		resolveServerSuggestionsEnabled(cfg),
+	), nil
 }
 
 func buildOpenAIClientConfig(cfg config.Config) (openai.ClientConfig, error) {
@@ -173,4 +125,28 @@ func resolveServerOverviewEnabled(cfg config.Config) bool {
 		return true
 	}
 	return *cfg.OverviewEnabled
+}
+
+func resolveServerSuggestionsEnabled(cfg config.Config) bool {
+	return cfg.SuggestedChanges.Enabled
+}
+
+func resolveServerCodingAgentConfig(cfg config.Config) codingAgentRuntimeConfig {
+	agent := strings.TrimSpace(cfg.CodingAgent.Agent)
+	if agent == "" {
+		agent = "opencode"
+	}
+	provider := strings.TrimSpace(cfg.CodingAgent.Provider)
+	if provider == "" {
+		provider = "openai"
+	}
+	model := strings.TrimSpace(cfg.CodingAgent.Model)
+	if model == "" {
+		model = strings.TrimSpace(cfg.OpenAI.Model)
+	}
+	return codingAgentRuntimeConfig{
+		Agent:    agent,
+		Provider: provider,
+		Model:    model,
+	}
 }

@@ -59,7 +59,18 @@ func NewOverviewGenerator(generator contracts.LLMGenerator, logger usecase.Logge
 func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecase.LLMOverviewPayload) (usecase.LLMOverviewResult, error) {
 	startedAt := time.Now()
 	g.logger.Infof("LLM overview generation started.")
-	g.logger.Debugf("The overview input includes %d changed files.", len(payload.Input.ChangedFiles))
+	if payload.Environment == nil {
+		return usecase.LLMOverviewResult{}, fmt.Errorf("code environment must not be nil")
+	}
+
+	changedFiles, err := payload.Environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: payload.Input.Base,
+		Head: payload.Input.Head,
+	})
+	if err != nil {
+		return usecase.LLMOverviewResult{}, err
+	}
+	g.logger.Debugf("The overview input includes %d changed files.", len(changedFiles))
 
 	systemPrompt, err := renderOverviewSystemPrompt()
 	if err != nil {
@@ -69,7 +80,7 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 		return usecase.LLMOverviewResult{}, err
 	}
 
-	userPrompt, err := renderOverviewUserPrompt(payload.Input)
+	userPrompt, err := renderOverviewUserPrompt(payload.Input, changedFiles)
 	if err != nil {
 		g.logger.Errorf("LLM overview generation failed while rendering the user prompt.")
 		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
@@ -200,9 +211,9 @@ func renderOverviewSystemPrompt() (string, error) {
 	return rendered.String(), nil
 }
 
-func renderOverviewUserPrompt(input domain.OverviewInput) (string, error) {
-	files := make([]overviewUserPromptFileData, 0, len(input.ChangedFiles))
-	for _, file := range input.ChangedFiles {
+func renderOverviewUserPrompt(input domain.OverviewInput, changedFiles []domain.ChangedFile) (string, error) {
+	files := make([]overviewUserPromptFileData, 0, len(changedFiles))
+	for _, file := range changedFiles {
 		changedText := file.DiffSnippet
 		if changedText == "" {
 			changedText = file.Content

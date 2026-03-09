@@ -10,7 +10,6 @@ import (
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
 	"bentos-backend/config"
-	"bentos-backend/domain"
 	stdlogger "bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/wiring"
 
@@ -41,8 +40,8 @@ func main() {
 		context.Background(),
 		os.Args[1:],
 		config.Load,
-		func(cfg config.Config, opts wiring.CLILLMOptions, provider domain.ChangeRequestInputProvider, publishType domain.ChangeRequestPublishType, logLevelOverride string) (*cliinbound.Command, error) {
-			return wiring.BuildCLICommand(cfg, opts, provider, publishType, logLevelOverride)
+		func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.Command, error) {
+			return wiring.BuildCLICommand(cfg, opts, logLevelOverride)
 		},
 	); err != nil {
 		if errors.Is(err, errCLIConfigLoad) {
@@ -56,7 +55,7 @@ func runCLI(
 	ctx context.Context,
 	args []string,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ChangeRequestInputProvider, domain.ChangeRequestPublishType, string) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.Command, error),
 ) error {
 	root := newRootCommand(ctx, loadConfig, buildCommand)
 	root.SetArgs(args)
@@ -66,29 +65,26 @@ func runCLI(
 func newRootCommand(
 	ctx context.Context,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, domain.ChangeRequestInputProvider, domain.ChangeRequestPublishType, string) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.Command, error),
 ) *cobra.Command {
 	var openAIBaseURL string
 	var openAIModel string
 	var openAIAPIKey string
-	var changedFiles string
-	var includeUnstaged bool
-	var includeUntracked bool
-	var githubPRNumber int
-	var commentOnPR bool
+	var provider string
+	var repo string
+	var changeRequest string
+	var base string
+	var head string
+	var comment bool
 	var overview bool
-	var suggestedChanges bool
+	var suggest bool
 	var logLevel string
 
 	var cmd *cobra.Command
 	cmd = &cobra.Command{
-		Use:   "review",
-		Short: "Run local repository review",
+		Use:   "autogit",
+		Short: "Run repository review via GitHub context",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if err := validateReviewModeFlags(cmd, githubPRNumber, commentOnPR); err != nil {
-				return err
-			}
-
 			opts := wiring.CLILLMOptions{}
 			if cmd.Flags().Changed("openai-base-url") {
 				value, err := validateOpenAIStringFlagValue("openai-base-url", openAIBaseURL)
@@ -129,9 +125,13 @@ func newRootCommand(
 			} else if cfg.OverviewEnabled != nil {
 				effectiveOverview = *cfg.OverviewEnabled
 			}
-			if cmd.Flags().Changed("suggested-changes") {
-				cfg.SuggestedChanges.Enabled = suggestedChanges
+			effectiveSuggest := false
+			if cmd.Flags().Changed("suggest") {
+				effectiveSuggest = suggest
+			} else {
+				effectiveSuggest = cfg.SuggestedChanges.Enabled
 			}
+
 			startupLogger, err := wiring.BuildLogger(cfg, logLevel)
 			if err != nil {
 				return err
@@ -146,19 +146,20 @@ func newRootCommand(
 				effectiveOpenAIConfig.Model,
 			)
 
-			provider, publishType := resolveCLISelection(githubPRNumber, commentOnPR)
-
-			cliCommand, err := buildCommand(cfg, opts, provider, publishType, logLevel)
+			cliCommand, err := buildCommand(cfg, opts, logLevel)
 			if err != nil {
 				return err
 			}
 
 			return cliCommand.Run(ctx, cliinbound.RunParams{
-				ChangedFiles:     changedFiles,
-				IncludeUnstaged:  includeUnstaged,
-				IncludeUntracked: includeUntracked,
-				PRNumber:         githubPRNumber,
-				Overview:         effectiveOverview,
+				Provider:      provider,
+				Repo:          repo,
+				ChangeRequest: changeRequest,
+				Base:          base,
+				Head:          head,
+				Comment:       comment,
+				Overview:      effectiveOverview,
+				Suggest:       effectiveSuggest,
 			})
 		},
 	}
@@ -167,13 +168,14 @@ func newRootCommand(
 	flags.StringVar(&openAIBaseURL, "openai-base-url", "gemini", "OpenAI compatible base URL override")
 	flags.StringVar(&openAIModel, "openai-model", "", "OpenAI compatible model override")
 	flags.StringVar(&openAIAPIKey, "openai-api-key", "", "OpenAI compatible API key override")
-	flags.StringVarP(&changedFiles, "changed-files", "c", "", "comma-separated list of changed file paths")
-	flags.BoolVarP(&includeUnstaged, "all", "a", false, "include unstaged changes")
-	flags.BoolVarP(&includeUntracked, "untracked", "u", false, "include untracked files")
-	flags.IntVar(&githubPRNumber, "gh-pr", 0, "GitHub pull request number to review")
-	flags.BoolVar(&commentOnPR, "comment-on-pr", false, "post review result as comments on the GitHub pull request")
+	flags.StringVar(&provider, "provider", "github", "provider name (only github is supported)")
+	flags.StringVar(&repo, "repo", "", "repository (GitHub URL or owner/repo)")
+	flags.StringVar(&changeRequest, "change-request", "", "GitHub pull request number")
+	flags.StringVar(&base, "base", "", "base ref")
+	flags.StringVar(&head, "head", "", "head ref or @staged/@all")
+	flags.BoolVar(&comment, "comment", false, "post review result as pull request comments")
 	flags.BoolVar(&overview, "overview", false, "generate and publish/print high-level overview output")
-	flags.BoolVar(&suggestedChanges, "suggested-changes", false, "enable/disable suggested changes for this run (overrides REVIEW_SUGGESTED_CHANGES_ENABLED when set)")
+	flags.BoolVar(&suggest, "suggest", false, "enable suggested code changes in review findings")
 	flags.StringVar(&logLevel, "log-level", "", "log level override: trace|debug|info|warning|error|silence")
 
 	return cmd
@@ -196,36 +198,4 @@ func validateOpenAIStringFlagValue(flagName string, value string) (string, error
 		return "", fmt.Errorf("flag --%s requires a non-empty value", flagName)
 	}
 	return trimmed, nil
-}
-
-func validateReviewModeFlags(cmd *cobra.Command, githubPRNumber int, commentOnPR bool) error {
-	if githubPRNumber < 0 {
-		return fmt.Errorf("flag --gh-pr requires a positive pull request number")
-	}
-	if githubPRNumber == 0 {
-		if commentOnPR {
-			return fmt.Errorf("flag --comment-on-pr requires --gh-pr")
-		}
-		return nil
-	}
-
-	if cmd.Flags().Changed("all") || cmd.Flags().Changed("untracked") || cmd.Flags().Changed("changed-files") {
-		return fmt.Errorf("flags --all, --untracked, and --changed-files are not supported with --gh-pr")
-	}
-
-	return nil
-}
-
-func resolveCLISelection(githubPRNumber int, commentOnPR bool) (domain.ChangeRequestInputProvider, domain.ChangeRequestPublishType) {
-	provider := domain.ChangeRequestInputProviderLocal
-	publishType := domain.ChangeRequestPublishTypePrint
-
-	if githubPRNumber > 0 {
-		provider = domain.ChangeRequestInputProviderGitHub
-	}
-	if commentOnPR {
-		publishType = domain.ChangeRequestPublishTypeComment
-	}
-
-	return provider, publishType
 }

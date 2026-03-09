@@ -8,17 +8,16 @@ import (
 	"time"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
-	cliinput "bentos-backend/adapter/outbound/input/cli"
-	githubinput "bentos-backend/adapter/outbound/input/github"
+	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
 	openai "bentos-backend/adapter/outbound/llm/openai"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
-	overviewllm "bentos-backend/adapter/outbound/overview/llm"
+	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
-	reviewerllm "bentos-backend/adapter/outbound/reviewer/llm"
+	routerpublisher "bentos-backend/adapter/outbound/publisher/router"
+	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
-	"bentos-backend/domain"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/rulepack"
 )
@@ -31,11 +30,7 @@ type CLILLMOptions struct {
 }
 
 // BuildCLICommand wires dependencies for a single CLI review mode.
-func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.ChangeRequestInputProvider, publishType domain.ChangeRequestPublishType, logLevelOverride string) (*cliinbound.Command, error) {
-	if err := validateCLISelection(provider, publishType); err != nil {
-		return nil, err
-	}
-
+func BuildCLICommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.Command, error) {
 	llmConfig, err := resolveCLILLMConfig(cfg, opts)
 	if err != nil {
 		return nil, err
@@ -48,49 +43,56 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Chan
 	httpClient := &http.Client{Timeout: 600 * time.Second}
 	llmClient := openai.NewClient(httpClient, llmConfig)
 	tracedLLMClient := llmtracing.NewGenerator(llmClient, logger)
-	llmReviewer, err := reviewerllm.NewReviewer(tracedLLMClient, logger)
+	codeEnvironmentFactory := codeenvhost.NewFactory(logger)
+	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
+	codingReviewer, err := reviewercodingagent.NewReviewer(tracedLLMClient, reviewercodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
 	if err != nil {
 		return nil, err
 	}
-	llmOverview, err := overviewllm.NewOverviewGenerator(tracedLLMClient, logger)
+	codingOverview, err := overviewcodingagent.NewOverviewGenerator(tracedLLMClient, overviewcodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
 	if err != nil {
 		return nil, err
 	}
 	ruleProvider := rulepack.NewCoreRulePackProvider()
+	githubClient := githubvcs.NewCLIClient()
 
-	inputProvider, providerName, providerClient, err := buildInputProvider(provider)
-	if err != nil {
-		return nil, err
-	}
-	reviewPublisher, overviewPublisher, err := buildPublishers(publishType, provider, providerClient, logger)
-	if err != nil {
-		return nil, err
-	}
-	reviewOptions, err := reviewUseCaseOptionsFromConfig(cfg, llmReviewer)
-	if err != nil {
-		return nil, err
-	}
+	reviewPublisher := routerpublisher.NewReviewPublisher(
+		clipublisher.NewPublisher(os.Stdout),
+		githubpublisher.NewPublisher(githubClient, logger),
+	)
+	overviewPublisher := routerpublisher.NewOverviewPublisher(
+		clipublisher.NewOverviewPublisher(os.Stdout),
+		githubpublisher.NewOverviewPublisher(githubClient, logger),
+	)
 
 	reviewUseCase, err := usecase.NewReviewUseCase(
 		ruleProvider,
-		llmReviewer,
+		codingReviewer,
 		reviewPublisher,
+		codeEnvironmentFactory,
 		logger,
-		reviewOptions...,
 	)
 	if err != nil {
 		return nil, err
 	}
 	overviewUseCase, err := usecase.NewOverviewUseCase(
-		llmOverview,
+		codingOverview,
 		overviewPublisher,
+		codeEnvironmentFactory,
 		logger,
 	)
 	if err != nil {
 		return nil, err
 	}
 	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
-		inputProvider,
 		reviewUseCase,
 		overviewUseCase,
 		logger,
@@ -99,71 +101,7 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, provider domain.Chan
 		return nil, err
 	}
 
-	return buildCLIInboundCommand(providerName, changeRequestUseCase, logger)
-}
-
-func buildInputProvider(provider domain.ChangeRequestInputProvider) (usecase.ChangeRequestInputProvider, domain.ChangeRequestInputProvider, any, error) {
-	switch provider {
-	case domain.ChangeRequestInputProviderLocal:
-		return cliinput.NewProvider(cliinput.NewGitChangeDetector()), domain.ChangeRequestInputProviderLocal, nil, nil
-	case domain.ChangeRequestInputProviderGitHub:
-		providerClient := githubvcs.NewCLIClient()
-		return githubinput.NewProvider(providerClient), domain.ChangeRequestInputProviderGitHub, providerClient, nil
-	default:
-		return nil, "", nil, fmt.Errorf("unsupported review input provider: %s", provider)
-	}
-}
-
-func buildPublishers(publishType domain.ChangeRequestPublishType, provider domain.ChangeRequestInputProvider, providerClient any, logger usecase.Logger) (usecase.ReviewResultPublisher, usecase.OverviewPublisher, error) {
-	switch publishType {
-	case domain.ChangeRequestPublishTypePrint:
-		return clipublisher.NewPublisher(os.Stdout), clipublisher.NewOverviewPublisher(os.Stdout), nil
-	case domain.ChangeRequestPublishTypeComment:
-		switch provider {
-		case domain.ChangeRequestInputProviderGitHub:
-			githubClient, ok := providerClient.(*githubvcs.CLIClient)
-			if !ok || githubClient == nil {
-				return nil, nil, fmt.Errorf("provider client is not configured for provider: %s", provider)
-			}
-			return githubpublisher.NewPublisher(githubClient, logger), githubpublisher.NewOverviewPublisher(githubClient, logger), nil
-		default:
-			return nil, nil, fmt.Errorf("publish type %q is not supported with provider %q", publishType, provider)
-		}
-	default:
-		return nil, nil, fmt.Errorf("unsupported review publish type: %s", publishType)
-	}
-}
-
-func buildCLIInboundCommand(providerName domain.ChangeRequestInputProvider, changeRequestUseCase usecase.ChangeRequestUseCase, logger usecase.Logger) (*cliinbound.Command, error) {
-	switch providerName {
-	case domain.ChangeRequestInputProviderLocal:
-		return cliinbound.NewLocalCommand(changeRequestUseCase, logger), nil
-	case domain.ChangeRequestInputProviderGitHub:
-		return cliinbound.NewGitHubPRCommand(changeRequestUseCase, logger), nil
-	default:
-		return nil, fmt.Errorf("unsupported review input provider: %s", providerName)
-	}
-}
-
-func validateCLISelection(provider domain.ChangeRequestInputProvider, publishType domain.ChangeRequestPublishType) error {
-	allowedPublishTypesByProvider := map[domain.ChangeRequestInputProvider]map[domain.ChangeRequestPublishType]struct{}{
-		domain.ChangeRequestInputProviderLocal: {
-			domain.ChangeRequestPublishTypePrint: {},
-		},
-		domain.ChangeRequestInputProviderGitHub: {
-			domain.ChangeRequestPublishTypePrint:   {},
-			domain.ChangeRequestPublishTypeComment: {},
-		},
-	}
-
-	allowedPublishTypes, ok := allowedPublishTypesByProvider[provider]
-	if !ok {
-		return fmt.Errorf("unsupported review input provider: %s", provider)
-	}
-	if _, ok := allowedPublishTypes[publishType]; !ok {
-		return fmt.Errorf("publish type %q is not supported with provider %q", publishType, provider)
-	}
-	return nil
+	return cliinbound.NewCommand(changeRequestUseCase, githubClient, logger), nil
 }
 
 func resolveCLILLMConfig(cfg config.Config, opts CLILLMOptions) (openai.ClientConfig, error) {

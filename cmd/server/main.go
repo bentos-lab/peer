@@ -19,7 +19,6 @@ type listenAndServeFunc func(string, http.Handler) error
 type serverDeps struct {
 	loadConfig         loadConfigFunc
 	buildGitHubHandler buildHandlerFunc
-	buildGitLabHandler buildHandlerFunc
 	listenAndServe     listenAndServeFunc
 }
 
@@ -41,7 +40,7 @@ func (e serverConfigLoadError) Is(target error) bool {
 	return target == errServerConfigLoad
 }
 
-// main bootstraps webhook handlers for GitHub and GitLab.
+// main bootstraps webhook handlers for GitHub.
 func main() {
 	logLevel := flag.String("log-level", "", "log level override: trace|debug|info|warning|error|silence")
 	flag.Parse()
@@ -59,9 +58,6 @@ func defaultServerDeps() serverDeps {
 		loadConfig: config.Load,
 		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
 			return wiring.BuildGitHubHandler(cfg)
-		},
-		buildGitLabHandler: func(cfg config.Config) (http.Handler, error) {
-			return wiring.BuildGitLabHandler(cfg)
 		},
 		listenAndServe: http.ListenAndServe,
 	}
@@ -99,19 +95,9 @@ func runServer(logLevelOverride string, deps serverDeps) error {
 	}
 	startupLogger.Infof("server startup: wired GitHub handler")
 
-	startupLogger.Infof("server startup: wiring GitLab handler")
-	gitlabHandler, err := deps.buildGitLabHandler(cfg)
-	if err != nil {
-		startupLogger.Errorf("server startup failed: build GitLab handler: %v", err)
-		return fmt.Errorf("build GitLab handler: %w", err)
-	}
-	startupLogger.Infof("server startup: wired GitLab handler")
-
 	mux := http.NewServeMux()
 	mux.Handle("/webhook/github", githubHandler)
 	startupLogger.Infof("server startup: route registered path=%q", "/webhook/github")
-	mux.Handle("/webhook/gitlab", gitlabHandler)
-	startupLogger.Infof("server startup: route registered path=%q", "/webhook/gitlab")
 
 	addr := ":" + cfg.Server.Port
 	startupLogger.Infof("server startup: listening on %q", addr)

@@ -5,13 +5,16 @@ import (
 	"errors"
 	"time"
 
+	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // overviewUseCase is the concrete OverviewUseCase implementation.
 type overviewUseCase struct {
 	llmOverview LLMOverviewGenerator
 	overviewPub OverviewPublisher
+	envFactory  uccontracts.CodeEnvironmentFactory
 	logger      Logger
 }
 
@@ -19,9 +22,10 @@ type overviewUseCase struct {
 func NewOverviewUseCase(
 	llmOverview LLMOverviewGenerator,
 	overviewPub OverviewPublisher,
+	envFactory uccontracts.CodeEnvironmentFactory,
 	logger Logger,
 ) (OverviewUseCase, error) {
-	if llmOverview == nil || overviewPub == nil {
+	if llmOverview == nil || overviewPub == nil || envFactory == nil {
 		return nil, errors.New("overview usecase dependencies must not be nil")
 	}
 	if logger == nil {
@@ -30,6 +34,7 @@ func NewOverviewUseCase(
 	return &overviewUseCase{
 		llmOverview: llmOverview,
 		overviewPub: overviewPub,
+		envFactory:  envFactory,
 		logger:      logger,
 	}, nil
 }
@@ -40,9 +45,22 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 	u.logger.Infof("Overview execution started.")
 	u.logger.Debugf("Overview target is repository %q with change request number %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 
+	initializeEnvironmentStartedAt := time.Now()
+	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+		RepoURL: request.Input.RepoURL,
+	})
+	if err != nil {
+		u.logStageFailure(request, "initialize_code_environment", initializeEnvironmentStartedAt, err)
+		return OverviewExecutionResult{}, err
+	}
+	u.logger.Infof("Code environment initialized.")
+	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "initialize_code_environment", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())
+
 	overviewStartedAt := time.Now()
 	overviewResult, err := u.llmOverview.GenerateOverview(ctx, LLMOverviewPayload{
-		Input: request.Input,
+		Input:       request.Input,
+		Environment: environment,
 	})
 	if err != nil {
 		u.logStageFailure(request, "generate_overview", overviewStartedAt, err)

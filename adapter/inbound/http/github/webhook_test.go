@@ -48,6 +48,18 @@ type spyLogger struct {
 	events []string
 }
 
+type mockInstallationTokenProvider struct {
+	token string
+	err   error
+}
+
+func (m mockInstallationTokenProvider) GetInstallationAccessToken(_ context.Context, _ string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.token, nil
+}
+
 func (s *spyLogger) Tracef(format string, args ...any) {
 	s.events = append(s.events, "trace:"+fmt.Sprintf(format, args...))
 }
@@ -74,15 +86,15 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 		ctxCh:     make(chan context.Context, 1),
 	}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, logger, testWebhookSecret, true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
-			"title":"Improve API",
-			"body":"details",
+			"title":"secret-title-token",
+			"body":"secret-body-token",
 			"base":{"ref":"main"},
 			"head":{"ref":"feature"}
 		}
@@ -96,9 +108,13 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 	select {
 	case reviewRequest := <-uc.requestCh:
 		require.Equal(t, "org/repo", reviewRequest.Repository)
+		require.Equal(t, "https://x-access-token:token-1@github.com/org/repo.git", reviewRequest.RepoURL)
 		require.Equal(t, 7, reviewRequest.ChangeRequestNumber)
+		require.Equal(t, "main", reviewRequest.Base)
+		require.Equal(t, "feature", reviewRequest.Head)
 		require.Equal(t, "opened", reviewRequest.Metadata["action"])
 		require.True(t, reviewRequest.EnableOverview)
+		require.True(t, reviewRequest.EnableSuggestions)
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
@@ -109,15 +125,28 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase context")
 	}
+
+	require.Eventually(t, func() bool {
+		return containsEvent(logger.events, `info:Pre-usecase input snapshot source="webhook" action="opened" provider="github" repository="org/repo" changeRequestNumber=7 enableOverview=true enableSuggestions=true.`)
+	}, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		return containsEvent(logger.events, `debug:Pre-usecase input details source="webhook" action="opened" base="main" head="feature" comment=true`)
+	}, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		return containsEvent(logger.events, `repoURLPresent=true repoURLSafe="https://github.com/org/repo.git"`)
+	}, time.Second, 10*time.Millisecond)
+	require.False(t, containsEvent(logger.events, "x-access-token:token-1@"))
+	require.False(t, containsEvent(logger.events, "secret-title-token"))
+	require.False(t, containsEvent(logger.events, "secret-body-token"))
 }
 
 func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	payload := `{
 		"action":"synchronize",
 		"installation":{"id":321},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -142,11 +171,11 @@ func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
 
 func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, false)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -169,13 +198,42 @@ func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(
 	}
 }
 
+func TestHandler_ServeHTTP_DisablesSuggestionsWhenHandlerToggleIsFalse(t *testing.T) {
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, false)
+	payload := `{
+		"action":"opened",
+		"installation":{"id":321},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := signedRequest(t, payload, "pull_request", testWebhookSecret)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	select {
+	case reviewRequest := <-uc.requestCh:
+		require.False(t, reviewRequest.EnableSuggestions)
+	case <-time.After(time.Second):
+		t.Fatal("expected review usecase execution")
+	}
+}
+
 func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	payload := `{
 		"action":"edited",
 		"installation":{"id":321},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -195,7 +253,7 @@ func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
 
 func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	resp := httptest.NewRecorder()
@@ -208,7 +266,7 @@ func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
 
 func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	req.Header.Set("X-Hub-Signature-256", "sha256=deadbeef")
@@ -222,7 +280,7 @@ func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
 
 func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	req := signedRequest(t, `{`, "pull_request", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -234,7 +292,7 @@ func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 
 func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -259,10 +317,10 @@ func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) 
 func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, logger, testWebhookSecret, true, true)
 	payload := `{
 		"action":"opened",
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -285,7 +343,7 @@ func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) 
 
 func TestHandler_ServeHTTP_NonPullRequestEventIsIgnored(t *testing.T) {
 	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	req := signedRequest(t, `{"action":"opened"}`, "issues", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -300,11 +358,11 @@ func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 		requestCh: make(chan usecase.ChangeRequestRequest, 1),
 		proceedCh: make(chan struct{}),
 	}
-	handler := NewHandler(uc, nil, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, nil, testWebhookSecret, true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -343,11 +401,11 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 		err:       errors.New("review failed"),
 	}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, logger, testWebhookSecret, true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -378,11 +436,11 @@ func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 		panicVal:  "boom",
 	}
 	logger := &spyLogger{}
-	handler := NewHandler(uc, logger, testWebhookSecret, true)
+	handler := NewHandler(uc, mockInstallationTokenProvider{token: "token-1"}, logger, testWebhookSecret, true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
-		"repository":{"full_name":"org/repo"},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
 		"pull_request":{
 			"number": 7,
 			"title":"Improve API",
@@ -400,6 +458,30 @@ func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return containsEvent(logger.events, "error:GitHub webhook background review panicked.")
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestHandler_ServeHTTP_TokenResolutionFailureReturnsBadGateway(t *testing.T) {
+	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	handler := NewHandler(uc, mockInstallationTokenProvider{err: errors.New("boom")}, nil, testWebhookSecret, true, true)
+	payload := `{
+		"action":"opened",
+		"installation":{"id":123},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := signedRequest(t, payload, "pull_request", testWebhookSecret)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusBadGateway, resp.Code)
+	require.Len(t, uc.requestCh, 0)
 }
 
 func signedRequest(t *testing.T, payload string, event string, secret string) *http.Request {

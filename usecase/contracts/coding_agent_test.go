@@ -14,17 +14,28 @@ func (a *dummyCodingAgent) Run(_ context.Context, task string, _ domain.CodingAg
 	return domain.CodingAgentRunResult{Text: task}, nil
 }
 
-type dummyCodingAgentEnvironment struct{}
+type dummyCodeEnvironment struct{}
 
-func (e *dummyCodingAgentEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (CodingAgent, error) {
+func (e *dummyCodeEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (CodingAgent, error) {
 	return &dummyCodingAgent{}, nil
 }
 
-func TestCodingAgentEnvironmentContract(t *testing.T) {
-	var env CodingAgentEnvironment = &dummyCodingAgentEnvironment{}
+func (e *dummyCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
+	return []domain.ChangedFile{}, nil
+}
+
+type dummyCodeEnvironmentFactory struct{}
+
+func (f *dummyCodeEnvironmentFactory) New(_ context.Context, _ domain.CodeEnvironmentInitOptions) (CodeEnvironment, error) {
+	return &dummyCodeEnvironment{}, nil
+}
+
+func TestCodeEnvironmentContract(t *testing.T) {
+	var env CodeEnvironment = &dummyCodeEnvironment{}
 
 	agent, err := env.SetupAgent(context.Background(), domain.CodingAgentSetupOptions{
-		RepoURL: "https://github.com/example/repo.git",
+		Agent: "opencode",
+		Ref:   "main",
 	})
 	require.NoError(t, err)
 
@@ -34,4 +45,14 @@ func TestCodingAgentEnvironmentContract(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "Task abc", result.Text)
+}
+
+func TestCodeEnvironmentFactoryContract(t *testing.T) {
+	var factory CodeEnvironmentFactory = &dummyCodeEnvironmentFactory{}
+
+	env, err := factory.New(context.Background(), domain.CodeEnvironmentInitOptions{
+		RepoURL: "https://github.com/example/repo.git",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, env)
 }

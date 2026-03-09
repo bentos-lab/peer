@@ -107,6 +107,45 @@ func TestResolveServerOverviewEnabled(t *testing.T) {
 	}
 }
 
+func TestResolveServerSuggestionsEnabled(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    config.Config
+		expected bool
+	}{
+		{
+			name:     "defaults to false when unset",
+			input:    config.Config{},
+			expected: false,
+		},
+		{
+			name: "uses configured true",
+			input: config.Config{
+				SuggestedChanges: config.SuggestedChangesConfig{
+					Enabled: true,
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "uses configured false",
+			input: config.Config{
+				SuggestedChanges: config.SuggestedChangesConfig{
+					Enabled: false,
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := resolveServerSuggestionsEnabled(testCase.input)
+			require.Equal(t, testCase.expected, actual)
+		})
+	}
+}
+
 func boolPointer(value bool) *bool {
 	return &value
 }

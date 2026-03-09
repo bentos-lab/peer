@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"bentos-backend/domain"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // RulePack defines the active set of review instructions.
@@ -16,19 +17,18 @@ type RulePack struct {
 
 // ChangeRequestRequest is the shared orchestrator input and is platform-neutral.
 type ChangeRequestRequest struct {
+	Provider            string
 	Repository          string
+	RepoURL             string
 	ChangeRequestNumber int
 	Title               string
 	Description         string
-	BaseRef             string
-	HeadRef             string
+	Base                string
+	Head                string
+	Comment             bool
 	EnableOverview      bool
+	EnableSuggestions   bool
 	Metadata            map[string]string
-}
-
-// ChangeRequestInputProvider loads changed contents for the requested change.
-type ChangeRequestInputProvider interface {
-	LoadChangeSnapshot(ctx context.Context, request ChangeRequestRequest) (domain.ChangeSnapshot, error)
 }
 
 // RulePackProvider returns hardcoded rule packs.
@@ -38,8 +38,10 @@ type RulePackProvider interface {
 
 // LLMReviewPayload is the complete review prompt payload.
 type LLMReviewPayload struct {
-	Input    domain.ReviewInput
-	RulePack RulePack
+	Input       domain.ReviewInput
+	RulePack    RulePack
+	Environment uccontracts.CodeEnvironment
+	Suggestions bool
 }
 
 // LLMReviewResult is normalized LLM output.
@@ -53,70 +55,10 @@ type LLMReviewer interface {
 	Review(ctx context.Context, payload LLMReviewPayload) (LLMReviewResult, error)
 }
 
-// SuggestionFindingCandidate is one finding candidate passed to grouping/suggest stages.
-type SuggestionFindingCandidate struct {
-	Key         string
-	Finding     domain.Finding
-	DiffSnippet string
-}
-
-// SuggestionFindingGroup is one LLM-produced finding group.
-type SuggestionFindingGroup struct {
-	GroupID     string
-	Rationale   string
-	FindingKeys []string
-}
-
-// LLMSuggestionGroupingPayload is the complete grouping prompt payload.
-type LLMSuggestionGroupingPayload struct {
-	Input        domain.ReviewInput
-	Candidates   []SuggestionFindingCandidate
-	MaxGroupSize int
-}
-
-// LLMSuggestionGroupingResult is normalized grouping output.
-type LLMSuggestionGroupingResult struct {
-	Groups []SuggestionFindingGroup
-}
-
-// LLMSuggestionGrouping groups findings into suggestion batches.
-type LLMSuggestionGrouping interface {
-	GroupFindings(ctx context.Context, payload LLMSuggestionGroupingPayload) (LLMSuggestionGroupingResult, error)
-}
-
-// LLMSuggestedChangePayload is the complete suggested-change prompt payload.
-type LLMSuggestedChangePayload struct {
-	Input      domain.ReviewInput
-	Group      SuggestionFindingGroup
-	Candidates []SuggestionFindingCandidate
-	GroupDiffs []GroupFileDiffContext
-}
-
-// GroupFileDiffContext contains group-scoped diff context for suggestion generation.
-type GroupFileDiffContext struct {
-	FilePath    string
-	DiffSnippet string
-}
-
-// FindingSuggestedChange is one suggested change keyed to a finding.
-type FindingSuggestedChange struct {
-	FindingKey      string
-	SuggestedChange domain.SuggestedChange
-}
-
-// LLMSuggestedChangeResult is normalized suggested change output.
-type LLMSuggestedChangeResult struct {
-	Suggestions []FindingSuggestedChange
-}
-
-// LLMSuggestedChangeGenerator generates suggested changes per finding group.
-type LLMSuggestedChangeGenerator interface {
-	GenerateSuggestedChanges(ctx context.Context, payload LLMSuggestedChangePayload) (LLMSuggestedChangeResult, error)
-}
-
 // LLMOverviewPayload is the complete overview prompt payload.
 type LLMOverviewPayload struct {
-	Input domain.OverviewInput
+	Input       domain.OverviewInput
+	Environment uccontracts.CodeEnvironment
 }
 
 // LLMOverviewResult is normalized LLM overview output.
@@ -157,7 +99,8 @@ type OverviewPublisher interface {
 
 // ReviewRequest is the review-usecase input.
 type ReviewRequest struct {
-	Input domain.ReviewInput
+	Input       domain.ReviewInput
+	Suggestions bool
 }
 
 // ReviewExecutionResult is the review-usecase output.

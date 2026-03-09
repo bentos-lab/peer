@@ -7,8 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ type pullRequestEvent struct {
 	} `json:"installation"`
 	Repository struct {
 		FullName string `json:"full_name"`
+		CloneURL string `json:"clone_url"`
 	} `json:"repository"`
 	PullRequest struct {
 		Number int    `json:"number"`
@@ -35,31 +38,49 @@ type pullRequestEvent struct {
 		Body   string `json:"body"`
 		Base   struct {
 			Ref string `json:"ref"`
+			SHA string `json:"sha"`
 		} `json:"base"`
 		Head struct {
 			Ref string `json:"ref"`
+			SHA string `json:"sha"`
 		} `json:"head"`
 	} `json:"pull_request"`
 }
 
+// InstallationTokenProvider resolves installation access tokens.
+type InstallationTokenProvider interface {
+	GetInstallationAccessToken(ctx context.Context, installationID string) (string, error)
+}
+
 // Handler receives GitHub webhook events and triggers review.
 type Handler struct {
-	reviewer       usecase.ChangeRequestUseCase
-	logger         usecase.Logger
-	webhookSecret  string
-	enableOverview bool
+	reviewer          usecase.ChangeRequestUseCase
+	tokenProvider     InstallationTokenProvider
+	logger            usecase.Logger
+	webhookSecret     string
+	enableOverview    bool
+	enableSuggestions bool
 }
 
 // NewHandler creates a GitHub webhook handler.
-func NewHandler(changeRequestUseCase usecase.ChangeRequestUseCase, logger usecase.Logger, webhookSecret string, enableOverview bool) *Handler {
+func NewHandler(
+	changeRequestUseCase usecase.ChangeRequestUseCase,
+	tokenProvider InstallationTokenProvider,
+	logger usecase.Logger,
+	webhookSecret string,
+	enableOverview bool,
+	enableSuggestions bool,
+) *Handler {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &Handler{
-		reviewer:       changeRequestUseCase,
-		logger:         logger,
-		webhookSecret:  strings.TrimSpace(webhookSecret),
-		enableOverview: enableOverview,
+		reviewer:          changeRequestUseCase,
+		tokenProvider:     tokenProvider,
+		logger:            logger,
+		webhookSecret:     strings.TrimSpace(webhookSecret),
+		enableOverview:    enableOverview,
+		enableSuggestions: enableSuggestions,
 	}
 }
 
@@ -101,20 +122,56 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing installation id", http.StatusBadRequest)
 		return
 	}
+	if h.tokenProvider == nil {
+		h.logger.Errorf("GitHub webhook token provider is not configured.")
+		http.Error(w, "token provider is not configured", http.StatusInternalServerError)
+		return
+	}
+
+	installationID := strconv.FormatInt(event.Installation.ID, 10)
+	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
+	if err != nil {
+		h.logger.Errorf("GitHub webhook failed to resolve installation token.")
+		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.PullRequest.Number)
+		h.logger.Debugf("Failure details: %v.", err)
+		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
+		return
+	}
+
+	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
+	if err != nil {
+		h.logger.Errorf("GitHub webhook failed to build repository clone URL.")
+		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.PullRequest.Number)
+		h.logger.Debugf("Failure details: %v.", err)
+		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
+		return
+	}
+
+	base := strings.TrimSpace(event.PullRequest.Base.SHA)
+	if base == "" {
+		base = strings.TrimSpace(event.PullRequest.Base.Ref)
+	}
+	head := strings.TrimSpace(event.PullRequest.Head.SHA)
+	if head == "" {
+		head = strings.TrimSpace(event.PullRequest.Head.Ref)
+	}
 
 	request := usecase.ChangeRequestRequest{
+		Provider:            "github",
 		Repository:          event.Repository.FullName,
+		RepoURL:             repoURL,
 		ChangeRequestNumber: event.PullRequest.Number,
 		Title:               event.PullRequest.Title,
 		Description:         event.PullRequest.Body,
-		BaseRef:             event.PullRequest.Base.Ref,
-		HeadRef:             event.PullRequest.Head.Ref,
+		Base:                base,
+		Head:                head,
+		Comment:             true,
 		EnableOverview:      h.enableOverview && isInitialPROpenedAction(event.Action),
+		EnableSuggestions:   h.enableSuggestions,
 		Metadata: map[string]string{
 			"action": event.Action,
 		},
 	}
-	installationID := event.Installation.ID
 
 	background.RunReviewAsync(
 		h.logger,
@@ -123,7 +180,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		request,
 		backgroundReviewTimeout,
 		func(ctx context.Context) context.Context {
-			return githubvcs.WithInstallationID(ctx, strconv.FormatInt(installationID, 10))
+			return githubvcs.WithInstallationID(ctx, installationID)
 		},
 		func(ctx context.Context, req usecase.ChangeRequestRequest) error {
 			_, err := h.reviewer.Execute(ctx, req)
@@ -139,6 +196,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func isValidPullRequestEvent(event pullRequestEvent) bool {
 	return strings.TrimSpace(event.Repository.FullName) != "" &&
+		strings.TrimSpace(event.Repository.CloneURL) != "" &&
 		event.PullRequest.Number > 0 &&
 		strings.TrimSpace(event.PullRequest.Base.Ref) != "" &&
 		strings.TrimSpace(event.PullRequest.Head.Ref) != ""
@@ -177,4 +235,20 @@ func (h *Handler) verifySignature(signatureHeader string, body []byte) bool {
 	}
 	expected := mac.Sum(nil)
 	return hmac.Equal(signature, expected)
+}
+
+func buildAuthenticatedCloneURL(rawCloneURL string, installationToken string) (string, error) {
+	installationToken = strings.TrimSpace(installationToken)
+	if installationToken == "" {
+		return "", fmt.Errorf("installation token is required")
+	}
+	cloneURL, err := url.Parse(strings.TrimSpace(rawCloneURL))
+	if err != nil {
+		return "", err
+	}
+	if cloneURL.Scheme != "http" && cloneURL.Scheme != "https" {
+		return "", fmt.Errorf("clone URL must use http or https")
+	}
+	cloneURL.User = url.UserPassword("x-access-token", installationToken)
+	return cloneURL.String(), nil
 }

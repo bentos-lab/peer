@@ -51,10 +51,9 @@ func TestGeneratorGenerateLogsRequestAndResponse(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "hello", output)
-	require.Len(t, logger.traceLogs, 2)
-	require.Contains(t, logger.traceLogs[0], "llm request method=Generate")
-	require.Contains(t, logger.traceLogs[1], "llm response method=Generate")
-	require.Contains(t, logger.traceLogs[1], `output="hello"`)
+	require.Len(t, logger.traceLogs, 1)
+	require.Contains(t, logger.traceLogs[0], "llm response method=Generate")
+	require.Contains(t, logger.traceLogs[0], `output="hello"`)
 }
 
 func TestGeneratorGenerateJSONLogsRequestAndResponse(t *testing.T) {
@@ -72,10 +71,9 @@ func TestGeneratorGenerateJSONLogsRequestAndResponse(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "ok", output["summary"])
-	require.Len(t, logger.traceLogs, 2)
-	require.Contains(t, logger.traceLogs[0], "llm request method=GenerateJSON")
-	require.Contains(t, logger.traceLogs[1], "llm response method=GenerateJSON")
-	require.Contains(t, logger.traceLogs[1], `"summary":"ok"`)
+	require.Len(t, logger.traceLogs, 1)
+	require.Contains(t, logger.traceLogs[0], "llm response method=GenerateJSON")
+	require.Contains(t, logger.traceLogs[0], `"summary":"ok"`)
 }
 
 func TestGeneratorGenerateLogsError(t *testing.T) {
@@ -85,6 +83,6 @@ func TestGeneratorGenerateLogsError(t *testing.T) {
 
 	_, err := generator.Generate(context.Background(), contracts.GenerateParams{})
 	require.Error(t, err)
-	require.Len(t, logger.traceLogs, 2)
-	require.Contains(t, logger.traceLogs[1], `error="boom"`)
+	require.Len(t, logger.traceLogs, 1)
+	require.Contains(t, logger.traceLogs[0], `error="boom"`)
 }

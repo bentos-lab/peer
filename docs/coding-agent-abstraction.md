@@ -18,16 +18,23 @@ Define a provider-agnostic abstraction for creating and running coding agents wi
 
 ## Lifecycle
 
-1. Create an environment implementation (adapter implementation is out of scope for this version).
+1. Create an environment with `Factory.New`.
 2. Prepare an agent with `SetupAgent`.
 3. Execute one task with `Run` and per-run options.
 
 Example flow:
 
 ```go
-env := NewEnvironment()
-agent, err := env.SetupAgent(ctx, domain.CodingAgentSetupOptions{
+env, err := factory.New(ctx, domain.CodeEnvironmentInitOptions{
 	RepoURL: "https://github.com/example/repo.git",
+})
+if err != nil {
+	return err
+}
+
+agent, err := env.SetupAgent(ctx, domain.CodingAgentSetupOptions{
+	Agent: "opencode",
+	Ref:   "refs/heads/main",
 })
 if err != nil {
 	return err
@@ -43,6 +50,23 @@ if err != nil {
 
 _ = result.Text
 ```
+
+## Host Environment Behavior
+
+- `Factory.New` with `RepoURL` empty:
+  - uses current working directory as workspace.
+- `Factory.New` with `RepoURL` non-empty:
+  - creates a random temporary workspace under `~/.sisutmp`,
+  - runs shallow clone (`git clone --depth 1`),
+  - fetches refs (`git fetch --all --prune`).
+- `SetupAgent` with `Ref` non-empty:
+  - token refs:
+    - `@staged`: workspace staged mode (not a git ref), skip checkout/sync.
+    - `@all`: workspace full mode (not a git ref), skip checkout/sync.
+  - local workspace: `git fetch --all --prune` -> `git checkout <ref>` -> `git pull --ff-only`.
+  - cloned workspace: verify ref availability (with fetch recovery if needed) -> `git checkout <ref>`.
+  - token refs are supported only in local workspace mode (`RepoURL` empty). When `RepoURL` is provided, `Ref` must be a real git ref/commit.
+- `Agent` is selected in `SetupAgent` by string; current host implementation supports only `opencode`.
 
 ## Extending with Adapters
 

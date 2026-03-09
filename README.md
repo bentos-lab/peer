@@ -87,7 +87,6 @@ go run ./cmd/server --log-level warning
 Webhook routes:
 
 - `POST /webhook/github`
-- `POST /webhook/gitlab`
 
 GitHub PR actions that trigger review:
 
@@ -105,28 +104,48 @@ For each trigger, the service:
 ## Run CLI Reviewer
 
 ```bash
-go run ./cmd/cli
-go run ./cmd/cli --all
-go run ./cmd/cli --untracked
-go run ./cmd/cli --changed-files file1.go,file2.go
+go run ./cmd/cli --provider github
+go run ./cmd/cli --provider github --repo org/repo
+go run ./cmd/cli --provider github --repo https://github.com/org/repo.git
+go run ./cmd/cli --provider github --repo git@github.com:org/repo.git
+go run ./cmd/cli --provider github --head @staged
+go run ./cmd/cli --provider github --head @all
+go run ./cmd/cli --provider github --base main --head feature/ref
+go run ./cmd/cli --provider github --change-request 123
+go run ./cmd/cli --provider github --change-request 123 --comment
 go run ./cmd/cli --overview
-go run ./cmd/cli --suggested-changes
-go run ./cmd/cli --suggested-changes=false
-go run ./cmd/cli --gh-pr 123
-go run ./cmd/cli --gh-pr 123 --overview
-go run ./cmd/cli --gh-pr 123 --comment-on-pr
-go run ./cmd/cli --gh-pr 123 --comment-on-pr --overview
+go run ./cmd/cli --suggest
+go run ./cmd/cli --suggest=false
 ```
 
 CLI notes:
 
-- GitHub PR mode in CLI still uses authenticated GitHub CLI (`gh auth login`).
+- CLI uses authenticated GitHub CLI (`gh auth login`) for repo/PR resolution.
+- `--provider` currently supports only `github`.
+- `--repo` supports:
+  - `owner/repo`
+  - `https://github.com/owner/repo.git` (or `http://...`)
+  - `git@github.com:owner/repo.git`
+  - `ssh://git@github.com/owner/repo.git`
+- `--change-request` and `--base`/`--head` are mutually exclusive.
+- `--comment` requires `--change-request`.
+- `--head` supports:
+  - `@staged`: staged workspace changes (token mode, not a git ref).
+  - `@all`: staged + unstaged + untracked workspace changes (token mode, not a git ref).
+  - any git ref/commit (ref mode).
+- If `--head` is empty, it defaults to:
+  - `@staged` in local workspace mode (without `--repo`).
+  - `HEAD` when `--repo` is provided.
+- If `--base` is empty while `--head` is non-empty, `--base` defaults to `HEAD`.
+- `@staged` and `@all` require local workspace mode (omit `--repo`).
+- When `--repo` is provided, `--head` must be a real git ref/commit.
 - GitHub App auth is for server webhook flow.
 - `--overview` always generates overview and sends it to the mode's configured overview publisher/output.
 - If `--overview` is not provided, CLI uses `OVERVIEW_ENABLED` when set; otherwise overview is disabled by default.
 - Explicit CLI flag value (`--overview` or `--overview=false`) takes precedence over `OVERVIEW_ENABLED`.
-- If `--suggested-changes` is not provided, CLI uses `REVIEW_SUGGESTED_CHANGES_ENABLED`.
-- Explicit CLI flag value (`--suggested-changes` or `--suggested-changes=false`) takes precedence over `REVIEW_SUGGESTED_CHANGES_ENABLED`.
+- `--suggest` enables structured suggested code changes in findings.
+- If `--suggest` is not provided, CLI uses `REVIEW_SUGGESTED_CHANGES_ENABLED`.
+- Explicit CLI flag value (`--suggest` or `--suggest=false`) takes precedence over `REVIEW_SUGGESTED_CHANGES_ENABLED`.
 
 ## Troubleshooting
 

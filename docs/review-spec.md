@@ -62,6 +62,39 @@ Current reviewer adapter (`adapter/outbound/reviewer/llm`) expects model output 
 }
 ```
 
+Coding-agent reviewer adapter (`adapter/outbound/reviewer/codingagent`) follows the same JSON shape and additionally allows optional per-finding suggested change:
+
+```json
+{
+  "summary": "string",
+  "findings": [
+    {
+      "filePath": "path/to/file.go",
+      "startLine": 123,
+      "endLine": 126,
+      "severity": "CRITICAL|MAJOR|MINOR|NIT",
+      "title": "Short finding title",
+      "detail": "Why this matters",
+      "suggestion": "Suggested improvement",
+      "suggestedChange": {
+        "startLine": 123,
+        "endLine": 126,
+        "kind": "REPLACE|DELETE",
+        "replacement": "string",
+        "reason": "string"
+      }
+    }
+  ]
+}
+```
+
+Coding-agent review and overview prompts are split into two templates per flow:
+- one `task.md` per flow (`reviewer/codingagent`, `overview/codingagent`) for coding-agent analysis instructions
+- one `formatting_system.md` per flow (`reviewer/codingagent`, `overview/codingagent`) for free-text-to-JSON conversion contract
+- metadata-only input (title, description, base/head, repo)
+- no inline diff/file-content injection
+- coding agent must discover context by inspecting repository/workspace directly
+
 Overview adapter (`adapter/outbound/overview/llm`) uses an independent prompt and JSON contract:
 
 ```json

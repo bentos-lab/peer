@@ -29,6 +29,8 @@ type SuggestedChange struct {
 	Replacement string
 	Kind        SuggestedChangeKindEnum
 	Reason      string
+	StartLine   int
+	EndLine     int
 }
 
 // Finding represents one LLM-generated review finding.

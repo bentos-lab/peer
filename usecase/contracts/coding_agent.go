@@ -11,7 +11,16 @@ type CodingAgent interface {
 	Run(ctx context.Context, task string, opts domain.CodingAgentRunOptions) (domain.CodingAgentRunResult, error)
 }
 
-// CodingAgentEnvironment prepares coding agents for repository-scoped work.
-type CodingAgentEnvironment interface {
+// CodeEnvironment provides repository-scoped code operations for review/overview.
+type CodeEnvironment interface {
+	// SetupAgent prepares a coding agent against the target repository context.
 	SetupAgent(ctx context.Context, opts domain.CodingAgentSetupOptions) (CodingAgent, error)
+	// LoadChangedFiles loads changed files for the selected comparison mode.
+	LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error)
+}
+
+// CodeEnvironmentFactory creates request-scoped code environments.
+type CodeEnvironmentFactory interface {
+	// New creates a code environment for one usecase execution context.
+	New(ctx context.Context, opts domain.CodeEnvironmentInitOptions) (CodeEnvironment, error)
 }
