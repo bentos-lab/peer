@@ -24,6 +24,10 @@ func (e *dummyCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.Code
 	return []domain.ChangedFile{}, nil
 }
 
+func (e *dummyCodeEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
+	return domain.CodeEnvironmentPushResult{}, nil
+}
+
 func (e *dummyCodeEnvironment) Cleanup(_ context.Context) error {
 	return nil
 }

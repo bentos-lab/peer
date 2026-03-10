@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"bentos-backend/domain"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -235,7 +236,7 @@ func renderOverviewUserPrompt(input domain.ChangeRequestInput, changedFiles []do
 	var rendered bytes.Buffer
 	if err := parsedTemplate.Execute(&rendered, overviewUserPromptTemplateData{
 		Title:       input.Title,
-		Description: input.Description,
+		Description: sharedtext.SingleLine(input.Description),
 		Files:       files,
 	}); err != nil {
 		return "", err

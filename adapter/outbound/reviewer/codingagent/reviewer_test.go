@@ -43,6 +43,10 @@ func (e *reviewerTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.C
 	return e.changedFiles, nil
 }
 
+func (e *reviewerTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
+	return domain.CodeEnvironmentPushResult{}, nil
+}
+
 func (e *reviewerTestEnvironment) Cleanup(_ context.Context) error {
 	return nil
 }

@@ -519,6 +519,7 @@ func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, p
 		Description: strings.TrimSpace(payload.Body),
 		BaseRef:     base,
 		HeadRef:     head,
+		HeadRefName: strings.TrimSpace(payload.Head.Ref),
 	}, nil
 }
 

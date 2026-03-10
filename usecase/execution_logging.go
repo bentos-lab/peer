@@ -37,6 +37,8 @@ func title(flow string) string {
 		return "Review"
 	case "overview":
 		return "Overview"
+	case "autogen":
+		return "Autogen"
 	case "change request":
 		return "Change request"
 	default:

@@ -89,6 +89,9 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.Command, error) {
 					return cliinbound.NewCommand(changeRequestUseCase, githubClient, nil), nil
 				},
+				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+					return nil, nil
+				},
 				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
 					return nil, nil
 				},

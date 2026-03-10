@@ -70,6 +70,20 @@ type LLMOverviewGenerator interface {
 	GenerateOverview(ctx context.Context, payload LLMOverviewPayload) (LLMOverviewResult, error)
 }
 
+// AutogenPayload is the complete autogen prompt payload.
+type AutogenPayload struct {
+	Input       domain.ChangeRequestInput
+	Docs        bool
+	Tests       bool
+	HeadBranch  string
+	Environment uccontracts.CodeEnvironment
+}
+
+// AutogenGenerator applies missing tests/docs/comments for the diff.
+type AutogenGenerator interface {
+	Generate(ctx context.Context, payload AutogenPayload) (string, error)
+}
+
 // ReviewPublishResult is output passed to a concrete publisher.
 type ReviewPublishResult struct {
 	Target   domain.ChangeRequestTarget
@@ -93,6 +107,24 @@ type OverviewPublishRequest struct {
 // OverviewPublisher publishes overview results.
 type OverviewPublisher interface {
 	PublishOverview(ctx context.Context, req OverviewPublishRequest) error
+}
+
+// AutogenPublishRequest is output passed to a concrete autogen publisher.
+type AutogenPublishRequest struct {
+	Target      domain.ChangeRequestTarget
+	Changes     []domain.AutogenChange
+	Summary     domain.AutogenSummary
+	Publish     bool
+	HeadBranch  string
+	Metadata    map[string]string
+	AgentOutput string
+	Environment uccontracts.CodeEnvironment
+	PushOptions domain.CodeEnvironmentPushOptions
+}
+
+// AutogenPublisher publishes autogen results.
+type AutogenPublisher interface {
+	PublishAutogen(ctx context.Context, req AutogenPublishRequest) error
 }
 
 // ReviewRequest is the review-usecase input.
@@ -126,6 +158,27 @@ type OverviewExecutionResult struct {
 // OverviewUseCase defines overview execution behavior.
 type OverviewUseCase interface {
 	Execute(ctx context.Context, request OverviewRequest) (OverviewExecutionResult, error)
+}
+
+// AutogenRequest is the autogen-usecase input.
+type AutogenRequest struct {
+	Input      domain.ChangeRequestInput
+	Docs       bool
+	Tests      bool
+	Publish    bool
+	HeadBranch string
+}
+
+// AutogenExecutionResult is the autogen-usecase output.
+type AutogenExecutionResult struct {
+	Changes     []domain.AutogenChange
+	Summary     domain.AutogenSummary
+	AgentOutput string
+}
+
+// AutogenUseCase defines autogen execution behavior.
+type AutogenUseCase interface {
+	Execute(ctx context.Context, request AutogenRequest) (AutogenExecutionResult, error)
 }
 
 // ChangeRequestExecutionResult is the orchestrator output.

@@ -17,6 +17,8 @@ type CodeEnvironment interface {
 	SetupAgent(ctx context.Context, opts domain.CodingAgentSetupOptions) (CodingAgent, error)
 	// LoadChangedFiles loads changed files for the selected comparison mode.
 	LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error)
+	// PushChanges commits and pushes changes with the provided options.
+	PushChanges(ctx context.Context, opts domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error)
 	// Cleanup releases any resources allocated for the code environment.
 	Cleanup(ctx context.Context) error
 }

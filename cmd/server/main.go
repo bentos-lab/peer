@@ -45,7 +45,7 @@ func (e serverConfigLoadError) Is(target error) bool {
 // main bootstraps webhook handlers for GitHub.
 func main() {
 	var verbosity int
-	pflag.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace)")
+	pflag.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
 	pflag.Parse()
 
 	logLevelOverride := sharedcli.LogLevelOverrideFromVerbosity(verbosity)

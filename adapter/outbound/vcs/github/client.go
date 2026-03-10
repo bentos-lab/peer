@@ -33,6 +33,7 @@ type PullRequestInfo struct {
 	Description string
 	BaseRef     string
 	HeadRef     string
+	HeadRefName string
 }
 
 // PullRequestReviewSummary contains normalized pull request review metadata.
@@ -396,6 +397,7 @@ func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, p
 		Description: strings.TrimSpace(payload.Body),
 		BaseRef:     base,
 		HeadRef:     head,
+		HeadRefName: strings.TrimSpace(payload.Head.Ref),
 	}, nil
 }
 

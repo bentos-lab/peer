@@ -156,6 +156,53 @@ func (e *HostCodeEnvironment) Cleanup(_ context.Context) error {
 	return os.RemoveAll(workspaceDir)
 }
 
+// WorkspaceDir returns the active workspace directory, if any.
+func (e *HostCodeEnvironment) WorkspaceDir() string {
+	return strings.TrimSpace(e.workspaceDir)
+}
+
+// PushChanges commits and pushes workspace changes to the target branch.
+func (e *HostCodeEnvironment) PushChanges(ctx context.Context, opts domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
+	workspaceDir, err := e.workspaceDirForRun()
+	if err != nil {
+		return domain.CodeEnvironmentPushResult{}, err
+	}
+
+	targetBranch := strings.TrimSpace(opts.TargetBranch)
+	if targetBranch == "" {
+		return domain.CodeEnvironmentPushResult{}, fmt.Errorf("target branch is required")
+	}
+	commitMessage := strings.TrimSpace(opts.CommitMessage)
+	if commitMessage == "" {
+		return domain.CodeEnvironmentPushResult{}, fmt.Errorf("commit message is required")
+	}
+	remoteName := strings.TrimSpace(opts.RemoteName)
+	if remoteName == "" {
+		remoteName = "origin"
+	}
+
+	status, err := e.git(ctx, workspaceDir, "status", "--porcelain")
+	if err != nil {
+		return domain.CodeEnvironmentPushResult{}, err
+	}
+	if strings.TrimSpace(string(status.Stdout)) == "" {
+		e.logger.Infof("No autogen changes detected; skipping commit and push.")
+		return domain.CodeEnvironmentPushResult{Pushed: false}, nil
+	}
+
+	if _, err := e.git(ctx, workspaceDir, "add", "-A"); err != nil {
+		return domain.CodeEnvironmentPushResult{}, err
+	}
+	if _, err := e.git(ctx, workspaceDir, "commit", "-m", commitMessage); err != nil {
+		return domain.CodeEnvironmentPushResult{}, err
+	}
+	if _, err := e.git(ctx, workspaceDir, "push", remoteName, fmt.Sprintf("HEAD:%s", targetBranch)); err != nil {
+		return domain.CodeEnvironmentPushResult{}, err
+	}
+
+	return domain.CodeEnvironmentPushResult{Pushed: true}, nil
+}
+
 func (e *HostCodeEnvironment) verifyLocalRefExists(ctx context.Context, workspaceDir string, ref string) error {
 	_, err := e.git(ctx, workspaceDir, "rev-parse", "--verify", fmt.Sprintf("%s^{commit}", ref))
 	if err != nil {
@@ -257,9 +304,18 @@ func (e *HostCodeEnvironment) resolveRef(ctx context.Context, workspaceDir strin
 
 	candidates := refFetchCandidates(requestedRef)
 	var lastErr error
+	isShallow, shallowErr := e.isShallowRepository(ctx, workspaceDir)
+	if shallowErr != nil {
+		e.logger.Debugf("Failed to determine if repository is shallow: %v", shallowErr)
+	}
 	for _, candidate := range candidates {
 		e.logger.Debugf("Attempting to fetch ref candidate: %s, will store as: %s", candidate, fetchedRef)
-		result, fetchErr := e.runner.Run(ctx, "git", "-C", workspaceDir, "fetch", "--unshallow", "origin", fmt.Sprintf("%s:%s", candidate, fetchedRef))
+		args := []string{"-C", workspaceDir, "fetch"}
+		if shallowErr == nil && isShallow {
+			args = append(args, "--unshallow")
+		}
+		args = append(args, "origin", fmt.Sprintf("%s:%s", candidate, fetchedRef))
+		result, fetchErr := e.runner.Run(ctx, "git", args...)
 		if fetchErr != nil {
 			lastErr = formatCommandError(fetchErr, result)
 			continue
@@ -480,6 +536,22 @@ func (e *HostCodeEnvironment) git(ctx context.Context, workspaceDir string, args
 		return result, formatCommandError(err, result)
 	}
 	return result, nil
+}
+
+func (e *HostCodeEnvironment) isShallowRepository(ctx context.Context, workspaceDir string) (bool, error) {
+	result, err := e.git(ctx, workspaceDir, "rev-parse", "--is-shallow-repository")
+	if err != nil {
+		return false, err
+	}
+	value := strings.TrimSpace(string(result.Stdout))
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected shallow repository value %q", value)
+	}
 }
 
 func newHostCodeEnvironmentTempDirMaker(userHomeDir func() (string, error)) func() (string, error) {

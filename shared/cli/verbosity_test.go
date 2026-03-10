@@ -13,11 +13,11 @@ func TestLogLevelOverrideFromVerbosity(t *testing.T) {
 		verbosity int
 		expected  string
 	}{
-		{name: "zero", verbosity: 0, expected: ""},
-		{name: "negative", verbosity: -1, expected: ""},
-		{name: "info", verbosity: 1, expected: string(stdlogger.LevelInfo)},
-		{name: "debug", verbosity: 2, expected: string(stdlogger.LevelDebug)},
-		{name: "trace", verbosity: 3, expected: string(stdlogger.LevelTrace)},
+		{name: "zero", verbosity: 0, expected: string(stdlogger.LevelInfo)},
+		{name: "negative", verbosity: -1, expected: string(stdlogger.LevelInfo)},
+		{name: "debug", verbosity: 1, expected: string(stdlogger.LevelDebug)},
+		{name: "trace", verbosity: 2, expected: string(stdlogger.LevelTrace)},
+		{name: "trace_high", verbosity: 3, expected: string(stdlogger.LevelTrace)},
 		{name: "clamped", verbosity: 4, expected: string(stdlogger.LevelTrace)},
 	}
 

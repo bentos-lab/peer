@@ -8,6 +8,7 @@ import (
 	"time"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
+	autogencodingagent "bentos-backend/adapter/outbound/autogen/codingagent"
 	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
 	openai "bentos-backend/adapter/outbound/llm/openai"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
@@ -106,6 +107,45 @@ func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverri
 	}
 
 	return cliinbound.NewCommand(changeRequestUseCase, githubClient, logger), nil
+}
+
+// BuildCLIAutogenCommand wires dependencies for a single CLI autogen mode.
+func BuildCLIAutogenCommand(cfg config.Config, _ CLILLMOptions, logLevelOverride string) (*cliinbound.AutogenCommand, error) {
+	logger, err := buildLogger(cfg, logLevelOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
+		Logger: logger,
+	})
+	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
+	autogenGenerator, err := autogencodingagent.NewGenerator(autogencodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	githubClient := githubvcs.NewCLIClient()
+	autogenPublisher := routerpublisher.NewAutogenPublisher(
+		clipublisher.NewAutogenPublisher(os.Stdout),
+		githubpublisher.NewAutogenPublisher(githubClient, logger),
+	)
+
+	autogenUseCase, err := usecase.NewAutogenUseCase(
+		autogenGenerator,
+		autogenPublisher,
+		codeEnvironmentFactory,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return cliinbound.NewAutogenCommand(autogenUseCase, githubClient, logger), nil
 }
 
 // BuildCLIReplyCommentCommand wires dependencies for CLI replycomment mode.

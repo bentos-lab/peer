@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"bentos-backend/domain"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -101,7 +102,7 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		Base:         normalizedBase,
 		Head:         normalizedHead,
 		Title:        payload.Input.Title,
-		Description:  payload.Input.Description,
+		Description:  sharedtext.SingleLine(payload.Input.Description),
 		Language:     resolveLanguage(payload.Input.Language),
 		Suggestions:  payload.Suggestions,
 		RulePackText: strings.Join(payload.RulePack.Instructions, "\n\n"),

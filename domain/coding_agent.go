@@ -18,6 +18,18 @@ type CodeEnvironmentInitOptions struct {
 	RepoURL string
 }
 
+// CodeEnvironmentPushOptions contains inputs for pushing code changes.
+type CodeEnvironmentPushOptions struct {
+	TargetBranch  string
+	CommitMessage string
+	RemoteName    string
+}
+
+// CodeEnvironmentPushResult captures push results for a code environment.
+type CodeEnvironmentPushResult struct {
+	Pushed bool
+}
+
 // CodingAgentRunOptions contains run-time inputs for one coding task execution.
 type CodingAgentRunOptions struct {
 	Provider string

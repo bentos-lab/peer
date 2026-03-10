@@ -30,6 +30,11 @@
 - Section cross-references: use anchors on root-relative paths (example: `[Hooks](/configuration#hooks)`).
 - Always add new environments to `.env.example`.
 
+## Prompt Authoring
+- System prompts and task prompts must be clear, explicit, and aligned with repository rules.
+- When a prompt needs detailed guidance, place that guidance in documentation under `docs/` and link to it from the prompt or AGENTS.
+- Follow the prompt authoring guidelines in [System Prompt Guidelines](/docs/system-prompt-guidelines.md).
+
 ## Build, Test, and Development Commands
 
 - Go version: 1.26

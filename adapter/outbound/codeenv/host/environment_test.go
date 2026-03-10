@@ -238,7 +238,14 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefFetchesMissingRef(t *tes
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", workspaceDir, "fetch", "--unshallow", "origin", "feature/ref:" + fetchedRef},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--is-shallow-repository"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("false")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "fetch", "origin", "feature/ref:" + fetchedRef},
 		},
 		Result: commandrunner.Result{Stdout: []byte("fetched")},
 	})
@@ -442,7 +449,14 @@ func TestHostCodeEnvironment_LoadChangedFilesFetchesWhenRefMissing(t *testing.T)
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", workspaceDir, "fetch", "--unshallow", "origin", "feature/ref:" + fetchedRef},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--is-shallow-repository"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("false")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "fetch", "origin", "feature/ref:" + fetchedRef},
 		},
 		Result: commandrunner.Result{Stdout: []byte("fetched")},
 	})
@@ -535,7 +549,14 @@ func TestHostCodeEnvironment_LoadChangedFilesReturnsErrorWhenRefStillMissingAfte
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", workspaceDir, "fetch", "--unshallow", "origin", "feature/ref:" + fetchedRef},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--is-shallow-repository"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("false")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "fetch", "origin", "feature/ref:" + fetchedRef},
 		},
 		Result: commandrunner.Result{Stderr: []byte("fatal: couldn't find remote ref feature/ref")},
 		Err:    errors.New("exit status 128"),
@@ -794,6 +815,60 @@ func TestHostCodeEnvironment_CleanupLocalWorkspaceNoop(t *testing.T) {
 	require.NoError(t, err)
 	_, statErr := os.Stat(tempDir)
 	require.NoError(t, statErr)
+}
+
+func TestHostCodeEnvironment_PushChangesSkipsWhenNoChanges(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", "/workspace", "status", "--porcelain"}},
+		Result:   commandrunner.Result{Stdout: []byte("\n")},
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+	})
+	env.workspaceDir = "/workspace"
+
+	result, err := env.PushChanges(context.Background(), domain.CodeEnvironmentPushOptions{
+		TargetBranch:  "feature",
+		CommitMessage: "autogen: add tests/docs/comments",
+	})
+	require.NoError(t, err)
+	require.False(t, result.Pushed)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_PushChangesCommitsAndPushes(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", "/workspace", "status", "--porcelain"}},
+		Result:   commandrunner.Result{Stdout: []byte(" M foo.go\n")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", "/workspace", "add", "-A"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", "/workspace", "commit", "-m", "autogen: add tests/docs/comments"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", "/workspace", "push", "origin", "HEAD:feature"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+	})
+	env.workspaceDir = "/workspace"
+
+	result, err := env.PushChanges(context.Background(), domain.CodeEnvironmentPushOptions{
+		TargetBranch:  "feature",
+		CommitMessage: "autogen: add tests/docs/comments",
+	})
+	require.NoError(t, err)
+	require.True(t, result.Pushed)
+	require.NoError(t, runner.VerifyDone())
 }
 
 type hostTestLogger struct {

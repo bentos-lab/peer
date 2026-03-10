@@ -117,10 +117,15 @@ go run ./cmd/cli --provider github --head @staged
 go run ./cmd/cli --provider github --head @all
 go run ./cmd/cli --provider github --base main --head feature/ref
 go run ./cmd/cli --provider github --change-request 123
-go run ./cmd/cli --provider github --change-request 123 --comment
+go run ./cmd/cli --provider github --change-request 123 --publish
 go run ./cmd/cli --overview
 go run ./cmd/cli --suggest
 go run ./cmd/cli --suggest=false
+go run ./cmd/cli autogen --docs
+go run ./cmd/cli autogen --tests
+go run ./cmd/cli autogen --docs --tests
+go run ./cmd/cli autogen --base main --head feature/ref --docs
+go run ./cmd/cli autogen --change-request 123 --publish --docs --tests
 ```
 
 CLI notes:
@@ -134,7 +139,7 @@ CLI notes:
   - `git@github.com:owner/repo.git`
   - `ssh://git@github.com/owner/repo.git`
 - `--change-request` and `--base`/`--head` are mutually exclusive.
-- `--comment` requires `--change-request`.
+- `--publish` requires `--change-request`.
 - `--head` supports:
   - `@staged`: staged workspace changes (token mode, not a git ref).
   - `@all`: staged + unstaged + untracked workspace changes (token mode, not a git ref).
@@ -152,6 +157,9 @@ CLI notes:
 - `--suggest` enables structured suggested code changes in findings.
 - If `--suggest` is not provided, CLI uses `REVIEW_SUGGESTED_CHANGES_ENABLED`.
 - Explicit CLI flag value (`--suggest` or `--suggest=false`) takes precedence over `REVIEW_SUGGESTED_CHANGES_ENABLED`.
+- `autogen` adds missing tests/docs/comments for the merge-base diff between `--base` and `--head`.
+- `autogen --docs` generates docs and code comments; `autogen --tests` generates tests.
+- `autogen --publish` requires `--change-request` and pushes changes to the PR head branch.
 
 ## Troubleshooting
 
@@ -168,4 +176,5 @@ CLI notes:
 
 - [Architecture Spec](/docs/architecture.md)
 - [Review Spec](/docs/review-spec.md)
+- [Autogen Spec](/docs/autogen-spec.md)
 - [Agent Handoff](/docs/agent-handoff.md)

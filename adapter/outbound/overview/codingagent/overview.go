@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"bentos-backend/domain"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -97,7 +98,7 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 		Base:        normalizedBase,
 		Head:        normalizedHead,
 		Title:       payload.Input.Title,
-		Description: payload.Input.Description,
+		Description: sharedtext.SingleLine(payload.Input.Description),
 	})
 	if err != nil {
 		return usecase.LLMOverviewResult{}, err

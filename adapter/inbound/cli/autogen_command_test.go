@@ -1,0 +1,94 @@
+package cli
+
+import (
+	"context"
+	"testing"
+
+	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/usecase"
+	"github.com/stretchr/testify/require"
+)
+
+type fakeAutogenUseCase struct {
+	requests []usecase.AutogenRequest
+}
+
+func (f *fakeAutogenUseCase) Execute(_ context.Context, request usecase.AutogenRequest) (usecase.AutogenExecutionResult, error) {
+	f.requests = append(f.requests, request)
+	return usecase.AutogenExecutionResult{}, nil
+}
+
+func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{}
+	cmd := NewAutogenCommand(useCase, githubClient, nil)
+
+	err := cmd.Run(context.Background(), AutogenRunParams{
+		Provider:      "github",
+		Repo:          "org/repo",
+		ChangeRequest: "123",
+		Base:          "main",
+		Head:          "feature",
+		Docs:          true,
+	})
+	require.ErrorContains(t, err, "--change-request")
+}
+
+func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{}
+	cmd := NewAutogenCommand(useCase, githubClient, nil)
+
+	err := cmd.Run(context.Background(), AutogenRunParams{
+		Provider: "github",
+		Publish:  true,
+		Docs:     true,
+	})
+	require.ErrorContains(t, err, "--publish")
+}
+
+func TestAutogenCommandDefaultsLocalWorkspace(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "org/repo"}
+	cmd := NewAutogenCommand(useCase, githubClient, nil)
+
+	err := cmd.Run(context.Background(), AutogenRunParams{
+		Provider: "github",
+		Docs:     true,
+	})
+	require.NoError(t, err)
+	require.Len(t, useCase.requests, 1)
+	require.Equal(t, "@staged", useCase.requests[0].Input.Head)
+	require.Equal(t, "HEAD", useCase.requests[0].Input.Base)
+}
+
+func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{
+		resolvedRepository: "org/repo",
+		pullRequestInfo: githubvcs.PullRequestInfo{
+			Repository:  "org/repo",
+			Number:      7,
+			Title:       "title",
+			Description: "desc",
+			BaseRef:     "baseSHA",
+			HeadRef:     "headSHA",
+			HeadRefName: "feature-branch",
+		},
+	}
+	cmd := NewAutogenCommand(useCase, githubClient, nil)
+
+	err := cmd.Run(context.Background(), AutogenRunParams{
+		Provider:      "github",
+		ChangeRequest: "7",
+		Publish:       true,
+		Docs:          true,
+		Tests:         true,
+	})
+	require.NoError(t, err)
+	require.Len(t, useCase.requests, 1)
+	require.Equal(t, "baseSHA", useCase.requests[0].Input.Base)
+	require.Equal(t, "headSHA", useCase.requests[0].Input.Head)
+	require.Equal(t, "feature-branch", useCase.requests[0].HeadBranch)
+	require.True(t, useCase.requests[0].Publish)
+}
