@@ -139,7 +139,7 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 		})
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no changes found for base %q and head %q", base, head)
+		return nil, fmt.Errorf("%w: no changes found for base %q and head %q", domain.ErrNoCodeChanges, base, head)
 	}
 	return files, nil
 }

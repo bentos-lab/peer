@@ -47,6 +47,10 @@ func (p *AutogenPublisher) PublishAutogen(ctx context.Context, req usecase.Autog
 	if req.Environment == nil {
 		return fmt.Errorf("code environment is required for autogen publish")
 	}
+	if len(req.Changes) == 0 {
+		p.logger.Infof("No autogen docs/tests/comments added; skipping publish.")
+		return nil
+	}
 
 	startedAt := time.Now()
 	p.logger.Infof("Publishing GitHub autogen result started.")

@@ -42,6 +42,7 @@ type autogenUseCaseTestEnvironment struct {
 	files     []domain.ChangedFile
 	loadCalls int
 	loadOpts  domain.CodeEnvironmentLoadOptions
+	loadErr   error
 }
 
 func (e *autogenUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (uccontracts.CodingAgent, error) {
@@ -51,6 +52,9 @@ func (e *autogenUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.C
 func (e *autogenUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	e.loadCalls++
 	e.loadOpts = opts
+	if e.loadErr != nil {
+		return nil, e.loadErr
+	}
 	return e.files, nil
 }
 
@@ -176,4 +180,29 @@ func TestAutogenUseCasePropagatesGeneratorError(t *testing.T) {
 		Docs: true,
 	})
 	require.ErrorContains(t, err, "generator failed")
+}
+
+func TestAutogenUseCaseSkipsErrorWhenNoChangesDetected(t *testing.T) {
+	env := &autogenUseCaseTestEnvironment{loadErr: domain.ErrNoCodeChanges}
+	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
+	generator := &autogenUseCaseTestGenerator{output: "agent report"}
+	publisher := &autogenUseCaseTestPublisher{}
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	require.NoError(t, err)
+
+	result, err := useCase.Execute(context.Background(), AutogenRequest{
+		Input: domain.ChangeRequestInput{
+			Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 1},
+		},
+		Docs:       true,
+		Publish:    true,
+		HeadBranch: "feature",
+	})
+	require.NoError(t, err)
+	require.Empty(t, result.Changes)
+	require.Empty(t, result.Summary.Docs)
+	require.Empty(t, result.Summary.Tests)
+	require.Empty(t, result.Summary.Comments)
+	require.Equal(t, 1, publisher.callCount)
+	require.Empty(t, publisher.lastReq.Changes)
 }

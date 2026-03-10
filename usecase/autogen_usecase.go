@@ -98,8 +98,13 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 		Head: "@all",
 	})
 	if err != nil {
-		logStageFailure(u.logger, "autogen", "collect_autogen_changes", target, collectStartedAt, err)
-		return AutogenExecutionResult{}, err
+		if errors.Is(err, domain.ErrNoCodeChanges) {
+			u.logger.Infof("No autogen changes detected; skipping content summary.")
+			changedFiles = nil
+		} else {
+			logStageFailure(u.logger, "autogen", "collect_autogen_changes", target, collectStartedAt, err)
+			return AutogenExecutionResult{}, err
+		}
 	}
 	changes := buildAutogenChanges(changedFiles)
 	summary := buildAutogenSummary(changes)

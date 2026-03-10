@@ -3,8 +3,10 @@ package commandrunner
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -61,6 +63,9 @@ func (r *OSStreamCommandRunner) RunStream(ctx context.Context, onChunk func(Stre
 				continue
 			}
 			if readErr == io.EOF {
+				return
+			}
+			if errors.Is(readErr, os.ErrClosed) {
 				return
 			}
 

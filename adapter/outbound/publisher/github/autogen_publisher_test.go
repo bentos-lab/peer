@@ -52,6 +52,7 @@ func TestAutogenPublisherPushesWithEnvironment(t *testing.T) {
 		Target:      domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 9},
 		Publish:     true,
 		HeadBranch:  "feature",
+		Changes:     []domain.AutogenChange{{FilePath: "foo.go", StartLine: 1, EndLine: 1, Content: "// add"}},
 		Summary:     domain.AutogenSummary{},
 		AgentOutput: "Autogen agent report",
 		Environment: env,
@@ -66,4 +67,30 @@ func TestAutogenPublisherPushesWithEnvironment(t *testing.T) {
 	require.Contains(t, client.bodies[0], "Agent output")
 	require.Equal(t, 1, env.pushCalls)
 	require.Equal(t, "feature", env.lastOptions.TargetBranch)
+}
+
+func TestAutogenPublisherSkipsWhenNoChanges(t *testing.T) {
+	env := &autogenTestEnvironment{}
+
+	client := &autogenTestCommentClient{}
+	logger := &spyLogger{}
+	publisher := NewAutogenPublisher(client, logger)
+
+	err := publisher.PublishAutogen(context.Background(), usecase.AutogenPublishRequest{
+		Target:      domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 9},
+		Publish:     true,
+		HeadBranch:  "feature",
+		Summary:     domain.AutogenSummary{},
+		AgentOutput: "Autogen agent report",
+		Environment: env,
+		PushOptions: domain.CodeEnvironmentPushOptions{
+			TargetBranch:  "feature",
+			CommitMessage: "autogen: add tests/docs/comments",
+			RemoteName:    "origin",
+		},
+	})
+	require.NoError(t, err)
+	require.Empty(t, client.bodies)
+	require.Equal(t, 0, env.pushCalls)
+	require.True(t, containsEvent(logger.events, "No autogen docs/tests/comments added; skipping publish."))
 }
