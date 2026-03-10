@@ -243,7 +243,7 @@ func renderSystemPrompt(rulePackText string) (string, error) {
 	return rendered.String(), nil
 }
 
-func renderUserPrompt(input domain.ReviewInput, changedFiles []domain.ChangedFile) (string, error) {
+func renderUserPrompt(input domain.ChangeRequestInput, changedFiles []domain.ChangedFile) (string, error) {
 	files := make([]reviewUserPromptFileData, 0, len(changedFiles))
 	for _, file := range changedFiles {
 		changedText := file.DiffSnippet

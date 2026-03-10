@@ -7,21 +7,3 @@ type ChangedFile struct {
 	OldContent  string
 	DiffSnippet string
 }
-
-// ReviewTarget represents where review comments should be published.
-type ReviewTarget struct {
-	Repository          string
-	ChangeRequestNumber int
-}
-
-// ReviewInput is the complete input for the review engine.
-type ReviewInput struct {
-	Target      ReviewTarget
-	RepoURL     string
-	Base        string
-	Head        string
-	Title       string
-	Description string
-	Language    string
-	Metadata    map[string]string
-}

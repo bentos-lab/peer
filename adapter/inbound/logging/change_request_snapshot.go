@@ -18,9 +18,8 @@ func LogChangeRequestInputSnapshot(logger usecase.Logger, source string, action 
 	trimmedAction := strings.TrimSpace(action)
 	if trimmedAction == "" {
 		logger.Infof(
-			"Pre-usecase input snapshot source=%q provider=%q repository=%q changeRequestNumber=%d enableOverview=%t enableSuggestions=%t.",
+			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d enableOverview=%t enableSuggestions=%t.",
 			strings.TrimSpace(source),
-			request.Provider,
 			request.Repository,
 			request.ChangeRequestNumber,
 			request.EnableOverview,
@@ -28,10 +27,9 @@ func LogChangeRequestInputSnapshot(logger usecase.Logger, source string, action 
 		)
 	} else {
 		logger.Infof(
-			"Pre-usecase input snapshot source=%q action=%q provider=%q repository=%q changeRequestNumber=%d enableOverview=%t enableSuggestions=%t.",
+			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d enableOverview=%t enableSuggestions=%t.",
 			strings.TrimSpace(source),
 			trimmedAction,
-			request.Provider,
 			request.Repository,
 			request.ChangeRequestNumber,
 			request.EnableOverview,
@@ -41,12 +39,11 @@ func LogChangeRequestInputSnapshot(logger usecase.Logger, source string, action 
 
 	safeRepoURL, hasRepoURL := sanitizeRepoURL(request.RepoURL)
 	logger.Debugf(
-		"Pre-usecase input details source=%q action=%q base=%q head=%q comment=%t metadataKeys=%q metadataCount=%d titleLength=%d descriptionLength=%d repoURLPresent=%t repoURLSafe=%q.",
+		"Pre-usecase input details source=%q action=%q base=%q head=%q metadataKeys=%q metadataCount=%d titleLength=%d descriptionLength=%d repoURLPresent=%t repoURLSafe=%q.",
 		strings.TrimSpace(source),
 		trimmedAction,
 		request.Base,
 		request.Head,
-		request.Comment,
 		strings.Join(sortedMetadataKeys(request.Metadata), ","),
 		len(request.Metadata),
 		len(request.Title),

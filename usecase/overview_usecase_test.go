@@ -80,8 +80,8 @@ func TestOverviewUseCaseExecuteInitializesEnvironmentAndPassesItToGenerator(t *t
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
-		Input: domain.OverviewInput{
-			Target:  domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
 			RepoURL: "https://github.com/org/repo.git",
 			Base:    "main",
 			Head:    "feature",
@@ -103,8 +103,8 @@ func TestOverviewUseCaseExecuteReturnsFactoryError(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
-		Input: domain.OverviewInput{
-			Target:  domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
 			RepoURL: "https://github.com/org/repo.git",
 			Base:    "main",
 			Head:    "feature",

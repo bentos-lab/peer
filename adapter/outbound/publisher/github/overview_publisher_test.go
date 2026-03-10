@@ -29,7 +29,7 @@ func TestOverviewPublisher_PublishOverview_PostsMarkdown(t *testing.T) {
 	publisher := NewOverviewPublisher(client, logger)
 
 	err := publisher.PublishOverview(context.Background(), usecase.OverviewPublishRequest{
-		Target: domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 11},
+		Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 11},
 		Overview: usecase.LLMOverviewResult{
 			Categories: []domain.OverviewCategoryItem{
 				{Category: domain.OverviewCategoryLogicUpdates, Summary: "Updated request handling."},
@@ -54,7 +54,7 @@ func TestOverviewPublisher_PublishOverview_SkipsNonOpenedAction(t *testing.T) {
 	publisher := NewOverviewPublisher(client, nil)
 
 	err := publisher.PublishOverview(context.Background(), usecase.OverviewPublishRequest{
-		Target:   domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 11},
+		Target:   domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 11},
 		Overview: usecase.LLMOverviewResult{},
 		Metadata: map[string]string{"action": "synchronize"},
 	})
@@ -68,7 +68,7 @@ func TestOverviewPublisher_PublishOverview_FailsWhenClientFails(t *testing.T) {
 	publisher := NewOverviewPublisher(client, logger)
 
 	err := publisher.PublishOverview(context.Background(), usecase.OverviewPublishRequest{
-		Target: domain.OverviewTarget{Repository: "org/repo", ChangeRequestNumber: 11},
+		Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 11},
 		Overview: usecase.LLMOverviewResult{
 			Walkthroughs: []domain.OverviewWalkthrough{{GroupName: "A", Summary: "B"}},
 		},

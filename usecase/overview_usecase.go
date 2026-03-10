@@ -42,19 +42,19 @@ func NewOverviewUseCase(
 // Execute generates overview content and publishes it to the configured publisher.
 func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) (OverviewExecutionResult, error) {
 	startedAt := time.Now()
-	u.logger.Infof("Overview execution started.")
-	u.logger.Debugf("Overview target is repository %q with change request number %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	target := request.Input.Target
+	logExecutionStarted(u.logger, "overview", target)
 
 	initializeEnvironmentStartedAt := time.Now()
 	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
 		RepoURL: request.Input.RepoURL,
 	})
 	if err != nil {
-		u.logStageFailure(request, "initialize_code_environment", initializeEnvironmentStartedAt, err)
+		logStageFailure(u.logger, "overview", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
 		return OverviewExecutionResult{}, err
 	}
 	u.logger.Infof("Code environment initialized.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "initialize_code_environment", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	logStageSuccess(u.logger, "overview", "initialize_code_environment", target, initializeEnvironmentStartedAt)
 	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())
 
 	overviewStartedAt := time.Now()
@@ -63,11 +63,11 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 		Environment: environment,
 	})
 	if err != nil {
-		u.logStageFailure(request, "generate_overview", overviewStartedAt, err)
+		logStageFailure(u.logger, "overview", "generate_overview", target, overviewStartedAt, err)
 		return OverviewExecutionResult{}, err
 	}
 	u.logger.Infof("Overview generation completed.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "generate_overview", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	logStageSuccess(u.logger, "overview", "generate_overview", target, overviewStartedAt)
 	u.logger.Debugf("Overview generation took %d ms.", time.Since(overviewStartedAt).Milliseconds())
 
 	publishStartedAt := time.Now()
@@ -76,26 +76,19 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 		Overview: overviewResult,
 		Metadata: request.Input.Metadata,
 	}); err != nil {
-		u.logger.Errorf("Overview stage failed.")
-		u.logger.Debugf("Stage %q failed for repository %q and change request number %d.", "publish_overview_result", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-		u.logger.Debugf("The failed stage ran for %d ms.", time.Since(publishStartedAt).Milliseconds())
-		u.logger.Debugf("Failure details: %v.", err)
+		logStageFailure(u.logger, "overview", "publish_overview_result", target, publishStartedAt, err)
 		return OverviewExecutionResult{}, err
 	}
 	u.logger.Infof("Overview publish completed.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "publish_overview_result", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	u.logger.Debugf("Overview publish took %d ms.", time.Since(publishStartedAt).Milliseconds())
-
-	u.logger.Infof("Overview execution completed.")
-	u.logger.Debugf("Overview target was repository %q with change request number %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	u.logger.Debugf("Overview execution took %d ms.", time.Since(startedAt).Milliseconds())
+	logStageSuccess(u.logger, "overview", "publish_overview_result", target, publishStartedAt)
+	logExecutionCompleted(
+		u.logger,
+		"overview",
+		target,
+		startedAt,
+		"Overview execution took %d ms.",
+		time.Since(startedAt).Milliseconds(),
+	)
 
 	return OverviewExecutionResult{Overview: overviewResult}, nil
-}
-
-func (u *overviewUseCase) logStageFailure(request OverviewRequest, stage string, startedAt time.Time, err error) {
-	u.logger.Errorf("Overview stage failed.")
-	u.logger.Debugf("Stage %q failed for repository %q and change request number %d.", stage, request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	u.logger.Debugf("The failed stage ran for %d ms.", time.Since(startedAt).Milliseconds())
-	u.logger.Debugf("Failure details: %v.", err)
 }

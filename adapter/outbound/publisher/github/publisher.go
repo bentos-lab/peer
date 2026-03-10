@@ -129,7 +129,7 @@ func buildFindingCommentBody(finding domain.Finding) string {
 	return commentBody
 }
 
-func (p *Publisher) logFindingPayload(state string, target domain.ReviewTarget, finding domain.Finding, commentBody string) {
+func (p *Publisher) logFindingPayload(state string, target domain.ChangeRequestTarget, finding domain.Finding, commentBody string) {
 	p.logger.Debugf("GitHub review comment metadata state=%q repo=%q pr=%d file=%q startLine=%d endLine=%d severity=%q title=%q.",
 		state, target.Repository, target.ChangeRequestNumber, finding.FilePath, finding.StartLine, finding.EndLine, finding.Severity, finding.Title)
 
@@ -146,7 +146,7 @@ func (p *Publisher) logFindingPayload(state string, target domain.ReviewTarget, 
 		state, finding.Detail, finding.Suggestion, suggestedChangeKind, suggestedChangeReason, suggestedChangeReplacement, commentBody)
 }
 
-func (p *Publisher) logSummaryPayload(state string, target domain.ReviewTarget, body string) {
+func (p *Publisher) logSummaryPayload(state string, target domain.ChangeRequestTarget, body string) {
 	p.logger.Debugf("GitHub review summary metadata state=%q repo=%q pr=%d.", state, target.Repository, target.ChangeRequestNumber)
 	p.logger.Tracef("GitHub review summary content state=%q body=%q.", state, body)
 }

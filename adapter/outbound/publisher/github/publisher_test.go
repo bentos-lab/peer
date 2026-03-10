@@ -66,7 +66,7 @@ func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -109,7 +109,7 @@ func TestPublisher_PublishRendersReplaceSuggestedChangeBlock(t *testing.T) {
 	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -144,7 +144,7 @@ func TestPublisher_PublishRendersDeleteSuggestedChangeBlock(t *testing.T) {
 	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -179,7 +179,7 @@ func TestPublisher_PublishSkipsFindingWhenSuggestedChangeRangeIsInvalid(t *testi
 	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -213,7 +213,7 @@ func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
 	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -246,7 +246,7 @@ func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
 	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -278,7 +278,7 @@ func TestPublisher_PublishFailsForNonAnchorError(t *testing.T) {
 	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -309,7 +309,7 @@ func TestPublisher_PublishFailsForSummaryError(t *testing.T) {
 	pub := NewPublisher(client, logger)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},
@@ -326,7 +326,7 @@ func TestPublisher_PublishPostsOnlySummaryWhenNoFindings(t *testing.T) {
 	pub := NewPublisher(client, nil)
 
 	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
-		Target: domain.ReviewTarget{
+		Target: domain.ChangeRequestTarget{
 			Repository:          "org/repo",
 			ChangeRequestNumber: 11,
 		},

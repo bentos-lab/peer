@@ -211,7 +211,7 @@ func renderOverviewSystemPrompt() (string, error) {
 	return rendered.String(), nil
 }
 
-func renderOverviewUserPrompt(input domain.OverviewInput, changedFiles []domain.ChangedFile) (string, error) {
+func renderOverviewUserPrompt(input domain.ChangeRequestInput, changedFiles []domain.ChangedFile) (string, error) {
 	files := make([]overviewUserPromptFileData, 0, len(changedFiles))
 	for _, file := range changedFiles {
 		changedText := file.DiffSnippet

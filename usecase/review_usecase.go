@@ -46,17 +46,17 @@ func NewReviewUseCase(
 // Execute runs the review flow and publishes review messages.
 func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (ReviewExecutionResult, error) {
 	startedAt := time.Now()
-	u.logger.Infof("Review execution started.")
-	u.logger.Debugf("Review target is repository %q with change request number %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	target := request.Input.Target
+	logExecutionStarted(u.logger, "review", target)
 
 	loadRulePackStartedAt := time.Now()
 	pack, err := u.ruleProvider.CorePack(ctx)
 	if err != nil {
-		u.logStageFailure(request, "load_rule_pack", loadRulePackStartedAt, err)
+		logStageFailure(u.logger, "review", "load_rule_pack", target, loadRulePackStartedAt, err)
 		return ReviewExecutionResult{}, err
 	}
 	u.logger.Infof("Review rule pack loaded.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "load_rule_pack", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	logStageSuccess(u.logger, "review", "load_rule_pack", target, loadRulePackStartedAt)
 	u.logger.Debugf("Loading the rule pack took %d ms and returned %d instructions.", time.Since(loadRulePackStartedAt).Milliseconds(), len(pack.Instructions))
 
 	initializeEnvironmentStartedAt := time.Now()
@@ -64,11 +64,11 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 		RepoURL: request.Input.RepoURL,
 	})
 	if err != nil {
-		u.logStageFailure(request, "initialize_code_environment", initializeEnvironmentStartedAt, err)
+		logStageFailure(u.logger, "review", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
 		return ReviewExecutionResult{}, err
 	}
 	u.logger.Infof("Code environment initialized.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "initialize_code_environment", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	logStageSuccess(u.logger, "review", "initialize_code_environment", target, initializeEnvironmentStartedAt)
 	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())
 
 	reviewDiffStartedAt := time.Now()
@@ -79,11 +79,11 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 		Suggestions: request.Suggestions,
 	})
 	if err != nil {
-		u.logStageFailure(request, "review_diff", reviewDiffStartedAt, err)
+		logStageFailure(u.logger, "review", "review_diff", target, reviewDiffStartedAt, err)
 		return ReviewExecutionResult{}, err
 	}
 	u.logger.Infof("LLM review completed.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "review_diff", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	logStageSuccess(u.logger, "review", "review_diff", target, reviewDiffStartedAt)
 	u.logger.Debugf("The LLM review produced %d findings.", len(llmResult.Findings))
 
 	publishStartedAt := time.Now()
@@ -95,27 +95,27 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 		Summary:  llmResult.Summary,
 	}
 	if err := u.publisher.Publish(ctx, publishInput); err != nil {
-		u.logStageFailure(request, "publish_review_result", publishStartedAt, err)
+		logStageFailure(u.logger, "review", "publish_review_result", target, publishStartedAt, err)
 		return ReviewExecutionResult{}, err
 	}
 	u.logger.Infof("Review result publishing completed.")
-	u.logger.Debugf("Stage %q finished for repository %q and change request %d.", "publish_review_result", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
+	logStageSuccess(u.logger, "review", "publish_review_result", target, publishStartedAt)
 	u.logger.Debugf("Publishing review messages took %d ms and sent %d messages.", time.Since(publishStartedAt).Milliseconds(), len(messages))
 
-	u.logger.Infof("Review execution completed.")
-	u.logger.Debugf("Review target was repository %q with change request number %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	u.logger.Debugf("Full execution took %d ms and produced %d findings with %d messages.", time.Since(startedAt).Milliseconds(), len(llmResult.Findings), len(messages))
+	logExecutionCompleted(
+		u.logger,
+		"review",
+		target,
+		startedAt,
+		"Full execution took %d ms and produced %d findings with %d messages.",
+		time.Since(startedAt).Milliseconds(),
+		len(llmResult.Findings),
+		len(messages),
+	)
 
 	return ReviewExecutionResult{
 		Messages: messages,
 		Findings: llmResult.Findings,
 		Summary:  llmResult.Summary,
 	}, nil
-}
-
-func (u *reviewUseCase) logStageFailure(request ReviewRequest, stage string, startedAt time.Time, err error) {
-	u.logger.Errorf("Review stage failed.")
-	u.logger.Debugf("Stage %q failed for repository %q and change request number %d.", stage, request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	u.logger.Debugf("The failed stage ran for %d ms.", time.Since(startedAt).Milliseconds())
-	u.logger.Debugf("Failure details: %v.", err)
 }

@@ -104,8 +104,8 @@ func TestReviewUseCaseExecuteInitializesEnvironmentAndPassesItToReviewer(t *test
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), ReviewRequest{
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
 			RepoURL: "https://github.com/org/repo.git",
 			Base:    "main",
 			Head:    "feature",
@@ -135,8 +135,8 @@ func TestReviewUseCaseExecuteReturnsFactoryError(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), ReviewRequest{
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
 			RepoURL: "https://github.com/org/repo.git",
 			Base:    "main",
 			Head:    "feature",
@@ -167,8 +167,8 @@ func TestReviewUseCaseExecutePassesSuggestionsDisabledToReviewer(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), ReviewRequest{
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
 			RepoURL: "https://github.com/org/repo.git",
 			Base:    "main",
 			Head:    "feature",

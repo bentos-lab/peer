@@ -74,8 +74,8 @@ func TestGenerateOverviewUsesTaskPromptWithChangedFiles(t *testing.T) {
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:      domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:      domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL:     "https://example.com/repo.git",
 		Base:        "main",
 		Head:        "feature",
@@ -129,8 +129,8 @@ func TestGenerateOverviewRejectsInvalidCategory(t *testing.T) {
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "main",
 		Head:    "feature",
@@ -154,8 +154,8 @@ func TestGenerateOverviewTaskPromptBaseEmptyUsesHeadFallback(t *testing.T) {
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "",
 		Head:    "feature",
@@ -183,8 +183,8 @@ func TestGenerateOverviewTaskPromptHeadEmptyUsesBaseFallback(t *testing.T) {
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "main",
 		Head:    "",
@@ -212,8 +212,8 @@ func TestGenerateOverviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *test
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "",
 		Head:    "",
@@ -240,8 +240,8 @@ func TestGenerateOverviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "HEAD",
 		Head:    "@staged",
@@ -268,8 +268,8 @@ func TestGenerateOverviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "HEAD",
 		Head:    "@all",
@@ -293,8 +293,8 @@ func TestGenerateOverviewReturnsErrorWhenEnvironmentMissing(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{
-		Input: domain.OverviewInput{
-			Target: domain.OverviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target: domain.ChangeRequestTarget{Repository: "org/repo"},
 		},
 	})
 	require.Error(t, err)
@@ -313,8 +313,8 @@ func TestGenerateOverviewReturnsErrorWhenDiffContentIsEmpty(t *testing.T) {
 	generator, err := NewOverviewGenerator(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
 	require.NoError(t, err)
 
-	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.OverviewInput{
-		Target:  domain.OverviewTarget{Repository: "org/repo"},
+	_, err = generator.GenerateOverview(context.Background(), usecase.LLMOverviewPayload{Environment: env, Input: domain.ChangeRequestInput{
+		Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 		RepoURL: "https://example.com/repo.git",
 		Base:    "main",
 		Head:    "feature",

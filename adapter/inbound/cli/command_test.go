@@ -201,10 +201,10 @@ func TestCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
-		return containsLogEvent(logger.events, "info:Pre-usecase input snapshot source=\"cli\" provider=\"github\" repository=\"owner/repo\" changeRequestNumber=9 enableOverview=true enableSuggestions=true.")
+		return containsLogEvent(logger.events, "info:Pre-usecase input snapshot source=\"cli\" repository=\"owner/repo\" changeRequestNumber=9 enableOverview=true enableSuggestions=true.")
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
-		return containsLogEvent(logger.events, "debug:Pre-usecase input details source=\"cli\" action=\"\" base=\"main\" head=\"feature/ref\" comment=true")
+		return containsLogEvent(logger.events, "debug:Pre-usecase input details source=\"cli\" action=\"\" base=\"main\" head=\"feature/ref\"")
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
 		return containsLogEvent(logger.events, "repoURLPresent=true repoURLSafe=\"https://github.com/owner/repo.git\"")

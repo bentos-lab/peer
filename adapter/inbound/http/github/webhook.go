@@ -157,7 +157,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	request := usecase.ChangeRequestRequest{
-		Provider:            "github",
 		Repository:          event.Repository.FullName,
 		RepoURL:             repoURL,
 		ChangeRequestNumber: event.PullRequest.Number,
@@ -165,7 +164,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Description:         event.PullRequest.Body,
 		Base:                base,
 		Head:                head,
-		Comment:             true,
 		EnableOverview:      h.enableOverview && isInitialPROpenedAction(event.Action),
 		EnableSuggestions:   h.enableSuggestions,
 		Metadata: map[string]string{

@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 
+	"bentos-backend/domain"
 	"bentos-backend/usecase"
 )
 
@@ -19,13 +20,11 @@ func NewReviewPublisher(printPublisher usecase.ReviewResultPublisher, commentPub
 
 // Publish routes to comment publisher when PR number is present; otherwise print.
 func (p *ReviewPublisher) Publish(ctx context.Context, result usecase.ReviewPublishResult) error {
-	if result.Target.ChangeRequestNumber > 0 && p.Comment != nil {
-		return p.Comment.Publish(ctx, result)
+	publisher := selectPublisher(result.Target, p.Print, p.Comment)
+	if publisher == nil {
+		return nil
 	}
-	if p.Print != nil {
-		return p.Print.Publish(ctx, result)
-	}
-	return nil
+	return publisher.Publish(ctx, result)
 }
 
 // OverviewPublisher routes overview output to comment or print publishers.
@@ -41,11 +40,22 @@ func NewOverviewPublisher(printPublisher usecase.OverviewPublisher, commentPubli
 
 // PublishOverview routes to comment publisher when PR number is present; otherwise print.
 func (p *OverviewPublisher) PublishOverview(ctx context.Context, req usecase.OverviewPublishRequest) error {
-	if req.Target.ChangeRequestNumber > 0 && p.Comment != nil {
-		return p.Comment.PublishOverview(ctx, req)
+	publisher := selectPublisher(req.Target, p.Print, p.Comment)
+	if publisher == nil {
+		return nil
 	}
-	if p.Print != nil {
-		return p.Print.PublishOverview(ctx, req)
+	return publisher.PublishOverview(ctx, req)
+}
+
+func selectPublisher[T any](target domain.ChangeRequestTarget, printPublisher T, commentPublisher T) T {
+	var zero T
+	if target.ChangeRequestNumber > 0 {
+		if any(commentPublisher) != nil {
+			return commentPublisher
+		}
 	}
-	return nil
+	if any(printPublisher) != nil {
+		return printPublisher
+	}
+	return zero
 }

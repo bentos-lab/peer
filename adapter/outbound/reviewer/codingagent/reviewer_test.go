@@ -105,8 +105,8 @@ func TestReviewerReviewUsesTaskPromptAndNormalizesSuggestedChanges(t *testing.T)
 
 	result, err := reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:      domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:      domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL:     "https://example.com/repo.git",
 			Base:        "main",
 			Head:        "feature",
@@ -191,8 +191,8 @@ func TestReviewerReviewSuggestionsDisabledDoesNotRequireSuggestedChange(t *testi
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:      domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:      domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL:     "https://example.com/repo.git",
 			Base:        "main",
 			Head:        "feature",
@@ -243,8 +243,8 @@ func TestReviewerReviewDropsSuggestedChangeWhenRangeIsInvalid(t *testing.T) {
 
 	result, err := reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:      domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:      domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL:     "https://example.com/repo.git",
 			Base:        "main",
 			Head:        "feature",
@@ -274,8 +274,8 @@ func TestReviewerReviewTaskPromptBaseEmptyUsesHeadFallback(t *testing.T) {
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL: "https://example.com/repo.git",
 			Base:    "",
 			Head:    "feature",
@@ -307,8 +307,8 @@ func TestReviewerReviewTaskPromptHeadEmptyUsesBaseFallback(t *testing.T) {
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL: "https://example.com/repo.git",
 			Base:    "main",
 			Head:    "",
@@ -340,8 +340,8 @@ func TestReviewerReviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *testin
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL: "https://example.com/repo.git",
 			Base:    "",
 			Head:    "",
@@ -372,8 +372,8 @@ func TestReviewerReviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing.T
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL: "https://example.com/repo.git",
 			Base:    "HEAD",
 			Head:    "@staged",
@@ -404,8 +404,8 @@ func TestReviewerReviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL: "https://example.com/repo.git",
 			Base:    "HEAD",
 			Head:    "@all",
@@ -432,8 +432,8 @@ func TestReviewerReviewReturnsErrorWhenEnvironmentMissing(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
-		Input: domain.ReviewInput{
-			Target: domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target: domain.ChangeRequestTarget{Repository: "org/repo"},
 		},
 		RulePack: usecase.RulePack{Instructions: []string{"rule"}},
 	})
@@ -456,8 +456,8 @@ func TestReviewerReviewReturnsErrorWhenDiffContentIsEmpty(t *testing.T) {
 
 	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
 		Environment: env,
-		Input: domain.ReviewInput{
-			Target:  domain.ReviewTarget{Repository: "org/repo"},
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
 			RepoURL: "https://example.com/repo.git",
 			Base:    "main",
 			Head:    "feature",

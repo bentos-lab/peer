@@ -127,10 +127,10 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 	}
 
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, `info:Pre-usecase input snapshot source="webhook" action="opened" provider="github" repository="org/repo" changeRequestNumber=7 enableOverview=true enableSuggestions=true.`)
+		return containsEvent(logger.events, `info:Pre-usecase input snapshot source="webhook" action="opened" repository="org/repo" changeRequestNumber=7 enableOverview=true enableSuggestions=true.`)
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, `debug:Pre-usecase input details source="webhook" action="opened" base="main" head="feature" comment=true`)
+		return containsEvent(logger.events, `debug:Pre-usecase input details source="webhook" action="opened" base="main" head="feature"`)
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
 		return containsEvent(logger.events, `repoURLPresent=true repoURLSafe="https://github.com/org/repo.git"`)

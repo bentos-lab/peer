@@ -131,7 +131,6 @@ func (c *Command) Run(ctx context.Context, params RunParams) error {
 	}
 
 	request := usecase.ChangeRequestRequest{
-		Provider:            provider,
 		Repository:          repository,
 		RepoURL:             repoURL,
 		ChangeRequestNumber: prNumber,
@@ -139,10 +138,8 @@ func (c *Command) Run(ctx context.Context, params RunParams) error {
 		Description:         description,
 		Base:                base,
 		Head:                head,
-		Comment:             params.Comment,
 		EnableOverview:      params.Overview,
 		EnableSuggestions:   params.Suggest,
-		Metadata:            map[string]string{},
 	}
 	if !params.Comment {
 		request.ChangeRequestNumber = 0
@@ -150,21 +147,20 @@ func (c *Command) Run(ctx context.Context, params RunParams) error {
 
 	startedAt := time.Now()
 	c.logger.Infof("CLI review started.")
-	c.logger.Debugf("Provider is %q.", provider)
 	c.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
 	inboundlogging.LogChangeRequestInputSnapshot(c.logger, "cli", "", request)
 
 	_, err = c.changeRequestUseCase.Execute(ctx, request)
 	if err != nil {
 		c.logger.Errorf("CLI review failed.")
-		c.logger.Debugf("The review used provider %q for repository %q and change request %d.", provider, request.Repository, request.ChangeRequestNumber)
+		c.logger.Debugf("The review target was repository %q and change request %d.", request.Repository, request.ChangeRequestNumber)
 		c.logger.Debugf("The CLI review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
 		c.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
 
 	c.logger.Infof("CLI review completed.")
-	c.logger.Debugf("The review used provider %q for repository %q and change request %d.", provider, request.Repository, request.ChangeRequestNumber)
+	c.logger.Debugf("The review target was repository %q and change request %d.", request.Repository, request.ChangeRequestNumber)
 	c.logger.Debugf("The CLI review completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
 }

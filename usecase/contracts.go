@@ -17,7 +17,6 @@ type RulePack struct {
 
 // ChangeRequestRequest is the shared orchestrator input and is platform-neutral.
 type ChangeRequestRequest struct {
-	Provider            string
 	Repository          string
 	RepoURL             string
 	ChangeRequestNumber int
@@ -25,7 +24,6 @@ type ChangeRequestRequest struct {
 	Description         string
 	Base                string
 	Head                string
-	Comment             bool
 	EnableOverview      bool
 	EnableSuggestions   bool
 	Metadata            map[string]string
@@ -38,7 +36,7 @@ type RulePackProvider interface {
 
 // LLMReviewPayload is the complete review prompt payload.
 type LLMReviewPayload struct {
-	Input       domain.ReviewInput
+	Input       domain.ChangeRequestInput
 	RulePack    RulePack
 	Environment uccontracts.CodeEnvironment
 	Suggestions bool
@@ -57,7 +55,7 @@ type LLMReviewer interface {
 
 // LLMOverviewPayload is the complete overview prompt payload.
 type LLMOverviewPayload struct {
-	Input       domain.OverviewInput
+	Input       domain.ChangeRequestInput
 	Environment uccontracts.CodeEnvironment
 }
 
@@ -74,7 +72,7 @@ type LLMOverviewGenerator interface {
 
 // ReviewPublishResult is output passed to a concrete publisher.
 type ReviewPublishResult struct {
-	Target   domain.ReviewTarget
+	Target   domain.ChangeRequestTarget
 	Messages []domain.ReviewMessage
 	Findings []domain.Finding
 	Summary  string
@@ -87,7 +85,7 @@ type ReviewResultPublisher interface {
 
 // OverviewPublishRequest is output passed to a concrete overview publisher.
 type OverviewPublishRequest struct {
-	Target   domain.OverviewTarget
+	Target   domain.ChangeRequestTarget
 	Overview LLMOverviewResult
 	Metadata map[string]string
 }
@@ -99,7 +97,7 @@ type OverviewPublisher interface {
 
 // ReviewRequest is the review-usecase input.
 type ReviewRequest struct {
-	Input       domain.ReviewInput
+	Input       domain.ChangeRequestInput
 	Suggestions bool
 }
 
@@ -117,7 +115,7 @@ type ReviewUseCase interface {
 
 // OverviewRequest is the overview-usecase input.
 type OverviewRequest struct {
-	Input domain.OverviewInput
+	Input domain.ChangeRequestInput
 }
 
 // OverviewExecutionResult is the overview-usecase output.
