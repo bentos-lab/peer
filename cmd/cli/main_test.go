@@ -69,9 +69,11 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 			changeRequestUseCase := &mainTestChangeRequestUseCase{}
 			githubClient := &mainTestGitHubClient{}
 
+			args := append([]string{"review"}, testCase.args...)
+
 			err := runCLI(
 				context.Background(),
-				testCase.args,
+				args,
 				func() (config.Config, error) {
 					return config.Config{
 						LogLevel: "info",
@@ -86,6 +88,9 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				},
 				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.Command, error) {
 					return cliinbound.NewCommand(changeRequestUseCase, githubClient, nil), nil
+				},
+				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+					return nil, nil
 				},
 			)
 			require.NoError(t, err)

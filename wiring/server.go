@@ -12,6 +12,8 @@ import (
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
+	replycommentcodingagent "bentos-backend/adapter/outbound/replycomment/codingagent"
+	replycommentsanitizer "bentos-backend/adapter/outbound/replycomment/sanitizer"
 	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
@@ -99,11 +101,36 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	replyAnswerer, err := replycommentcodingagent.NewAnswerer(replycommentcodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
+	if err != nil {
+		return nil, err
+	}
+	replySanitizer, err := replycommentsanitizer.NewSanitizer(tracedFormatter)
+	if err != nil {
+		return nil, err
+	}
+	replyPublisher := githubpublisher.NewReplyCommentPublisher(ghClient, logger)
+	replyUseCase, err := usecase.NewReplyCommentUseCase(
+		replySanitizer,
+		replyAnswerer,
+		replyPublisher,
+		codeEnvironmentFactory,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return githubinbound.NewHandler(
 		changeRequestUseCase,
+		replyUseCase,
 		ghClient,
 		logger,
 		cfg.Server.GitHub.WebhookSecret,
+		cfg.Server.GitHub.ReplyCommentTriggerName,
 		resolveServerOverviewEnabled(cfg),
 		resolveServerSuggestionsEnabled(cfg),
 	), nil

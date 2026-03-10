@@ -24,6 +24,10 @@ func (e *dummyCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.Code
 	return []domain.ChangedFile{}, nil
 }
 
+func (e *dummyCodeEnvironment) Cleanup(_ context.Context) error {
+	return nil
+}
+
 type dummyCodeEnvironmentFactory struct{}
 
 func (f *dummyCodeEnvironmentFactory) New(_ context.Context, _ domain.CodeEnvironmentInitOptions) (CodeEnvironment, error) {

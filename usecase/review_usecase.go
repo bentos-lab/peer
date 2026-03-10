@@ -67,6 +67,11 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 		logStageFailure(u.logger, "review", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
 		return ReviewExecutionResult{}, err
 	}
+	defer func() {
+		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
+			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+		}
+	}()
 	u.logger.Infof("Code environment initialized.")
 	logStageSuccess(u.logger, "review", "initialize_code_environment", target, initializeEnvironmentStartedAt)
 	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())

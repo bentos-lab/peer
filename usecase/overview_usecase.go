@@ -53,6 +53,11 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 		logStageFailure(u.logger, "overview", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
 		return OverviewExecutionResult{}, err
 	}
+	defer func() {
+		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
+			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+		}
+	}()
 	u.logger.Infof("Code environment initialized.")
 	logStageSuccess(u.logger, "overview", "initialize_code_environment", target, initializeEnvironmentStartedAt)
 	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())

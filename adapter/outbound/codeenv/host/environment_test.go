@@ -764,6 +764,38 @@ func TestHostCodeEnvironment_SetupAgentPropagatesLoggerToHostAgent(t *testing.T)
 	require.Same(t, logger, hostAgent.logger)
 }
 
+func TestHostCodeEnvironment_CleanupRemoteWorkspaceRemovesDir(t *testing.T) {
+	tempDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "tmp.txt"), []byte("data"), 0o644))
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: commandrunner.NewDummyCommandRunner(),
+	})
+	env.workspaceDir = tempDir
+	env.isRemote = true
+
+	err := env.Cleanup(context.Background())
+	require.NoError(t, err)
+	_, statErr := os.Stat(tempDir)
+	require.True(t, os.IsNotExist(statErr))
+}
+
+func TestHostCodeEnvironment_CleanupLocalWorkspaceNoop(t *testing.T) {
+	tempDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "tmp.txt"), []byte("data"), 0o644))
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: commandrunner.NewDummyCommandRunner(),
+	})
+	env.workspaceDir = tempDir
+	env.isRemote = false
+
+	err := env.Cleanup(context.Background())
+	require.NoError(t, err)
+	_, statErr := os.Stat(tempDir)
+	require.NoError(t, statErr)
+}
+
 type hostTestLogger struct {
 	debugLogs []string
 }

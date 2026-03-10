@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildCLICommandBuildsWithCodingAgentWiring(t *testing.T) {
-	command, err := BuildCLICommand(config.Config{
+func TestBuildCLIReviewCommandBuildsWithCodingAgentWiring(t *testing.T) {
+	command, err := BuildCLIReviewCommand(config.Config{
 		LogLevel: "info",
 		OpenAI: config.OpenAIConfig{
 			BaseURL: "openai",
@@ -26,8 +26,8 @@ func TestBuildCLICommandBuildsWithCodingAgentWiring(t *testing.T) {
 	require.NotNil(t, command)
 }
 
-func TestBuildCLICommandRejectsMissingOpenAIAPIKey(t *testing.T) {
-	_, err := BuildCLICommand(config.Config{
+func TestBuildCLIReviewCommandRejectsMissingOpenAIAPIKey(t *testing.T) {
+	_, err := BuildCLIReviewCommand(config.Config{
 		LogLevel: "info",
 		OpenAI: config.OpenAIConfig{
 			BaseURL: "openai",
@@ -44,8 +44,8 @@ func TestBuildCLICommandRejectsMissingOpenAIAPIKey(t *testing.T) {
 	require.Contains(t, err.Error(), "openai API key is required")
 }
 
-func TestBuildCLICommandRejectsMissingCodingAgentModel(t *testing.T) {
-	_, err := BuildCLICommand(config.Config{
+func TestBuildCLIReviewCommandRejectsMissingCodingAgentModel(t *testing.T) {
+	_, err := BuildCLIReviewCommand(config.Config{
 		LogLevel: "info",
 		OpenAI: config.OpenAIConfig{
 			BaseURL: "openai",

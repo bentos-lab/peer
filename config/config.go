@@ -54,10 +54,11 @@ type ServerConfig struct {
 
 // GitHubConfig contains GitHub webhook/app integration settings.
 type GitHubConfig struct {
-	WebhookSecret string
-	AppID         string
-	AppPrivateKey string
-	APIBaseURL    string
+	WebhookSecret           string
+	AppID                   string
+	AppPrivateKey           string
+	APIBaseURL              string
+	ReplyCommentTriggerName string
 }
 
 // Load reads configuration from environment variables.
@@ -96,10 +97,11 @@ func Load() (Config, error) {
 		Server: ServerConfig{
 			Port: envOrDefault("PORT", "8080"),
 			GitHub: GitHubConfig{
-				WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
-				AppID:         os.Getenv("GITHUB_APP_ID"),
-				AppPrivateKey: os.Getenv("GITHUB_APP_PRIVATE_KEY"),
-				APIBaseURL:    envOrDefault("GITHUB_API_BASE_URL", "https://api.github.com"),
+				WebhookSecret:           os.Getenv("GITHUB_WEBHOOK_SECRET"),
+				AppID:                   os.Getenv("GITHUB_APP_ID"),
+				AppPrivateKey:           os.Getenv("GITHUB_APP_PRIVATE_KEY"),
+				APIBaseURL:              envOrDefault("GITHUB_API_BASE_URL", "https://api.github.com"),
+				ReplyCommentTriggerName: envOrDefault("REPLYCOMMENT_TRIGGER_NAME", "autogitbot"),
 			},
 		},
 	}

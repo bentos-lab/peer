@@ -22,6 +22,7 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_ENABLED")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MIN_SEVERITY")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MAX_CANDIDATES")
@@ -52,6 +53,7 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	require.Equal(t, "", cfg.Server.GitHub.AppID)
 	require.Equal(t, "", cfg.Server.GitHub.AppPrivateKey)
 	require.Equal(t, "https://api.github.com", cfg.Server.GitHub.APIBaseURL)
+	require.Equal(t, "autogitbot", cfg.Server.GitHub.ReplyCommentTriggerName)
 	require.False(t, cfg.SuggestedChanges.Enabled)
 	require.Equal(t, "MAJOR", cfg.SuggestedChanges.MinSeverity)
 	require.Equal(t, 50, cfg.SuggestedChanges.MaxCandidates)
@@ -75,6 +77,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_ENABLED")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MIN_SEVERITY")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MAX_CANDIDATES")
@@ -92,7 +95,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=my-model\nOPENAI_API_KEY=env-key\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=my-model\nOPENAI_API_KEY=env-key\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -109,6 +112,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	require.Equal(t, "12345", cfg.Server.GitHub.AppID)
 	require.Equal(t, "-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----", cfg.Server.GitHub.AppPrivateKey)
 	require.Equal(t, "https://github.example.com/api/v3", cfg.Server.GitHub.APIBaseURL)
+	require.Equal(t, "autogit", cfg.Server.GitHub.ReplyCommentTriggerName)
 }
 
 func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
@@ -125,6 +129,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	t.Setenv("GITHUB_APP_ID", "set-app-id")
 	t.Setenv("GITHUB_APP_PRIVATE_KEY", "set-private-key")
 	t.Setenv("GITHUB_API_BASE_URL", "https://set.example.com")
+	t.Setenv("REPLYCOMMENT_TRIGGER_NAME", "set-trigger")
 	t.Setenv("REVIEW_SUGGESTED_CHANGES_ENABLED", "true")
 	t.Setenv("REVIEW_SUGGESTED_CHANGES_MIN_SEVERITY", "CRITICAL")
 	t.Setenv("REVIEW_SUGGESTED_CHANGES_MAX_CANDIDATES", "20")
@@ -142,7 +147,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=from-dotenv\nOPENAI_API_KEY=dotenv-key\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=from-dotenv\nOPENAI_API_KEY=dotenv-key\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -160,6 +165,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	require.Equal(t, "set-app-id", cfg.Server.GitHub.AppID)
 	require.Equal(t, "set-private-key", cfg.Server.GitHub.AppPrivateKey)
 	require.Equal(t, "https://set.example.com", cfg.Server.GitHub.APIBaseURL)
+	require.Equal(t, "set-trigger", cfg.Server.GitHub.ReplyCommentTriggerName)
 	require.True(t, cfg.SuggestedChanges.Enabled)
 	require.Equal(t, "CRITICAL", cfg.SuggestedChanges.MinSeverity)
 	require.Equal(t, 20, cfg.SuggestedChanges.MaxCandidates)
@@ -183,6 +189,7 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_ENABLED")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MIN_SEVERITY")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MAX_CANDIDATES")
@@ -219,6 +226,7 @@ func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_ENABLED")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MIN_SEVERITY")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES_MAX_CANDIDATES")

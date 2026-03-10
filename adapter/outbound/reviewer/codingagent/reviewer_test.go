@@ -43,6 +43,10 @@ func (e *reviewerTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.C
 	return e.changedFiles, nil
 }
 
+func (e *reviewerTestEnvironment) Cleanup(_ context.Context) error {
+	return nil
+}
+
 type reviewerTestFormatter struct {
 	output   map[string]any
 	lastArgs contracts.GenerateParams

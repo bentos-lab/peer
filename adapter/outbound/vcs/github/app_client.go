@@ -183,6 +183,345 @@ func (c *AppClient) CreateReviewComment(ctx context.Context, repository string, 
 	return nil
 }
 
+// CreateReviewReply posts a reply to a review comment thread.
+func (c *AppClient) CreateReviewReply(ctx context.Context, repository string, pullRequestNumber int, commentID int64, body string) error {
+	if pullRequestNumber <= 0 {
+		return fmt.Errorf("pull request number must be positive")
+	}
+	if commentID <= 0 {
+		return fmt.Errorf("comment id must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	payload := map[string]any{
+		"body":        body,
+		"in_reply_to": commentID,
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/comments", c.apiBaseURL, repository, pullRequestNumber)
+	if err := c.requestJSON(ctx, token, http.MethodPost, endpoint, payload, nil); err != nil {
+		return fmt.Errorf("failed to create review reply: %w", err)
+	}
+	return nil
+}
+
+// GetIssueComment loads a single issue comment by ID.
+func (c *AppClient) GetIssueComment(ctx context.Context, repository string, commentID int64) (IssueComment, error) {
+	if commentID <= 0 {
+		return IssueComment{}, fmt.Errorf("comment id must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return IssueComment{}, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return IssueComment{}, err
+	}
+
+	var payload struct {
+		ID        int64  `json:"id"`
+		Body      string `json:"body"`
+		CreatedAt string `json:"created_at"`
+		User      struct {
+			Login string `json:"login"`
+			Type  string `json:"type"`
+		} `json:"user"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/issues/comments/%d", c.apiBaseURL, repository, commentID)
+	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return IssueComment{}, fmt.Errorf("failed to load issue comment: %w", err)
+	}
+	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.CreatedAt))
+	if err != nil {
+		return IssueComment{}, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
+	}
+	return IssueComment{
+		ID:        payload.ID,
+		Body:      payload.Body,
+		Author:    CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		CreatedAt: createdAt,
+	}, nil
+}
+
+// GetReviewComment loads a single review comment by ID.
+func (c *AppClient) GetReviewComment(ctx context.Context, repository string, commentID int64) (ReviewComment, error) {
+	if commentID <= 0 {
+		return ReviewComment{}, fmt.Errorf("comment id must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return ReviewComment{}, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return ReviewComment{}, err
+	}
+
+	var payload struct {
+		ID                int64  `json:"id"`
+		Body              string `json:"body"`
+		CreatedAt         string `json:"created_at"`
+		InReplyToID       int64  `json:"in_reply_to_id"`
+		Path              string `json:"path"`
+		DiffHunk          string `json:"diff_hunk"`
+		Line              int    `json:"line"`
+		OriginalLine      int    `json:"original_line"`
+		StartLine         int    `json:"start_line"`
+		OriginalStartLine int    `json:"original_start_line"`
+		Side              string `json:"side"`
+		StartSide         string `json:"start_side"`
+		CommitID          string `json:"commit_id"`
+		ReviewID          int64  `json:"pull_request_review_id"`
+		User              struct {
+			Login string `json:"login"`
+			Type  string `json:"type"`
+		} `json:"user"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/pulls/comments/%d", c.apiBaseURL, repository, commentID)
+	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return ReviewComment{}, fmt.Errorf("failed to load review comment: %w", err)
+	}
+	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.CreatedAt))
+	if err != nil {
+		return ReviewComment{}, fmt.Errorf("failed to parse review comment timestamp: %w", err)
+	}
+	return ReviewComment{
+		ID:                payload.ID,
+		Body:              payload.Body,
+		Author:            CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		CreatedAt:         createdAt,
+		InReplyToID:       payload.InReplyToID,
+		Path:              payload.Path,
+		DiffHunk:          payload.DiffHunk,
+		Line:              payload.Line,
+		OriginalLine:      payload.OriginalLine,
+		StartLine:         payload.StartLine,
+		OriginalStartLine: payload.OriginalStartLine,
+		Side:              payload.Side,
+		StartSide:         payload.StartSide,
+		CommitID:          payload.CommitID,
+		ReviewID:          payload.ReviewID,
+	}, nil
+}
+
+// ListIssueComments loads issue comments for a pull request.
+func (c *AppClient) ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]IssueComment, error) {
+	if pullRequestNumber <= 0 {
+		return nil, fmt.Errorf("pull request number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return nil, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comments := make([]IssueComment, 0)
+	page := 1
+	for {
+		endpoint := fmt.Sprintf("%s/repos/%s/issues/%d/comments?per_page=100&page=%d", c.apiBaseURL, repository, pullRequestNumber, page)
+		var payload []struct {
+			ID        int64  `json:"id"`
+			Body      string `json:"body"`
+			CreatedAt string `json:"created_at"`
+			User      struct {
+				Login string `json:"login"`
+				Type  string `json:"type"`
+			} `json:"user"`
+		}
+		if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+			return nil, fmt.Errorf("failed to load issue comments: %w", err)
+		}
+		for _, item := range payload {
+			createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(item.CreatedAt))
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
+			}
+			comments = append(comments, IssueComment{
+				ID:        item.ID,
+				Body:      item.Body,
+				Author:    CommentAuthor{Login: item.User.Login, Type: item.User.Type},
+				CreatedAt: createdAt,
+			})
+		}
+		if len(payload) < 100 {
+			break
+		}
+		page++
+	}
+	return comments, nil
+}
+
+// ListReviewComments loads review comments for a pull request.
+func (c *AppClient) ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]ReviewComment, error) {
+	if pullRequestNumber <= 0 {
+		return nil, fmt.Errorf("pull request number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return nil, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	comments := make([]ReviewComment, 0)
+	page := 1
+	for {
+		endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/comments?per_page=100&page=%d", c.apiBaseURL, repository, pullRequestNumber, page)
+		var payload []struct {
+			ID                int64  `json:"id"`
+			Body              string `json:"body"`
+			CreatedAt         string `json:"created_at"`
+			InReplyToID       int64  `json:"in_reply_to_id"`
+			Path              string `json:"path"`
+			DiffHunk          string `json:"diff_hunk"`
+			Line              int    `json:"line"`
+			OriginalLine      int    `json:"original_line"`
+			StartLine         int    `json:"start_line"`
+			OriginalStartLine int    `json:"original_start_line"`
+			Side              string `json:"side"`
+			StartSide         string `json:"start_side"`
+			CommitID          string `json:"commit_id"`
+			ReviewID          int64  `json:"pull_request_review_id"`
+			User              struct {
+				Login string `json:"login"`
+				Type  string `json:"type"`
+			} `json:"user"`
+		}
+		if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+			return nil, fmt.Errorf("failed to load review comments: %w", err)
+		}
+		for _, item := range payload {
+			createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(item.CreatedAt))
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse review comment timestamp: %w", err)
+			}
+			comments = append(comments, ReviewComment{
+				ID:                item.ID,
+				Body:              item.Body,
+				Author:            CommentAuthor{Login: item.User.Login, Type: item.User.Type},
+				CreatedAt:         createdAt,
+				InReplyToID:       item.InReplyToID,
+				Path:              item.Path,
+				DiffHunk:          item.DiffHunk,
+				Line:              item.Line,
+				OriginalLine:      item.OriginalLine,
+				StartLine:         item.StartLine,
+				OriginalStartLine: item.OriginalStartLine,
+				Side:              item.Side,
+				StartSide:         item.StartSide,
+				CommitID:          item.CommitID,
+				ReviewID:          item.ReviewID,
+			})
+		}
+		if len(payload) < 100 {
+			break
+		}
+		page++
+	}
+	return comments, nil
+}
+
+// GetPullRequestReview loads a pull request review summary.
+func (c *AppClient) GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (PullRequestReviewSummary, error) {
+	if pullRequestNumber <= 0 {
+		return PullRequestReviewSummary{}, fmt.Errorf("pull request number must be positive")
+	}
+	if reviewID <= 0 {
+		return PullRequestReviewSummary{}, fmt.Errorf("review id must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return PullRequestReviewSummary{}, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return PullRequestReviewSummary{}, err
+	}
+
+	var payload struct {
+		ID    int64  `json:"id"`
+		Body  string `json:"body"`
+		State string `json:"state"`
+		User  struct {
+			Login string `json:"login"`
+			Type  string `json:"type"`
+		} `json:"user"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/reviews/%d", c.apiBaseURL, repository, pullRequestNumber, reviewID)
+	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return PullRequestReviewSummary{}, fmt.Errorf("failed to load pull request review: %w", err)
+	}
+	return PullRequestReviewSummary{
+		ID:    payload.ID,
+		Body:  strings.TrimSpace(payload.Body),
+		State: strings.TrimSpace(payload.State),
+		User:  CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+	}, nil
+}
+
+// GetPullRequestInfo loads title/body/base/head for a pull request.
+func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (PullRequestInfo, error) {
+	if pullRequestNumber <= 0 {
+		return PullRequestInfo{}, fmt.Errorf("pull request number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return PullRequestInfo{}, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return PullRequestInfo{}, err
+	}
+
+	var payload struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Base  struct {
+			Ref string `json:"ref"`
+			SHA string `json:"sha"`
+		} `json:"base"`
+		Head struct {
+			Ref string `json:"ref"`
+			SHA string `json:"sha"`
+		} `json:"head"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d", c.apiBaseURL, repository, pullRequestNumber)
+	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return PullRequestInfo{}, fmt.Errorf("failed to load pull request metadata: %w", err)
+	}
+	base := strings.TrimSpace(payload.Base.SHA)
+	if base == "" {
+		base = strings.TrimSpace(payload.Base.Ref)
+	}
+	head := strings.TrimSpace(payload.Head.SHA)
+	if head == "" {
+		head = strings.TrimSpace(payload.Head.Ref)
+	}
+	if base == "" || head == "" {
+		return PullRequestInfo{}, fmt.Errorf("failed to resolve pull request base/head refs")
+	}
+	return PullRequestInfo{
+		Repository:  repository,
+		Number:      pullRequestNumber,
+		Title:       strings.TrimSpace(payload.Title),
+		Description: strings.TrimSpace(payload.Body),
+		BaseRef:     base,
+		HeadRef:     head,
+	}, nil
+}
+
 func (c *AppClient) getPullRequestHeadSHA(ctx context.Context, token string, repository string, pullRequestNumber int) (string, error) {
 	var payload struct {
 		Head struct {

@@ -81,7 +81,9 @@ Examples:
 
 ```bash
 go run ./cmd/server
-go run ./cmd/server --log-level warning
+go run ./cmd/server -v
+go run ./cmd/server -vv
+go run ./cmd/server -vvv
 ```
 
 Webhook routes:
@@ -105,6 +107,9 @@ For each trigger, the service:
 
 ```bash
 go run ./cmd/cli --provider github
+go run ./cmd/cli --provider github -v
+go run ./cmd/cli --provider github -vv
+go run ./cmd/cli --provider github -vvv
 go run ./cmd/cli --provider github --repo org/repo
 go run ./cmd/cli --provider github --repo https://github.com/org/repo.git
 go run ./cmd/cli --provider github --repo git@github.com:org/repo.git
@@ -122,6 +127,7 @@ CLI notes:
 
 - CLI uses authenticated GitHub CLI (`gh auth login`) for repo/PR resolution.
 - `--provider` currently supports only `github`.
+- `-v/-vv/-vvv` sets log verbosity to info/debug/trace.
 - `--repo` supports:
   - `owner/repo`
   - `https://github.com/owner/repo.git` (or `http://...`)

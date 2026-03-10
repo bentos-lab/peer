@@ -144,6 +144,18 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 	return files, nil
 }
 
+// Cleanup removes any temporary workspace created for remote repositories.
+func (e *HostCodeEnvironment) Cleanup(_ context.Context) error {
+	if !e.isRemote {
+		return nil
+	}
+	workspaceDir := strings.TrimSpace(e.workspaceDir)
+	if workspaceDir == "" {
+		return nil
+	}
+	return os.RemoveAll(workspaceDir)
+}
+
 func (e *HostCodeEnvironment) verifyLocalRefExists(ctx context.Context, workspaceDir string, ref string) error {
 	_, err := e.git(ctx, workspaceDir, "rev-parse", "--verify", fmt.Sprintf("%s^{commit}", ref))
 	if err != nil {

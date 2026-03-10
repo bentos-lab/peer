@@ -2,14 +2,16 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"bentos-backend/config"
+	sharedcli "bentos-backend/shared/cli"
 	"bentos-backend/wiring"
+
+	"github.com/spf13/pflag"
 )
 
 type loadConfigFunc func() (config.Config, error)
@@ -42,10 +44,12 @@ func (e serverConfigLoadError) Is(target error) bool {
 
 // main bootstraps webhook handlers for GitHub.
 func main() {
-	logLevel := flag.String("log-level", "", "log level override: trace|debug|info|warning|error|silence")
-	flag.Parse()
+	var verbosity int
+	pflag.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace)")
+	pflag.Parse()
 
-	if err := runServer(*logLevel, defaultServerDeps()); err != nil {
+	logLevelOverride := sharedcli.LogLevelOverrideFromVerbosity(verbosity)
+	if err := runServer(logLevelOverride, defaultServerDeps()); err != nil {
 		if errors.Is(err, errServerConfigLoad) {
 			log.Printf("server startup failed: %v", err)
 		}

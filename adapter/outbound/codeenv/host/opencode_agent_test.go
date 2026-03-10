@@ -138,8 +138,8 @@ func TestHostOpencodeAgentRunParsesOpencodeTextPartEvents(t *testing.T) {
 	require.Equal(t, "Hello! How can I help you today?", result.Text)
 	require.NoError(t, runner.VerifyDone())
 	traceContent := strings.Join(logger.traceLogs, "\n")
-	require.Contains(t, traceContent, `action="agent started step"`)
-	require.Contains(t, traceContent, `action="agent finished step reason=stop"`)
+	require.Contains(t, traceContent, `action="agent produced assistant message"`)
+	require.Contains(t, traceContent, `action="agent finalized assistant transcript"`)
 }
 
 func TestHostOpencodeAgentRunReturnsErrorWhenJSONIsMalformed(t *testing.T) {

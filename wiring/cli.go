@@ -15,6 +15,8 @@ import (
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
 	routerpublisher "bentos-backend/adapter/outbound/publisher/router"
+	replycommentcodingagent "bentos-backend/adapter/outbound/replycomment/codingagent"
+	replycommentsanitizer "bentos-backend/adapter/outbound/replycomment/sanitizer"
 	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
@@ -29,8 +31,8 @@ type CLILLMOptions struct {
 	OpenAIAPIKey  string
 }
 
-// BuildCLICommand wires dependencies for a single CLI review mode.
-func BuildCLICommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.Command, error) {
+// BuildCLIReviewCommand wires dependencies for a single CLI review mode.
+func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.Command, error) {
 	llmConfig, err := resolveCLILLMConfig(cfg, opts)
 	if err != nil {
 		return nil, err
@@ -104,6 +106,57 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, logLevelOverride str
 	}
 
 	return cliinbound.NewCommand(changeRequestUseCase, githubClient, logger), nil
+}
+
+// BuildCLIReplyCommentCommand wires dependencies for CLI replycomment mode.
+func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.ReplyCommentCommand, error) {
+	llmConfig, err := resolveCLILLMConfig(cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+	logger, err := buildLogger(cfg, logLevelOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := &http.Client{Timeout: 600 * time.Second}
+	llmClient := openai.NewClient(httpClient, llmConfig)
+	tracedLLMClient := llmtracing.NewGenerator(llmClient, logger)
+
+	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
+		Logger: logger,
+	})
+	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
+	answerer, err := replycommentcodingagent.NewAnswerer(replycommentcodingagent.Config{
+		Agent:    codingAgentConfig.Agent,
+		Provider: codingAgentConfig.Provider,
+		Model:    codingAgentConfig.Model,
+	}, logger)
+	if err != nil {
+		return nil, err
+	}
+	sanitizer, err := replycommentsanitizer.NewSanitizer(tracedLLMClient)
+	if err != nil {
+		return nil, err
+	}
+
+	githubClient := githubvcs.NewCLIClient()
+	publisher := routerpublisher.NewReplyCommentPublisher(
+		clipublisher.NewReplyCommentPublisher(os.Stdout),
+		githubpublisher.NewReplyCommentPublisher(githubClient, logger),
+	)
+	replyCommentUseCase, err := usecase.NewReplyCommentUseCase(
+		sanitizer,
+		answerer,
+		publisher,
+		codeEnvironmentFactory,
+		logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return cliinbound.NewReplyCommentCommand(replyCommentUseCase, githubClient, cfg.Server.GitHub.ReplyCommentTriggerName), nil
 }
 
 func resolveCLILLMConfig(cfg config.Config, opts CLILLMOptions) (openai.ClientConfig, error) {

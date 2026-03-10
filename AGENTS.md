@@ -51,6 +51,7 @@
 - For enum, try using `type XXXEnum string.` Then define enum in the new type.
 - Keep shared contracts/value types (for example enums used by both usecase and adapters) in `domain`; do not place them in `usecase` DTOs and then import them back into adapters.
 - Before implementation, validate all guidelines and design decisions against Clean Architecture and SOLID principles.
+- All function/method name must be neutral if is is posible.
 
 
 ## Testing Guidelines

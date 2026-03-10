@@ -43,6 +43,10 @@ func (e *overviewTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.C
 	return e.changedFiles, nil
 }
 
+func (e *overviewTestEnvironment) Cleanup(_ context.Context) error {
+	return nil
+}
+
 type overviewTestFormatter struct {
 	output   map[string]any
 	lastArgs contracts.GenerateParams

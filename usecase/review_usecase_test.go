@@ -51,7 +51,10 @@ func (p *reviewUseCaseTestPublisher) Publish(_ context.Context, result ReviewPub
 	return p.err
 }
 
-type reviewUseCaseTestEnvironment struct{}
+type reviewUseCaseTestEnvironment struct {
+	cleanupCalls int
+	cleanupErr   error
+}
 
 func (e *reviewUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (uccontracts.CodingAgent, error) {
 	return nil, errors.New("not implemented")
@@ -59,6 +62,11 @@ func (e *reviewUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.Co
 
 func (e *reviewUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (e *reviewUseCaseTestEnvironment) Cleanup(_ context.Context) error {
+	e.cleanupCalls++
+	return e.cleanupErr
 }
 
 type reviewUseCaseTestEnvironmentFactory struct {
@@ -178,4 +186,60 @@ func TestReviewUseCaseExecutePassesSuggestionsDisabledToReviewer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, reviewer.callCount)
 	require.False(t, reviewer.lastPayload.Suggestions)
+}
+
+func TestReviewUseCaseExecuteCleansUpEnvironmentOnSuccess(t *testing.T) {
+	environment := &reviewUseCaseTestEnvironment{}
+	factory := &reviewUseCaseTestEnvironmentFactory{environment: environment}
+	reviewer := &reviewUseCaseTestReviewer{
+		result: LLMReviewResult{
+			Summary:  "summary",
+			Findings: []domain.Finding{},
+		},
+	}
+	useCase, err := NewReviewUseCase(
+		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
+		reviewer,
+		&reviewUseCaseTestPublisher{},
+		factory,
+		nil,
+	)
+	require.NoError(t, err)
+
+	_, err = useCase.Execute(context.Background(), ReviewRequest{
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+			RepoURL: "https://github.com/org/repo.git",
+			Base:    "main",
+			Head:    "feature",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, environment.cleanupCalls)
+}
+
+func TestReviewUseCaseExecuteCleansUpEnvironmentOnReviewerError(t *testing.T) {
+	environment := &reviewUseCaseTestEnvironment{}
+	factory := &reviewUseCaseTestEnvironmentFactory{environment: environment}
+	reviewer := &reviewUseCaseTestReviewer{err: errors.New("review failed")}
+	useCase, err := NewReviewUseCase(
+		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
+		reviewer,
+		&reviewUseCaseTestPublisher{},
+		factory,
+		nil,
+	)
+	require.NoError(t, err)
+
+	_, err = useCase.Execute(context.Background(), ReviewRequest{
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+			RepoURL: "https://github.com/org/repo.git",
+			Base:    "main",
+			Head:    "feature",
+		},
+	})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "review failed")
+	require.Equal(t, 1, environment.cleanupCalls)
 }
