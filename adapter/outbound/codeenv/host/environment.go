@@ -11,7 +11,6 @@ import (
 
 	"bentos-backend/adapter/outbound/commandrunner"
 	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 )
@@ -41,56 +40,21 @@ type HostCodeEnvironment struct {
 const hostCodeEnvironmentTempBaseDirName = ".sisutmp"
 const hostCodeEnvironmentFetchedRefPrefix = "refs/bentos/fetched/"
 
-// NewHostCodeEnvironment creates a host-backed code environment.
-func NewHostCodeEnvironment() *HostCodeEnvironment {
-	return NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
-		Runner:      commandrunner.NewOSCommandRunner(),
-		AgentRunner: commandrunner.NewOSStreamCommandRunner(),
-		Getwd:       os.Getwd,
-		MakeTempDir: newHostCodeEnvironmentTempDirMaker(os.UserHomeDir),
-		Logger:      stdlogger.Nop(),
-	})
-}
-
-// NewHostCodeEnvironmentWithLogger creates a host-backed code environment with the provided logger.
-func NewHostCodeEnvironmentWithLogger(logger usecase.Logger) *HostCodeEnvironment {
-	return NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
-		Runner:      commandrunner.NewOSCommandRunner(),
-		AgentRunner: commandrunner.NewOSStreamCommandRunner(),
-		Getwd:       os.Getwd,
-		MakeTempDir: newHostCodeEnvironmentTempDirMaker(os.UserHomeDir),
-		Logger:      logger,
-	})
-}
-
-// NewHostCodeEnvironmentWithConfig creates a host environment with injected dependencies.
-func NewHostCodeEnvironmentWithConfig(cfg HostCodeEnvironmentConfig) *HostCodeEnvironment {
-	runner := cfg.Runner
-	if runner == nil {
-		runner = commandrunner.NewOSCommandRunner()
-	}
-	agentRunner := cfg.AgentRunner
-	if agentRunner == nil {
-		agentRunner = commandrunner.NewOSStreamCommandRunner()
-	}
-	getwd := cfg.Getwd
-	if getwd == nil {
-		getwd = os.Getwd
-	}
-	makeTempDir := cfg.MakeTempDir
-	if makeTempDir == nil {
-		makeTempDir = newHostCodeEnvironmentTempDirMaker(os.UserHomeDir)
-	}
-	logger := cfg.Logger
-	if logger == nil {
-		logger = stdlogger.Nop()
-	}
+// NewHostCodeEnvironment creates a host environment with injected dependencies.
+func NewHostCodeEnvironment(cfg HostCodeEnvironmentConfig) *HostCodeEnvironment {
+	defaults := resolveHostDefaults(
+		cfg.Runner,
+		cfg.AgentRunner,
+		cfg.Getwd,
+		cfg.MakeTempDir,
+		cfg.Logger,
+	)
 	return &HostCodeEnvironment{
-		runner:       runner,
-		agentRunner:  agentRunner,
-		getwd:        getwd,
-		makeTempDir:  makeTempDir,
-		logger:       logger,
+		runner:       defaults.runner,
+		agentRunner:  defaults.agentRunner,
+		getwd:        defaults.getwd,
+		makeTempDir:  defaults.makeTempDir,
+		logger:       defaults.logger,
 		workspaceDir: strings.TrimSpace(cfg.WorkspaceDir),
 		isRemote:     cfg.IsRemote,
 	}
@@ -140,59 +104,22 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 
 	base := strings.TrimSpace(opts.Base)
 	head := strings.TrimSpace(opts.Head)
-	resolvedBase := base
-	resolvedHead := head
-	mergeBase := resolvedBase
+	resolvedBase, resolvedHead, mergeBase, err := e.resolveDiffRefs(ctx, workspaceDir, base, head)
+	if err != nil {
+		return nil, err
+	}
 	if !isWorkspaceTokenRef(head) {
-		if resolvedBase == "" {
-			resolvedBase = "HEAD"
-		}
-		var resolveErr error
-		resolvedBase, resolveErr = e.resolveRef(ctx, workspaceDir, resolvedBase)
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-		resolvedHead, resolveErr = e.resolveRef(ctx, workspaceDir, resolvedHead)
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-
-		mergeBase, resolveErr = e.mergeBase(ctx, workspaceDir, resolvedBase, resolvedHead)
-		if resolveErr != nil {
-			return nil, resolveErr
-		}
-
 		e.logger.Debugf("LoadChangedFiles: base=%s (resolved=%s), head=%s (resolved=%s), mergeBase=%s, workspaceDir=%s", base, resolvedBase, head, resolvedHead, mergeBase, workspaceDir)
 	}
 
-	var paths []string
-	switch head {
-	case "", "@staged":
-		paths, err = e.listChangedPaths(ctx, workspaceDir, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB")
-	case "@all":
-		staged, listErr := e.listChangedPaths(ctx, workspaceDir, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB")
-		if listErr != nil {
-			return nil, listErr
-		}
-		unstaged, listErr := e.listChangedPaths(ctx, workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB")
-		if listErr != nil {
-			return nil, listErr
-		}
-		untracked, listErr := e.listChangedPaths(ctx, workspaceDir, "ls-files", "--others", "--exclude-standard")
-		if listErr != nil {
-			return nil, listErr
-		}
-		paths = dedupePaths(append(append(staged, unstaged...), untracked...))
-	default:
-		paths, err = e.listChangedPaths(ctx, workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB", fmt.Sprintf("%s..%s", mergeBase, resolvedHead))
-	}
+	paths, err := e.collectChangedPaths(ctx, workspaceDir, head, mergeBase, resolvedHead)
 	if err != nil {
 		return nil, err
 	}
 
 	files := make([]domain.ChangedFile, 0, len(paths))
 	for _, path := range paths {
-		content, readErr := e.readPathContent(ctx, workspaceDir, path, resolvedBase, resolvedHead)
+		content, readErr := e.readPathContent(ctx, workspaceDir, path, resolvedHead)
 		if readErr != nil {
 			return nil, readErr
 		}
@@ -218,9 +145,9 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 }
 
 func (e *HostCodeEnvironment) verifyLocalRefExists(ctx context.Context, workspaceDir string, ref string) error {
-	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "rev-parse", "--verify", fmt.Sprintf("%s^{commit}", ref))
+	_, err := e.git(ctx, workspaceDir, "rev-parse", "--verify", fmt.Sprintf("%s^{commit}", ref))
 	if err != nil {
-		return fmt.Errorf("failed to verify ref %q: %w", ref, formatCommandError(err, result))
+		return fmt.Errorf("failed to verify ref %q: %w", ref, err)
 	}
 	return nil
 }
@@ -284,9 +211,9 @@ func (e *HostCodeEnvironment) syncRef(ctx context.Context, workspaceDir string, 
 	}
 
 	e.logger.Debugf("Syncing ref: requested=%s, resolved=%s", headRef, resolvedHeadRef)
-	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "checkout", resolvedHeadRef)
+	_, err = e.git(ctx, workspaceDir, "checkout", resolvedHeadRef)
 	if err != nil {
-		return fmt.Errorf("failed to checkout ref %q: %w", resolvedHeadRef, formatCommandError(err, result))
+		return fmt.Errorf("failed to checkout ref %q: %w", resolvedHeadRef, err)
 	}
 
 	currentHead, headErr = e.getCurrentHead(ctx, workspaceDir)
@@ -360,9 +287,9 @@ func isWorkspaceTokenRef(ref string) bool {
 }
 
 func (e *HostCodeEnvironment) listChangedPaths(ctx context.Context, workspaceDir string, args ...string) ([]string, error) {
-	result, err := e.runner.Run(ctx, "git", append([]string{"-C", workspaceDir}, args...)...)
+	result, err := e.git(ctx, workspaceDir, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list changed paths: %w", formatCommandError(err, result))
+		return nil, fmt.Errorf("failed to list changed paths: %w", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(result.Stdout)), "\n")
 	paths := make([]string, 0, len(lines))
@@ -376,7 +303,7 @@ func (e *HostCodeEnvironment) listChangedPaths(ctx context.Context, workspaceDir
 	return paths, nil
 }
 
-func (e *HostCodeEnvironment) readPathContent(ctx context.Context, workspaceDir string, path string, base string, head string) (string, error) {
+func (e *HostCodeEnvironment) readPathContent(ctx context.Context, workspaceDir string, path string, head string) (string, error) {
 	if isWorkspaceTokenRef(head) {
 		raw, err := os.ReadFile(filepath.Join(workspaceDir, path))
 		if err == nil {
@@ -385,31 +312,31 @@ func (e *HostCodeEnvironment) readPathContent(ctx context.Context, workspaceDir 
 		e.logger.Debugf("Failed to read file %s from workspace: %v", path, err)
 
 		// For staged content that is missing from the working tree, read from index.
-		result, showErr := e.runner.Run(ctx, "git", "-C", workspaceDir, "show", fmt.Sprintf(":%s", path))
+		result, showErr := e.git(ctx, workspaceDir, "show", fmt.Sprintf(":%s", path))
 		if showErr != nil {
-			return "", fmt.Errorf("failed to read file content for %q: %w (index fallback failed: %v)", path, err, formatCommandError(showErr, result))
+			return "", fmt.Errorf("failed to read file content for %q: %w (index fallback failed: %v)", path, err, showErr)
 		}
 		return strings.TrimSpace(string(result.Stdout)), nil
 	}
-	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "show", fmt.Sprintf("%s:%s", head, path))
+	result, err := e.git(ctx, workspaceDir, "show", fmt.Sprintf("%s:%s", head, path))
 	if err != nil {
-		return "", fmt.Errorf("failed to read file content for %q at ref %q: %w", path, head, formatCommandError(err, result))
+		return "", fmt.Errorf("failed to read file content for %q at ref %q: %w", path, head, err)
 	}
 	return strings.TrimSpace(string(result.Stdout)), nil
 }
 
 func (e *HostCodeEnvironment) getCurrentHead(ctx context.Context, workspaceDir string) (string, error) {
-	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "rev-parse", "HEAD")
+	result, err := e.git(ctx, workspaceDir, "rev-parse", "HEAD")
 	if err != nil {
-		return "", formatCommandError(err, result)
+		return "", err
 	}
 	return strings.TrimSpace(string(result.Stdout)), nil
 }
 
 func (e *HostCodeEnvironment) mergeBase(ctx context.Context, workspaceDir string, base string, head string) (string, error) {
-	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "merge-base", base, head)
+	result, err := e.git(ctx, workspaceDir, "merge-base", base, head)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve merge-base for %q and %q: %w", base, head, formatCommandError(err, result))
+		return "", fmt.Errorf("failed to resolve merge-base for %q and %q: %w", base, head, err)
 	}
 	mergeBase := strings.TrimSpace(string(result.Stdout))
 	if mergeBase == "" {
@@ -422,15 +349,15 @@ func (e *HostCodeEnvironment) diffForPath(ctx context.Context, workspaceDir stri
 	var args []string
 	switch strings.TrimSpace(head) {
 	case "", "@staged":
-		args = []string{"-C", workspaceDir, "diff", "--cached", "--", path}
+		args = []string{"diff", "--cached", "--", path}
 	case "@all":
-		stagedResult, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "diff", "--cached", "--", path)
+		stagedResult, err := e.git(ctx, workspaceDir, "diff", "--cached", "--", path)
 		if err != nil {
-			return "", fmt.Errorf("failed to get staged diff for %q: %w", path, formatCommandError(err, stagedResult))
+			return "", fmt.Errorf("failed to get staged diff for %q: %w", path, err)
 		}
-		unstagedResult, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "diff", "--", path)
+		unstagedResult, err := e.git(ctx, workspaceDir, "diff", "--", path)
 		if err != nil {
-			return "", fmt.Errorf("failed to get unstaged diff for %q: %w", path, formatCommandError(err, unstagedResult))
+			return "", fmt.Errorf("failed to get unstaged diff for %q: %w", path, err)
 		}
 		staged := strings.TrimSpace(string(stagedResult.Stdout))
 		unstaged := strings.TrimSpace(string(unstagedResult.Stdout))
@@ -445,11 +372,11 @@ func (e *HostCodeEnvironment) diffForPath(ctx context.Context, workspaceDir stri
 		if strings.TrimSpace(base) == "" {
 			base = "HEAD"
 		}
-		args = []string{"-C", workspaceDir, "diff", fmt.Sprintf("%s..%s", base, head), "--", path}
+		args = []string{"diff", fmt.Sprintf("%s..%s", base, head), "--", path}
 	}
-	result, err := e.runner.Run(ctx, "git", args...)
+	result, err := e.git(ctx, workspaceDir, args...)
 	if err != nil {
-		return "", fmt.Errorf("failed to get diff for %q: %w", path, formatCommandError(err, result))
+		return "", fmt.Errorf("failed to get diff for %q: %w", path, err)
 	}
 	return strings.TrimSpace(string(result.Stdout)), nil
 }
@@ -479,6 +406,68 @@ func formatCommandError(err error, result commandrunner.Result) error {
 	}
 
 	return err
+}
+
+func (e *HostCodeEnvironment) resolveDiffRefs(ctx context.Context, workspaceDir string, base string, head string) (string, string, string, error) {
+	base = strings.TrimSpace(base)
+	head = strings.TrimSpace(head)
+	resolvedBase := base
+	resolvedHead := head
+	mergeBase := resolvedBase
+	if isWorkspaceTokenRef(head) {
+		return resolvedBase, resolvedHead, mergeBase, nil
+	}
+
+	if resolvedBase == "" {
+		resolvedBase = "HEAD"
+	}
+	var resolveErr error
+	resolvedBase, resolveErr = e.resolveRef(ctx, workspaceDir, resolvedBase)
+	if resolveErr != nil {
+		return "", "", "", resolveErr
+	}
+	resolvedHead, resolveErr = e.resolveRef(ctx, workspaceDir, resolvedHead)
+	if resolveErr != nil {
+		return "", "", "", resolveErr
+	}
+
+	mergeBase, resolveErr = e.mergeBase(ctx, workspaceDir, resolvedBase, resolvedHead)
+	if resolveErr != nil {
+		return "", "", "", resolveErr
+	}
+
+	return resolvedBase, resolvedHead, mergeBase, nil
+}
+
+func (e *HostCodeEnvironment) collectChangedPaths(ctx context.Context, workspaceDir string, head string, mergeBase string, resolvedHead string) ([]string, error) {
+	switch head {
+	case "", "@staged":
+		return e.listChangedPaths(ctx, workspaceDir, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB")
+	case "@all":
+		staged, err := e.listChangedPaths(ctx, workspaceDir, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB")
+		if err != nil {
+			return nil, err
+		}
+		unstaged, err := e.listChangedPaths(ctx, workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB")
+		if err != nil {
+			return nil, err
+		}
+		untracked, err := e.listChangedPaths(ctx, workspaceDir, "ls-files", "--others", "--exclude-standard")
+		if err != nil {
+			return nil, err
+		}
+		return dedupePaths(append(append(staged, unstaged...), untracked...)), nil
+	default:
+		return e.listChangedPaths(ctx, workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB", fmt.Sprintf("%s..%s", mergeBase, resolvedHead))
+	}
+}
+
+func (e *HostCodeEnvironment) git(ctx context.Context, workspaceDir string, args ...string) (commandrunner.Result, error) {
+	result, err := e.runner.Run(ctx, "git", append([]string{"-C", workspaceDir}, args...)...)
+	if err != nil {
+		return result, formatCommandError(err, result)
+	}
+	return result, nil
 }
 
 func newHostCodeEnvironmentTempDirMaker(userHomeDir func() (string, error)) func() (string, error) {

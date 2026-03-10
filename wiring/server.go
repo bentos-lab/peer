@@ -39,7 +39,9 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	}
 	formatterClient := openai.NewClient(&http.Client{Timeout: serverLLMTimeout}, openAIConfig)
 	tracedFormatter := llmtracing.NewGenerator(formatterClient, logger)
-	codeEnvironmentFactory := codeenvhost.NewFactory(logger)
+	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
+		Logger: logger,
+	})
 	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
 
 	codingReviewer, err := reviewercodingagent.NewReviewer(tracedFormatter, reviewercodingagent.Config{

@@ -20,7 +20,7 @@ func TestFactoryNewRemoteWorkspacePreparesClone(t *testing.T) {
 		Result: commandrunner.Result{Stdout: []byte("cloned")},
 	})
 
-	factory := NewFactoryWithConfig(FactoryConfig{
+	factory := NewFactory(FactoryConfig{
 		Runner: runner,
 		MakeTempDir: func() (string, error) {
 			return "/home/test/.sisutmp/workspace-1", nil
@@ -37,7 +37,7 @@ func TestFactoryNewRemoteWorkspacePreparesClone(t *testing.T) {
 
 func TestFactoryNewLocalWorkspaceUsesCurrentDirectory(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
-	factory := NewFactoryWithConfig(FactoryConfig{
+	factory := NewFactory(FactoryConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil

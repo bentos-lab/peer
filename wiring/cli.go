@@ -43,7 +43,9 @@ func BuildCLICommand(cfg config.Config, opts CLILLMOptions, logLevelOverride str
 	httpClient := &http.Client{Timeout: 600 * time.Second}
 	llmClient := openai.NewClient(httpClient, llmConfig)
 	tracedLLMClient := llmtracing.NewGenerator(llmClient, logger)
-	codeEnvironmentFactory := codeenvhost.NewFactory(logger)
+	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
+		Logger: logger,
+	})
 	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
 	codingReviewer, err := reviewercodingagent.NewReviewer(tracedLLMClient, reviewercodingagent.Config{
 		Agent:    codingAgentConfig.Agent,

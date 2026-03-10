@@ -61,3 +61,9 @@
 - Only test exported/public functions and methods; validate private logic through public APIs.
 - Tests should match the structure and naming of the source files.
 - Pure test additions or fixes generally do NOT require a changelog entry, unless they affect user-facing behavior or the user explicitly requests one.
+
+## Planning new features
+- Aggressive refactor code if it should be. Rename objects for consistent.
+
+## Refactor rules
+- Reference to [refactor.md](./docs/refactor.md).

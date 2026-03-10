@@ -16,7 +16,7 @@ import (
 )
 
 func TestHostCodeEnvironment_SetupAgentUnsupportedAgent(t *testing.T) {
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: commandrunner.NewDummyCommandRunner(),
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
@@ -32,7 +32,7 @@ func TestHostCodeEnvironment_SetupAgentUnsupportedAgent(t *testing.T) {
 func TestHostCodeEnvironment_SetupAgentLocalWorkspaceNoRef(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 	makeTempDirCalled := false
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
@@ -57,7 +57,7 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceNoRef(t *testing.T) {
 
 func TestHostCodeEnvironment_SetupAgentLocalWorkspaceStagedTokenRefSkipsSync(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
@@ -78,7 +78,7 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceStagedTokenRefSkipsSync(t *
 
 func TestHostCodeEnvironment_SetupAgentLocalWorkspaceAllTokenRefSkipsSync(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
@@ -100,7 +100,7 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceAllTokenRefSkipsSync(t *tes
 func TestHostCodeEnvironment_SetupAgentRemoteWorkspaceNoRef(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner:       runner,
 		WorkspaceDir: "/home/test/.sisutmp/workspace-1",
 		IsRemote:     true,
@@ -122,6 +122,13 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRef(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
+			Args: []string{"-C", "/workspace/current", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
 			Args: []string{"-C", "/workspace/current", "rev-parse", "--verify", "feature/ref^{commit}"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("abc123")},
@@ -133,8 +140,15 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRef(t *testing.T) {
 		},
 		Result: commandrunner.Result{Stdout: []byte("checked out")},
 	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/workspace/current", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head456")},
+	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
@@ -158,6 +172,13 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefReturnsErrorWhenCheckout
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
+			Args: []string{"-C", "/workspace/current", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
 			Args: []string{"-C", "/workspace/current", "rev-parse", "--verify", "feature/ref^{commit}"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("abc123")},
@@ -171,7 +192,7 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefReturnsErrorWhenCheckout
 		Err:    errors.New("exit status 128"),
 	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
@@ -191,6 +212,13 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefFetchesMissingRef(t *tes
 	workspaceDir := "/workspace/current"
 	fetchedRef := localFetchedRefName("feature/ref")
 	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
@@ -228,8 +256,15 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefFetchesMissingRef(t *tes
 		},
 		Result: commandrunner.Result{Stdout: []byte("checked out")},
 	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head456")},
+	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return workspaceDir, nil
@@ -252,6 +287,13 @@ func TestHostCodeEnvironment_SetupAgentRemoteWorkspaceRef(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
+			Args: []string{"-C", "/home/test/.sisutmp/workspace-1", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
 			Args: []string{"-C", "/home/test/.sisutmp/workspace-1", "rev-parse", "--verify", "refs/heads/main^{commit}"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("abc123")},
@@ -263,8 +305,15 @@ func TestHostCodeEnvironment_SetupAgentRemoteWorkspaceRef(t *testing.T) {
 		},
 		Result: commandrunner.Result{Stdout: []byte("checked out")},
 	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/home/test/.sisutmp/workspace-1", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head456")},
+	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner:       runner,
 		WorkspaceDir: "/home/test/.sisutmp/workspace-1",
 		IsRemote:     true,
@@ -337,7 +386,7 @@ func TestHostCodeEnvironment_LoadChangedFilesRefsExistWithoutFetchRecovery(t *te
 		Result: commandrunner.Result{Stdout: []byte("diff --git a/main.go b/main.go")},
 	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return workspaceDir, nil
@@ -433,7 +482,7 @@ func TestHostCodeEnvironment_LoadChangedFilesFetchesWhenRefMissing(t *testing.T)
 		Result: commandrunner.Result{Stdout: []byte("diff --git a/main.go b/main.go")},
 	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return workspaceDir, nil
@@ -492,7 +541,7 @@ func TestHostCodeEnvironment_LoadChangedFilesReturnsErrorWhenRefStillMissingAfte
 		Err:    errors.New("exit status 128"),
 	})
 
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return workspaceDir, nil
@@ -515,6 +564,13 @@ func TestHostCodeEnvironment_LoadChangedFilesTokenModesSkipRefVerification(t *te
 	stagedRunner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
+			Args: []string{"-C", stagedWorkspace, "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	stagedRunner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
 			Args: []string{"-C", stagedWorkspace, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("main.go\n")},
@@ -527,7 +583,7 @@ func TestHostCodeEnvironment_LoadChangedFilesTokenModesSkipRefVerification(t *te
 		Result: commandrunner.Result{Stdout: []byte("diff --git a/main.go b/main.go")},
 	})
 
-	stagedEnv := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	stagedEnv := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: stagedRunner,
 		Getwd: func() (string, error) {
 			return stagedWorkspace, nil
@@ -539,7 +595,7 @@ func TestHostCodeEnvironment_LoadChangedFilesTokenModesSkipRefVerification(t *te
 	require.NoError(t, err)
 	require.NoError(t, stagedRunner.VerifyDone())
 	for _, call := range stagedRunner.Calls() {
-		require.NotContains(t, strings.Join(call.Args, " "), "rev-parse")
+		require.NotContains(t, strings.Join(call.Args, " "), "rev-parse --verify")
 		require.NotEqual(t, []string{"-C", stagedWorkspace, "fetch", "--all", "--prune"}, call.Args)
 	}
 
@@ -547,6 +603,13 @@ func TestHostCodeEnvironment_LoadChangedFilesTokenModesSkipRefVerification(t *te
 	require.NoError(t, os.WriteFile(filepath.Join(allWorkspace, "main.go"), []byte("package main\n"), 0o644))
 
 	allRunner := commandrunner.NewDummyCommandRunner()
+	allRunner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", allWorkspace, "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
 	allRunner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
@@ -583,7 +646,7 @@ func TestHostCodeEnvironment_LoadChangedFilesTokenModesSkipRefVerification(t *te
 		Result: commandrunner.Result{Stdout: []byte("")},
 	})
 
-	allEnv := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	allEnv := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: allRunner,
 		Getwd: func() (string, error) {
 			return allWorkspace, nil
@@ -595,7 +658,7 @@ func TestHostCodeEnvironment_LoadChangedFilesTokenModesSkipRefVerification(t *te
 	require.NoError(t, err)
 	require.NoError(t, allRunner.VerifyDone())
 	for _, call := range allRunner.Calls() {
-		require.NotContains(t, strings.Join(call.Args, " "), "rev-parse")
+		require.NotContains(t, strings.Join(call.Args, " "), "rev-parse --verify")
 		require.NotEqual(t, []string{"-C", allWorkspace, "fetch", "--all", "--prune"}, call.Args)
 	}
 }
@@ -664,7 +727,7 @@ func TestHostCodeEnvironment_PrepareWorkspaceRemoteLogsTmpFolderAtDebug(t *testi
 		Result: commandrunner.Result{Stdout: []byte("cloned")},
 	})
 	logger := &hostTestLogger{}
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: runner,
 		MakeTempDir: func() (string, error) {
 			return "/home/test/.sisutmp/workspace-1", nil
@@ -683,7 +746,7 @@ func TestHostCodeEnvironment_PrepareWorkspaceRemoteLogsTmpFolderAtDebug(t *testi
 
 func TestHostCodeEnvironment_SetupAgentPropagatesLoggerToHostAgent(t *testing.T) {
 	logger := &hostTestLogger{}
-	env := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner: commandrunner.NewDummyCommandRunner(),
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil

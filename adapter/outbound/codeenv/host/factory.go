@@ -2,11 +2,9 @@ package host
 
 import (
 	"context"
-	"os"
 
 	"bentos-backend/adapter/outbound/commandrunner"
 	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 )
@@ -29,51 +27,27 @@ type Factory struct {
 	logger      usecase.Logger
 }
 
-// NewFactory creates a host code environment factory.
-func NewFactory(logger usecase.Logger) *Factory {
-	return NewFactoryWithConfig(FactoryConfig{
-		Runner:      commandrunner.NewOSCommandRunner(),
-		AgentRunner: commandrunner.NewOSStreamCommandRunner(),
-		Getwd:       os.Getwd,
-		MakeTempDir: newHostCodeEnvironmentTempDirMaker(os.UserHomeDir),
-		Logger:      logger,
-	})
-}
-
-// NewFactoryWithConfig creates a host code environment factory with injected dependencies.
-func NewFactoryWithConfig(cfg FactoryConfig) *Factory {
-	runner := cfg.Runner
-	if runner == nil {
-		runner = commandrunner.NewOSCommandRunner()
-	}
-	agentRunner := cfg.AgentRunner
-	if agentRunner == nil {
-		agentRunner = commandrunner.NewOSStreamCommandRunner()
-	}
-	getwd := cfg.Getwd
-	if getwd == nil {
-		getwd = os.Getwd
-	}
-	makeTempDir := cfg.MakeTempDir
-	if makeTempDir == nil {
-		makeTempDir = newHostCodeEnvironmentTempDirMaker(os.UserHomeDir)
-	}
-	logger := cfg.Logger
-	if logger == nil {
-		logger = stdlogger.Nop()
-	}
+// NewFactory creates a host code environment factory with injected dependencies.
+func NewFactory(cfg FactoryConfig) *Factory {
+	defaults := resolveHostDefaults(
+		cfg.Runner,
+		cfg.AgentRunner,
+		cfg.Getwd,
+		cfg.MakeTempDir,
+		cfg.Logger,
+	)
 	return &Factory{
-		runner:      runner,
-		agentRunner: agentRunner,
-		getwd:       getwd,
-		makeTempDir: makeTempDir,
-		logger:      logger,
+		runner:      defaults.runner,
+		agentRunner: defaults.agentRunner,
+		getwd:       defaults.getwd,
+		makeTempDir: defaults.makeTempDir,
+		logger:      defaults.logger,
 	}
 }
 
 // New creates a new host-backed environment for one execution request.
 func (f *Factory) New(ctx context.Context, opts domain.CodeEnvironmentInitOptions) (contracts.CodeEnvironment, error) {
-	environment := NewHostCodeEnvironmentWithConfig(HostCodeEnvironmentConfig{
+	environment := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
 		Runner:      f.runner,
 		AgentRunner: f.agentRunner,
 		Getwd:       f.getwd,
