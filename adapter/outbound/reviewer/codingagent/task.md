@@ -1,6 +1,6 @@
 Primary task:
 - Analyze this change request and return concise findings in plain text.
-- Ground all findings in real changed code between BASE and HEAD.
+- Ground all findings in real changed code between BASE and HEAD, using merge-base diff.
 
 Hard constraints:
 - DO NOT edit files.
@@ -10,7 +10,7 @@ Hard constraints:
 
 Discovery guidance:
 - Inspect repository and git history directly from workspace.
-- Determine changed files and line ranges by comparing BASE and HEAD.
+- Determine changed files and line ranges by comparing BASE and HEAD, using merge-base diff.
 - Use metadata below only as contextual hints.
 
 Diff commands (required):
@@ -34,10 +34,12 @@ Diff commands (required):
 - Verify refs:
   - `git rev-parse --verify "{{ .Base }}^{commit}"`
   - `git rev-parse --verify "{{ .Head }}^{commit}"`
+- Resolve merge-base:
+  - `git merge-base "{{ .Base }}" "{{ .Head }}"`
 - Inspect changed files:
-  - `git diff --name-status "{{ .Base }}" "{{ .Head }}"`
+  - `git diff --name-status "<merge-base>" "{{ .Head }}"`
 - Inspect and anchor changed line ranges:
-  - `git diff --unified=0 --no-color "{{ .Base }}" "{{ .Head }}"`
+  - `git diff --unified=0 --no-color "<merge-base>" "{{ .Head }}"`
 {{- else if .Head }}
 - Base is empty; fallback to head-only inspection.
 - Verify ref:

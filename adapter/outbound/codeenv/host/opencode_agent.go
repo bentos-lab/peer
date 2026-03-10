@@ -196,7 +196,8 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 	}
 
 	parsedEvent := extractParsedOpencodeEvent(event)
-	if strings.TrimSpace(parsedEvent.Action) != "" {
+	action := strings.TrimSpace(parsedEvent.Action)
+	if action != "" && action != "agent started step" && !strings.HasPrefix(action, "agent finished step") {
 		p.logger.Tracef("coding-agent trace action=%q line=%d", parsedEvent.Action, p.lineNumber)
 	}
 
@@ -272,12 +273,6 @@ func (b *lineBuffer) Flush() {
 	if b.consumeLine != nil {
 		b.consumeLine(line)
 	}
-}
-
-func parseOpencodeJSONResponse(stdout []byte, logger usecase.Logger) (string, error) {
-	parser := newOpencodeJSONStreamParser(logger)
-	parser.Consume(stdout)
-	return parser.Finalize()
 }
 
 func extractParsedOpencodeEvent(event map[string]any) parsedOpencodeEvent {

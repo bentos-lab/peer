@@ -131,10 +131,18 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 		return nil, err
 	}
 
+	currentHead, headErr := e.getCurrentHead(ctx, workspaceDir)
+	if headErr != nil {
+		e.logger.Debugf("Failed to get current HEAD: %v", headErr)
+	} else {
+		e.logger.Debugf("Current HEAD in workspace: %s", currentHead)
+	}
+
 	base := strings.TrimSpace(opts.Base)
 	head := strings.TrimSpace(opts.Head)
 	resolvedBase := base
 	resolvedHead := head
+	mergeBase := resolvedBase
 	if !isWorkspaceTokenRef(head) {
 		if resolvedBase == "" {
 			resolvedBase = "HEAD"
@@ -148,6 +156,13 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 		if resolveErr != nil {
 			return nil, resolveErr
 		}
+
+		mergeBase, resolveErr = e.mergeBase(ctx, workspaceDir, resolvedBase, resolvedHead)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+
+		e.logger.Debugf("LoadChangedFiles: base=%s (resolved=%s), head=%s (resolved=%s), mergeBase=%s, workspaceDir=%s", base, resolvedBase, head, resolvedHead, mergeBase, workspaceDir)
 	}
 
 	var paths []string
@@ -169,7 +184,7 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 		}
 		paths = dedupePaths(append(append(staged, unstaged...), untracked...))
 	default:
-		paths, err = e.listChangedPaths(ctx, workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB", fmt.Sprintf("%s..%s", resolvedBase, resolvedHead))
+		paths, err = e.listChangedPaths(ctx, workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB", fmt.Sprintf("%s..%s", mergeBase, resolvedHead))
 	}
 	if err != nil {
 		return nil, err
@@ -182,7 +197,7 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 			return nil, readErr
 		}
 
-		diffSnippet, diffErr := e.diffForPath(ctx, workspaceDir, path, resolvedBase, resolvedHead)
+		diffSnippet, diffErr := e.diffForPath(ctx, workspaceDir, path, mergeBase, resolvedHead)
 		if diffErr != nil {
 			return nil, diffErr
 		}
@@ -233,6 +248,7 @@ func (e *HostCodeEnvironment) prepareWorkspace(ctx context.Context, repoURL stri
 		return fmt.Errorf("failed to clone repository: %w", formatCommandError(err, result))
 	}
 
+	e.logger.Debugf("Cloned repo to %s (shallow=true)", workspaceDir)
 	e.workspaceDir = workspaceDir
 	e.isRemote = true
 	return nil
@@ -255,14 +271,29 @@ func (e *HostCodeEnvironment) syncRef(ctx context.Context, workspaceDir string, 
 		return nil
 	}
 
+	currentHead, headErr := e.getCurrentHead(ctx, workspaceDir)
+	if headErr != nil {
+		e.logger.Debugf("Failed to get current HEAD before sync: %v", headErr)
+	} else {
+		e.logger.Debugf("Current HEAD before sync: %s", currentHead)
+	}
+
 	resolvedHeadRef, err := e.resolveRef(ctx, workspaceDir, headRef)
 	if err != nil {
 		return err
 	}
 
+	e.logger.Debugf("Syncing ref: requested=%s, resolved=%s", headRef, resolvedHeadRef)
 	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "checkout", resolvedHeadRef)
 	if err != nil {
 		return fmt.Errorf("failed to checkout ref %q: %w", resolvedHeadRef, formatCommandError(err, result))
+	}
+
+	currentHead, headErr = e.getCurrentHead(ctx, workspaceDir)
+	if headErr != nil {
+		e.logger.Debugf("Failed to get current HEAD after sync: %v", headErr)
+	} else {
+		e.logger.Debugf("Current HEAD after sync: %s", currentHead)
 	}
 
 	return nil
@@ -273,24 +304,29 @@ func (e *HostCodeEnvironment) resolveRef(ctx context.Context, workspaceDir strin
 	if requestedRef == "" {
 		return "", fmt.Errorf("ref is required")
 	}
+	e.logger.Debugf("Resolving ref: %s (isRemote=%v)", requestedRef, e.isRemote)
 	if err := e.verifyLocalRefExists(ctx, workspaceDir, requestedRef); err == nil {
+		e.logger.Debugf("Ref found locally: requested=%s", requestedRef)
 		return requestedRef, nil
 	}
 
 	fetchedRef := localFetchedRefName(requestedRef)
 	if err := e.verifyLocalRefExists(ctx, workspaceDir, fetchedRef); err == nil {
+		e.logger.Debugf("Ref found in fetched cache: requested=%s, resolved=%s", requestedRef, fetchedRef)
 		return fetchedRef, nil
 	}
 
 	candidates := refFetchCandidates(requestedRef)
 	var lastErr error
 	for _, candidate := range candidates {
-		result, fetchErr := e.runner.Run(ctx, "git", "-C", workspaceDir, "fetch", "origin", fmt.Sprintf("%s:%s", candidate, fetchedRef))
+		e.logger.Debugf("Attempting to fetch ref candidate: %s, will store as: %s", candidate, fetchedRef)
+		result, fetchErr := e.runner.Run(ctx, "git", "-C", workspaceDir, "fetch", "--unshallow", "origin", fmt.Sprintf("%s:%s", candidate, fetchedRef))
 		if fetchErr != nil {
 			lastErr = formatCommandError(fetchErr, result)
 			continue
 		}
 		if err := e.verifyLocalRefExists(ctx, workspaceDir, fetchedRef); err == nil {
+			e.logger.Debugf("Successfully fetched ref: candidate=%s -> %s", candidate, fetchedRef)
 			return fetchedRef, nil
 		}
 	}
@@ -340,13 +376,46 @@ func (e *HostCodeEnvironment) listChangedPaths(ctx context.Context, workspaceDir
 	return paths, nil
 }
 
-func (e *HostCodeEnvironment) readPathContent(ctx context.Context, workspaceDir string, path string, _, _ string) (string, error) {
-	_ = ctx
-	raw, err := os.ReadFile(filepath.Join(workspaceDir, path))
-	if err != nil {
-		return "", fmt.Errorf("failed to read file content for %q: %w", path, err)
+func (e *HostCodeEnvironment) readPathContent(ctx context.Context, workspaceDir string, path string, base string, head string) (string, error) {
+	if isWorkspaceTokenRef(head) {
+		raw, err := os.ReadFile(filepath.Join(workspaceDir, path))
+		if err == nil {
+			return string(raw), nil
+		}
+		e.logger.Debugf("Failed to read file %s from workspace: %v", path, err)
+
+		// For staged content that is missing from the working tree, read from index.
+		result, showErr := e.runner.Run(ctx, "git", "-C", workspaceDir, "show", fmt.Sprintf(":%s", path))
+		if showErr != nil {
+			return "", fmt.Errorf("failed to read file content for %q: %w (index fallback failed: %v)", path, err, formatCommandError(showErr, result))
+		}
+		return strings.TrimSpace(string(result.Stdout)), nil
 	}
-	return string(raw), nil
+	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "show", fmt.Sprintf("%s:%s", head, path))
+	if err != nil {
+		return "", fmt.Errorf("failed to read file content for %q at ref %q: %w", path, head, formatCommandError(err, result))
+	}
+	return strings.TrimSpace(string(result.Stdout)), nil
+}
+
+func (e *HostCodeEnvironment) getCurrentHead(ctx context.Context, workspaceDir string) (string, error) {
+	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", formatCommandError(err, result)
+	}
+	return strings.TrimSpace(string(result.Stdout)), nil
+}
+
+func (e *HostCodeEnvironment) mergeBase(ctx context.Context, workspaceDir string, base string, head string) (string, error) {
+	result, err := e.runner.Run(ctx, "git", "-C", workspaceDir, "merge-base", base, head)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve merge-base for %q and %q: %w", base, head, formatCommandError(err, result))
+	}
+	mergeBase := strings.TrimSpace(string(result.Stdout))
+	if mergeBase == "" {
+		return "", fmt.Errorf("failed to resolve merge-base for %q and %q: empty result", base, head)
+	}
+	return mergeBase, nil
 }
 
 func (e *HostCodeEnvironment) diffForPath(ctx context.Context, workspaceDir string, path string, base string, head string) (string, error) {
