@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 )
@@ -111,12 +111,8 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 
 	outputMap, err := g.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: overviewFormattingSystemPrompt,
-		Messages: []contracts.Message{{
-			Role:    "user",
-			Content: rawText,
-		}},
-		ResponseSchema: overviewResponseSchema(),
-	})
+		Messages:     []string{rawText},
+	}, overviewResponseSchema())
 	if err != nil {
 		return usecase.LLMOverviewResult{}, err
 	}

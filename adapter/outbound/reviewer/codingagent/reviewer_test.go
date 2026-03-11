@@ -52,16 +52,18 @@ func (e *reviewerTestEnvironment) Cleanup(_ context.Context) error {
 }
 
 type reviewerTestFormatter struct {
-	output   map[string]any
-	lastArgs contracts.GenerateParams
+	output     map[string]any
+	lastArgs   contracts.GenerateParams
+	lastSchema map[string]any
 }
 
 func (f *reviewerTestFormatter) Generate(_ context.Context, _ contracts.GenerateParams) (string, error) {
 	return "", nil
 }
 
-func (f *reviewerTestFormatter) GenerateJSON(_ context.Context, params contracts.GenerateParams) (map[string]any, error) {
+func (f *reviewerTestFormatter) GenerateJSON(_ context.Context, params contracts.GenerateParams, schema map[string]any) (map[string]any, error) {
 	f.lastArgs = params
+	f.lastSchema = schema
 	return f.output, nil
 }
 
@@ -150,7 +152,7 @@ func TestReviewerReviewUsesTaskPromptAndNormalizesSuggestedChanges(t *testing.T)
 	require.NotContains(t, env.agent.lastTask, "Explicitly set `suggested_change: none` for every finding.")
 	require.NotContains(t, env.agent.lastTask, "```diff")
 
-	require.Equal(t, "raw-review-output", formatter.lastArgs.Messages[0].Content)
+	require.Equal(t, "raw-review-output", formatter.lastArgs.Messages[0])
 	require.NotEmpty(t, formatter.lastArgs.SystemPrompt)
 	require.Contains(t, formatter.lastArgs.SystemPrompt, "You are a JSON formatter only.")
 	require.Contains(t, formatter.lastArgs.SystemPrompt, "You can do:")

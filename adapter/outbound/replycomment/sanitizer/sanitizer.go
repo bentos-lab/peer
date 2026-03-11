@@ -52,12 +52,8 @@ func (s *Sanitizer) Sanitize(ctx context.Context, question string) (usecase.Sani
 
 	output, err := s.llm.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: sanitizerSystemPrompt,
-		Messages: []contracts.Message{{
-			Role:    "user",
-			Content: question,
-		}},
-		ResponseSchema: sanitizerResponseSchema(),
-	})
+		Messages:     []string{question},
+	}, sanitizerResponseSchema())
 	if err != nil {
 		return usecase.SanitizedQuestion{}, err
 	}

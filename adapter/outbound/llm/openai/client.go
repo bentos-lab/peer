@@ -40,9 +40,6 @@ func NewClient(httpClient HTTPClient, config ClientConfig) *Client {
 type requestBody struct {
 	Model          string           `json:"model"`
 	Messages       []map[string]any `json:"messages"`
-	Temperature    *float64         `json:"temperature,omitempty"`
-	MaxTokens      *int             `json:"max_tokens,omitempty"`
-	Tools          []map[string]any `json:"tools,omitempty"`
 	ResponseFormat map[string]any   `json:"response_format,omitempty"`
 }
 
@@ -61,17 +58,17 @@ func (c *Client) Generate(ctx context.Context, params contracts.GenerateParams) 
 }
 
 // GenerateJSON calls Generate and decodes JSON content.
-func (c *Client) GenerateJSON(ctx context.Context, params contracts.GenerateParams) (map[string]any, error) {
+func (c *Client) GenerateJSON(ctx context.Context, params contracts.GenerateParams, schema map[string]any) (map[string]any, error) {
 	responseFormat := map[string]any{
 		"type": "json_object",
 	}
-	if len(params.ResponseSchema) > 0 {
+	if len(schema) > 0 {
 		responseFormat = map[string]any{
 			"type": "json_schema",
 			"json_schema": map[string]any{
 				"name":   "structured_output",
 				"strict": true,
-				"schema": params.ResponseSchema,
+				"schema": schema,
 			},
 		}
 	}
@@ -98,17 +95,14 @@ func (c *Client) buildRequestBody(params contracts.GenerateParams, responseForma
 	}
 	for _, message := range params.Messages {
 		messages = append(messages, map[string]any{
-			"role":    message.Role,
-			"content": message.Content,
+			"role":    "user",
+			"content": message,
 		})
 	}
 
 	return requestBody{
 		Model:          c.config.Model,
 		Messages:       messages,
-		Temperature:    params.Temperature,
-		MaxTokens:      params.MaxTokens,
-		Tools:          params.Tools,
 		ResponseFormat: responseFormat,
 	}
 }

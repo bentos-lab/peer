@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 )
@@ -99,14 +99,8 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 
 	outputMap, err := r.generator.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: systemPrompt,
-		Messages: []contracts.Message{
-			{
-				Role:    "user",
-				Content: userPrompt,
-			},
-		},
-		ResponseSchema: reviewResponseSchema(),
-	})
+		Messages:     []string{userPrompt},
+	}, reviewResponseSchema())
 	if err != nil {
 		r.logger.Errorf("LLM review failed while requesting JSON output.")
 		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())

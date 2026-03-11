@@ -42,9 +42,7 @@ func TestClient_Generate(t *testing.T) {
 
 	result, err := client.Generate(context.Background(), contracts.GenerateParams{
 		SystemPrompt: "system",
-		Messages: []contracts.Message{
-			{Role: "user", Content: "hello"},
-		},
+		Messages:     []string{"hello"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "done", result)
@@ -134,7 +132,7 @@ func TestClient_GenerateJSON(t *testing.T) {
 		Model:   "gpt-test",
 	})
 
-	result, err := client.GenerateJSON(context.Background(), contracts.GenerateParams{})
+	result, err := client.GenerateJSON(context.Background(), contracts.GenerateParams{}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "done", result["summary"])
 }
@@ -184,12 +182,10 @@ func TestClient_GenerateJSON_UsesResponseSchema(t *testing.T) {
 		Model:   "gpt-test",
 	})
 
-	result, err := client.GenerateJSON(context.Background(), contracts.GenerateParams{
-		ResponseSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"summary": map[string]any{"type": "string"},
-			},
+	result, err := client.GenerateJSON(context.Background(), contracts.GenerateParams{}, map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"summary": map[string]any{"type": "string"},
 		},
 	})
 	require.NoError(t, err)
@@ -215,6 +211,6 @@ func TestClient_GenerateJSON_ReturnsDecodeError(t *testing.T) {
 		Model:   "gpt-test",
 	})
 
-	_, err := client.GenerateJSON(context.Background(), contracts.GenerateParams{})
+	_, err := client.GenerateJSON(context.Background(), contracts.GenerateParams{}, nil)
 	require.Error(t, err)
 }

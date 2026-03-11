@@ -36,8 +36,8 @@ func (g *Generator) Generate(ctx context.Context, params contracts.GenerateParam
 }
 
 // GenerateJSON proxies JSON generation and logs input/output at trace level.
-func (g *Generator) GenerateJSON(ctx context.Context, params contracts.GenerateParams) (map[string]any, error) {
-	output, err := g.base.GenerateJSON(ctx, params)
+func (g *Generator) GenerateJSON(ctx context.Context, params contracts.GenerateParams, schema map[string]any) (map[string]any, error) {
+	output, err := g.base.GenerateJSON(ctx, params, schema)
 	if err != nil {
 		g.tracef("llm response method=GenerateJSON error=%q", err.Error())
 		return nil, err

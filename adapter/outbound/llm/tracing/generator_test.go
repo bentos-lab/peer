@@ -21,7 +21,7 @@ func (s *stubGenerator) Generate(_ context.Context, _ contracts.GenerateParams) 
 	return s.generateResult, s.generateErr
 }
 
-func (s *stubGenerator) GenerateJSON(_ context.Context, _ contracts.GenerateParams) (map[string]any, error) {
+func (s *stubGenerator) GenerateJSON(_ context.Context, _ contracts.GenerateParams, _ map[string]any) (map[string]any, error) {
 	return s.generateJSONResult, s.generateJSONErr
 }
 
@@ -45,9 +45,7 @@ func TestGeneratorGenerateLogsRequestAndResponse(t *testing.T) {
 
 	output, err := generator.Generate(context.Background(), contracts.GenerateParams{
 		SystemPrompt: "sys",
-		Messages: []contracts.Message{
-			{Role: "user", Content: "hi"},
-		},
+		Messages:     []string{"hi"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "hello", output)
@@ -68,7 +66,7 @@ func TestGeneratorGenerateJSONLogsRequestAndResponse(t *testing.T) {
 
 	output, err := generator.GenerateJSON(context.Background(), contracts.GenerateParams{
 		SystemPrompt: "sys",
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, "ok", output["summary"])
 	require.Len(t, logger.traceLogs, 1)

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 )
@@ -118,12 +118,8 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 
 	outputMap, err := r.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: reviewFormattingSystemPrompt,
-		Messages: []contracts.Message{{
-			Role:    "user",
-			Content: rawText,
-		}},
-		ResponseSchema: reviewResponseSchema(),
-	})
+		Messages:     []string{rawText},
+	}, reviewResponseSchema())
 	if err != nil {
 		return usecase.LLMReviewResult{}, err
 	}

@@ -39,9 +39,10 @@ Policy authoring mode:
 ## LLM Contract
 
 Generic LLM generation contracts are defined at `usecase/contracts`:
-- `Message`
 - `GenerateParams`
 - `LLMGenerator`
+
+`GenerateParams` includes `SystemPrompt` plus a list of user message strings. JSON schema for structured outputs is passed as a separate argument to `GenerateJSON`.
 
 Current reviewer adapter (`adapter/outbound/reviewer/llm`) expects model output content as JSON:
 
