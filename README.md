@@ -132,11 +132,17 @@ go run ./cmd/cli autogen --tests
 go run ./cmd/cli autogen --docs --tests
 go run ./cmd/cli autogen --base main --head feature/ref --docs
 go run ./cmd/cli autogen --change-request 123 --publish --docs --tests
+go run ./cmd/cli install gh --login
+go run ./cmd/cli install opencode
+go run ./cmd/cli install quickstart
 ```
 
 CLI notes:
 
 - CLI uses authenticated GitHub CLI (`gh auth login`) for repo/PR resolution.
+- `autogit install gh --login` installs `gh` and prompts for `gh auth login`.
+- `autogit install opencode` installs OpenCode.
+- `autogit install quickstart` installs `gh` (with login) and `opencode`.
 - `--provider` currently supports only `github`.
 - `-v/-vv/-vvv` sets log verbosity to info/debug/trace.
 - `--repo` supports:

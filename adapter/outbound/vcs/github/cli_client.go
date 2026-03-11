@@ -10,11 +10,14 @@ import (
 
 	"bentos-backend/adapter/outbound/commandrunner"
 	"bentos-backend/domain"
+	"bentos-backend/shared/toolinstall"
 )
 
 // CLIClient executes GitHub operations via the gh CLI.
 type CLIClient struct {
-	runner commandrunner.Runner
+	runner      commandrunner.Runner
+	installer   *toolinstall.Installer
+	authChecked bool
 }
 
 // CreateReviewCommentInput contains one anchored GitHub review comment payload.
@@ -47,7 +50,8 @@ type PullRequestReviewSummary struct {
 // NewCLIClient creates a GitHub CLI API client.
 func NewCLIClient() *CLIClient {
 	return &CLIClient{
-		runner: commandrunner.NewOSCommandRunner(),
+		runner:    commandrunner.NewOSCommandRunner(),
+		installer: toolinstall.NewInstaller(toolinstall.Config{}),
 	}
 }
 
@@ -433,14 +437,24 @@ func (c *CLIClient) getPullRequestHeadSHA(ctx context.Context, repository string
 }
 
 func (c *CLIClient) ensureAuth(ctx context.Context) error {
+	if c.authChecked {
+		return nil
+	}
+	if err := c.ensureGhInstalled(ctx); err != nil {
+		return err
+	}
 	result, err := c.runner.Run(ctx, "gh", "auth", "status")
 	if err != nil {
 		return fmt.Errorf("github CLI is not authenticated; run `gh auth login` first: %w", formatCommandError(err, result))
 	}
+	c.authChecked = true
 	return nil
 }
 
 func (c *CLIClient) resolveRepository(ctx context.Context, repository string) (string, error) {
+	if err := c.ensureGhInstalled(ctx); err != nil {
+		return "", err
+	}
 	repository = strings.TrimSpace(repository)
 	if repository != "" {
 		return repository, nil
@@ -462,6 +476,13 @@ func (c *CLIClient) resolveRepository(ctx context.Context, repository string) (s
 		return "", fmt.Errorf("failed to resolve current GitHub repository")
 	}
 	return payload.NameWithOwner, nil
+}
+
+func (c *CLIClient) ensureGhInstalled(ctx context.Context) error {
+	if c.installer == nil {
+		c.installer = toolinstall.NewInstaller(toolinstall.Config{})
+	}
+	return c.installer.EnsureGhInstalled(ctx)
 }
 
 func formatCommandError(err error, result commandrunner.Result) error {

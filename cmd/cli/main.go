@@ -101,6 +101,7 @@ func newRootCommand(
 	cmd.AddCommand(newReviewSubcommand(ctx, loadConfig, buildReviewCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &verbosity))
 	cmd.AddCommand(newAutogenSubcommand(ctx, loadConfig, buildAutogenCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &verbosity))
 	cmd.AddCommand(newReplyCommentSubcommand(ctx, loadConfig, buildReplyCommentCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &verbosity))
+	cmd.AddCommand(newInstallSubcommand(ctx))
 
 	return cmd
 }
@@ -316,6 +317,49 @@ func newReplyCommentSubcommand(
 	flags.StringVar(&commentID, "comment-id", "", "GitHub comment id to answer")
 	flags.StringVar(&question, "question", "", "question text to answer")
 	flags.BoolVar(&comment, "comment", false, "post reply as pull request comment (requires --comment-id)")
+	return sub
+}
+
+func newInstallSubcommand(ctx context.Context) *cobra.Command {
+	command := cliinbound.NewInstallCommand()
+
+	sub := &cobra.Command{
+		Use:   "install",
+		Short: "Install required CLI dependencies",
+	}
+
+	ghCmd := &cobra.Command{
+		Use:   "gh",
+		Short: "Install GitHub CLI (gh)",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			login, err := cmd.Flags().GetBool("login")
+			if err != nil {
+				return err
+			}
+			return command.InstallGh(ctx, login)
+		},
+	}
+	ghCmd.Flags().Bool("login", false, "run `gh auth login` after install")
+
+	opencodeCmd := &cobra.Command{
+		Use:   "opencode",
+		Short: "Install OpenCode (opencode)",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return command.InstallOpencode(ctx)
+		},
+	}
+
+	quickstartCmd := &cobra.Command{
+		Use:   "quickstart",
+		Short: "Install gh (with login) and opencode",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return command.InstallQuickstart(ctx)
+		},
+	}
+
+	sub.AddCommand(ghCmd)
+	sub.AddCommand(opencodeCmd)
+	sub.AddCommand(quickstartCmd)
 	return sub
 }
 

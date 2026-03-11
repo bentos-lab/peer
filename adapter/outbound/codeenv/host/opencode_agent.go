@@ -10,6 +10,7 @@ import (
 	"bentos-backend/adapter/outbound/commandrunner"
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	"bentos-backend/shared/toolinstall"
 	"bentos-backend/usecase"
 )
 
@@ -18,6 +19,7 @@ type HostOpencodeAgent struct {
 	workspaceDir string
 	runner       commandrunner.StreamRunner
 	logger       usecase.Logger
+	installer    *toolinstall.Installer
 }
 
 // NewHostOpencodeAgent creates a host opencode coding agent.
@@ -32,6 +34,7 @@ func NewHostOpencodeAgent(workspaceDir string, runner commandrunner.StreamRunner
 		workspaceDir: workspaceDir,
 		runner:       runner,
 		logger:       logger,
+		installer:    toolinstall.NewInstaller(toolinstall.Config{}),
 	}
 }
 
@@ -40,6 +43,10 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 	task = strings.TrimSpace(task)
 	if task == "" {
 		return domain.CodingAgentRunResult{}, fmt.Errorf("task is required")
+	}
+
+	if err := a.ensureOpencodeInstalled(ctx); err != nil {
+		return domain.CodingAgentRunResult{}, err
 	}
 
 	a.logger.Tracef("Open-code task: %s", task)
@@ -192,6 +199,13 @@ var defaultOpencodeModels = map[string]string{
 	"anthropic": "claude-sonnet-4-6",
 	"gemini":    "gemini-3-pro-preview",
 	"google":    "gemini-3-pro-preview",
+}
+
+func (a *HostOpencodeAgent) ensureOpencodeInstalled(ctx context.Context) error {
+	if a.installer == nil {
+		a.installer = toolinstall.NewInstaller(toolinstall.Config{})
+	}
+	return a.installer.EnsureOpencodeInstalled(ctx)
 }
 
 const opencodeTraceTranscriptMaxChars = 4096

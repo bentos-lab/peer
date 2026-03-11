@@ -6,11 +6,24 @@ import (
 	"testing"
 
 	"bentos-backend/adapter/outbound/commandrunner"
+	"bentos-backend/shared/toolinstall"
 	"github.com/stretchr/testify/require"
 )
 
 func newTestCLIClient(runner commandrunner.Runner) *CLIClient {
-	return &CLIClient{runner: runner}
+	installer := toolinstall.NewInstaller(toolinstall.Config{
+		StreamRunner: runner.(commandrunner.StreamRunner),
+		PreferTTY:    false,
+		PreferTTYSet: true,
+		LookPath: func(name string) (string, error) {
+			if name == "gh" {
+				return "/bin/gh", nil
+			}
+			return "", errors.New("not found")
+		},
+		IsTerminal: func() bool { return true },
+	})
+	return &CLIClient{runner: runner, installer: installer}
 }
 
 func TestClient_GetPullRequestChangedFiles(t *testing.T) {

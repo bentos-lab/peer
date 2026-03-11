@@ -2,23 +2,40 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"bentos-backend/adapter/outbound/commandrunner"
 	"bentos-backend/domain"
+	"bentos-backend/shared/toolinstall"
+	"bentos-backend/usecase"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHostOpencodeAgentRunRequiresTask(t *testing.T) {
-	agent := NewHostOpencodeAgent("/workspace/current", commandrunner.NewDummyCommandRunner(), nil)
+	agent := newTestHostOpencodeAgent("/workspace/current", commandrunner.NewDummyCommandRunner(), nil)
 
 	_, err := agent.Run(context.Background(), "", domain.CodingAgentRunOptions{
 		Provider: "openai",
 		Model:    "gpt-4o-mini",
 	})
 	require.EqualError(t, err, "task is required")
+}
+
+func newTestHostOpencodeAgent(workspaceDir string, runner commandrunner.StreamRunner, logger usecase.Logger) *HostOpencodeAgent {
+	agent := NewHostOpencodeAgent(workspaceDir, runner, logger)
+	agent.installer = toolinstall.NewInstaller(toolinstall.Config{
+		LookPath: func(name string) (string, error) {
+			if name == "opencode" {
+				return "/bin/opencode", nil
+			}
+			return "", errors.New("missing")
+		},
+		IsTerminal: func() bool { return false },
+	})
+	return agent
 }
 
 func TestHostOpencodeAgentRunAllowsEmptyProviderAndModel(t *testing.T) {
@@ -38,7 +55,7 @@ func TestHostOpencodeAgentRunAllowsEmptyProviderAndModel(t *testing.T) {
 			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{})
 	require.NoError(t, err)
@@ -67,7 +84,7 @@ func TestHostOpencodeAgentRunBuildsCommandAndParsesFinalAssistantText(t *testing
 			),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -102,7 +119,7 @@ func TestHostOpencodeAgentRunWarnsWhenModelWithoutProvider(t *testing.T) {
 			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Model: "gpt-4o-mini",
@@ -140,7 +157,7 @@ func TestHostOpencodeAgentRunResolvesDefaultModelFromList(t *testing.T) {
 			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -177,7 +194,7 @@ func TestHostOpencodeAgentRunUsesFirstModelWhenDefaultMissing(t *testing.T) {
 			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -212,7 +229,7 @@ func TestHostOpencodeAgentRunFallsBackWhenModelListEmpty(t *testing.T) {
 			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -247,7 +264,7 @@ func TestHostOpencodeAgentRunFallsBackWhenModelListFails(t *testing.T) {
 			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -279,7 +296,7 @@ func TestHostOpencodeAgentRunParsesDeltaFallback(t *testing.T) {
 			),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -314,7 +331,7 @@ func TestHostOpencodeAgentRunParsesOpencodeTextPartEvents(t *testing.T) {
 			),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -345,7 +362,7 @@ func TestHostOpencodeAgentRunReturnsErrorWhenJSONIsMalformed(t *testing.T) {
 			Stdout: []byte("{invalid-json}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, nil)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, nil)
 
 	_, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -371,7 +388,7 @@ func TestHostOpencodeAgentRunReturnsErrorWhenNoAssistantOutput(t *testing.T) {
 			Stdout: []byte("{\"type\":\"system\",\"text\":\"done\"}\n"),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, nil)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, nil)
 
 	_, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -399,7 +416,7 @@ func TestHostOpencodeAgentRunTruncatesTranscriptTrace(t *testing.T) {
 			Stdout: []byte(fmt.Sprintf("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"%s\"}]}}\n", longText)),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -439,7 +456,7 @@ func TestHostOpencodeAgentRunParsesFragmentedStreamChunks(t *testing.T) {
 			{Type: commandrunner.StreamTypeStdout, Data: []byte("sage\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Final text\"}]}}\n")},
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -469,7 +486,7 @@ func TestHostOpencodeAgentRunWarnLogsStderrStream(t *testing.T) {
 			{Type: commandrunner.StreamTypeStdout, Data: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Final output\"}]}}\n")},
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",
@@ -504,7 +521,7 @@ func TestHostOpencodeAgentRunTracesToolUseActionWithoutOutputPayload(t *testing.
 			),
 		},
 	})
-	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, logger)
 
 	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
 		Provider: "openai",

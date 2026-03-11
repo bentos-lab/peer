@@ -66,7 +66,7 @@ func (u *replyCommentUseCase) Execute(ctx context.Context, request ReplyCommentR
 	logStageSuccess(u.logger, "replycomment", "sanitize_question", target, sanitizeStartedAt)
 
 	answerText := ""
-	if sanitized.Status == domain.QuestionSafetyStatusOK {
+	if sanitized.Status == domain.PromptSafetyStatusOK {
 		initializeEnvironmentStartedAt := time.Now()
 		environment, envErr := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
 			RepoURL: request.RepoURL,

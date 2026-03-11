@@ -7,6 +7,11 @@ type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (Result, error)
 }
 
+// TTYRunner executes shell commands attached to a terminal.
+type TTYRunner interface {
+	RunTTY(ctx context.Context, name string, args ...string) error
+}
+
 // StreamType identifies which command stream produced a chunk.
 type StreamType string
 

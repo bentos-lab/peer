@@ -48,7 +48,7 @@ func (s *Sanitizer) Sanitize(ctx context.Context, prompt string) (usecase.Saniti
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		return usecase.SanitizedPrompt{
-			Status:         domain.QuestionSafetyStatusUnsupported,
+			Status:         domain.PromptSafetyStatusUnsupported,
 			RefusalMessage: "Thanks for the prompt. I need a concrete prompt to help.",
 		}, nil
 	}
@@ -77,11 +77,11 @@ func (s *Sanitizer) Sanitize(ctx context.Context, prompt string) (usecase.Saniti
 		RefusalMessage:  strings.TrimSpace(decoded.RefusalMessage),
 	}
 
-	if result.Status != domain.QuestionSafetyStatusOK && result.RefusalMessage == "" {
+	if result.Status != domain.PromptSafetyStatusOK && result.RefusalMessage == "" {
 		result.RefusalMessage = "Thanks for the prompt. I can't safely help with that request."
 	}
-	if result.Status == domain.QuestionSafetyStatusOK && result.SanitizedPrompt == "" {
-		result.Status = domain.QuestionSafetyStatusUnsupported
+	if result.Status == domain.PromptSafetyStatusOK && result.SanitizedPrompt == "" {
+		result.Status = domain.PromptSafetyStatusUnsupported
 		result.RefusalMessage = "Thanks for the prompt. I need more details to help."
 	}
 	return result, nil
@@ -101,18 +101,18 @@ func renderSystemPrompt(options Options) (string, error) {
 	return rendered.String(), nil
 }
 
-func sanitizeStatus(value string) domain.QuestionSafetyStatusEnum {
+func sanitizeStatus(value string) domain.PromptSafetyStatusEnum {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "ok":
-		return domain.QuestionSafetyStatusOK
+		return domain.PromptSafetyStatusOK
 	case "unsafe":
-		return domain.QuestionSafetyStatusUnsafe
+		return domain.PromptSafetyStatusUnsafe
 	default:
-		return domain.QuestionSafetyStatusUnsupported
+		return domain.PromptSafetyStatusUnsupported
 	}
 }
 
-func normalizeStatus(value string) domain.QuestionSafetyStatusEnum {
+func normalizeStatus(value string) domain.PromptSafetyStatusEnum {
 	return sanitizeStatus(value)
 }
 

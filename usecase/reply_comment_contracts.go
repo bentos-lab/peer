@@ -49,7 +49,7 @@ type ReplyCommentAnswerer interface {
 
 // SanitizedPrompt captures the sanitized prompt output.
 type SanitizedPrompt struct {
-	Status          domain.QuestionSafetyStatusEnum
+	Status          domain.PromptSafetyStatusEnum
 	SanitizedPrompt string
 	RefusalMessage  string
 }
