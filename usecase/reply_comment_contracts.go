@@ -47,16 +47,16 @@ type ReplyCommentAnswerer interface {
 	Answer(ctx context.Context, payload ReplyCommentAnswerPayload) (string, error)
 }
 
-// SanitizedQuestion captures the sanitized question output.
-type SanitizedQuestion struct {
-	Status            domain.QuestionSafetyStatusEnum
-	SanitizedQuestion string
-	RefusalMessage    string
+// SanitizedPrompt captures the sanitized prompt output.
+type SanitizedPrompt struct {
+	Status          domain.QuestionSafetyStatusEnum
+	SanitizedPrompt string
+	RefusalMessage  string
 }
 
-// ReplyCommentSanitizer cleans and classifies the question.
-type ReplyCommentSanitizer interface {
-	Sanitize(ctx context.Context, question string) (SanitizedQuestion, error)
+// SafetySanitizer cleans and classifies prompts.
+type SafetySanitizer interface {
+	Sanitize(ctx context.Context, prompt string) (SanitizedPrompt, error)
 }
 
 // ReplyCommentPublishResult is the payload for publishing a reply.

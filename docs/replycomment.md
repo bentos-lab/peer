@@ -22,4 +22,4 @@ autogit replycomment --repo owner/repo --change-request 123 --question "What cha
 ```
 
 ## Safety and edit intent handling
-Questions are sanitized by an LLM to remove edit instructions and convert edit requests into suggestions only. Unsafe or unsupported prompts return a refusal message.
+Replycomment uses the general safety sanitizer with read-only enforcement enabled. Prompts are sanitized to remove edit instructions and convert edit requests into suggestions only. Unsafe or unsupported prompts return a refusal message.

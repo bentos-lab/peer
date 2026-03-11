@@ -12,8 +12,8 @@ import (
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
 	replycommentcodingagent "bentos-backend/adapter/outbound/replycomment/codingagent"
-	replycommentsanitizer "bentos-backend/adapter/outbound/replycomment/sanitizer"
 	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
+	safetysanitizer "bentos-backend/adapter/outbound/safetysanitizer"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
@@ -115,7 +115,9 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	replySanitizer, err := replycommentsanitizer.NewSanitizer(tracedFormatter)
+	replySanitizer, err := safetysanitizer.NewSanitizer(tracedFormatter, safetysanitizer.Options{
+		EnforceReadOnly: true,
+	})
 	if err != nil {
 		return nil, err
 	}

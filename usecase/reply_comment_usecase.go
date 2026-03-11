@@ -14,7 +14,7 @@ import (
 
 // replyCommentUseCase is the concrete ReplyCommentUseCase implementation.
 type replyCommentUseCase struct {
-	sanitizer  ReplyCommentSanitizer
+	sanitizer  SafetySanitizer
 	answerer   ReplyCommentAnswerer
 	publisher  ReplyCommentPublisher
 	envFactory uccontracts.CodeEnvironmentFactory
@@ -23,7 +23,7 @@ type replyCommentUseCase struct {
 
 // NewReplyCommentUseCase constructs a reply comment usecase.
 func NewReplyCommentUseCase(
-	sanitizer ReplyCommentSanitizer,
+	sanitizer SafetySanitizer,
 	answerer ReplyCommentAnswerer,
 	publisher ReplyCommentPublisher,
 	envFactory uccontracts.CodeEnvironmentFactory,
@@ -95,7 +95,7 @@ func (u *replyCommentUseCase) Execute(ctx context.Context, request ReplyCommentR
 				Metadata:    request.Metadata,
 			},
 			Thread:      request.Thread,
-			Question:    sanitized.SanitizedQuestion,
+			Question:    sanitized.SanitizedPrompt,
 			Environment: environment,
 		})
 		if err != nil {

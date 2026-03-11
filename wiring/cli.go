@@ -12,8 +12,8 @@ import (
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
 	routerpublisher "bentos-backend/adapter/outbound/publisher/router"
 	replycommentcodingagent "bentos-backend/adapter/outbound/replycomment/codingagent"
-	replycommentsanitizer "bentos-backend/adapter/outbound/replycomment/sanitizer"
 	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
+	safetysanitizer "bentos-backend/adapter/outbound/safetysanitizer"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
@@ -178,7 +178,9 @@ func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevel
 	if err != nil {
 		return nil, err
 	}
-	sanitizer, err := replycommentsanitizer.NewSanitizer(tracedLLMClient)
+	sanitizer, err := safetysanitizer.NewSanitizer(tracedLLMClient, safetysanitizer.Options{
+		EnforceReadOnly: true,
+	})
 	if err != nil {
 		return nil, err
 	}
