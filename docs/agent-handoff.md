@@ -11,7 +11,7 @@ This repository is a backend service for LLM-assisted PR/MR review with one shar
 - Message grouping in `usecase/message_builder.go`
 - Single rule pack provider: `core/v1`
 - Core policy template file: `usecase/rulepack/core_policy_v1.md` (embedded)
-- OpenAI-compatible LLM adapter interface
+- OpenAI-compatible and coding-agent LLM adapters
 
 ## What Is Incomplete
 

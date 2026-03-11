@@ -1,0 +1,103 @@
+package codingagent
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+
+	"bentos-backend/domain"
+	"bentos-backend/usecase/contracts"
+	"github.com/stretchr/testify/require"
+)
+
+type stubAgent struct {
+	lastTask string
+	outputs  []string
+	calls    int
+	err      error
+}
+
+func (s *stubAgent) Run(_ context.Context, task string, _ domain.CodingAgentRunOptions) (domain.CodingAgentRunResult, error) {
+	s.lastTask = task
+	s.calls++
+	if s.err != nil {
+		return domain.CodingAgentRunResult{}, s.err
+	}
+	if len(s.outputs) == 0 {
+		return domain.CodingAgentRunResult{Text: ""}, nil
+	}
+	if s.calls > len(s.outputs) {
+		return domain.CodingAgentRunResult{Text: s.outputs[len(s.outputs)-1]}, nil
+	}
+	return domain.CodingAgentRunResult{Text: s.outputs[s.calls-1]}, nil
+}
+
+func TestNewGenerator_ValidatesInputs(t *testing.T) {
+	_, err := NewGenerator(nil, Config{Provider: "openai", Model: "model"}, nil)
+	require.EqualError(t, err, "coding agent is required")
+}
+
+func TestGenerator_Generate_RendersTaskAndReturnsOutput(t *testing.T) {
+	agent := &stubAgent{outputs: []string{"  done  "}}
+	generator, err := NewGenerator(agent, Config{Provider: "openai", Model: "model"}, nil)
+	require.NoError(t, err)
+
+	result, err := generator.Generate(context.Background(), contracts.GenerateParams{
+		SystemPrompt: "system",
+		Messages:     []string{"hello", "world"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "done", result)
+	require.Contains(t, agent.lastTask, "System prompt:")
+	require.Contains(t, agent.lastTask, "system")
+	require.Contains(t, agent.lastTask, "- hello")
+	require.Contains(t, agent.lastTask, "- world")
+}
+
+func TestGenerator_GenerateJSON_ParsesJSONOutput(t *testing.T) {
+	agent := &stubAgent{outputs: []string{`{"summary":"done"}`}}
+	generator, err := NewGenerator(agent, Config{Provider: "openai", Model: "model"}, nil)
+	require.NoError(t, err)
+
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"summary": map[string]any{"type": "string"},
+		},
+	}
+
+	result, err := generator.GenerateJSON(context.Background(), contracts.GenerateParams{
+		SystemPrompt: "system",
+		Messages:     []string{"hello"},
+	}, schema)
+	require.NoError(t, err)
+	require.Equal(t, "done", result["summary"])
+
+	schemaRaw, err := json.Marshal(schema)
+	require.NoError(t, err)
+	require.Contains(t, agent.lastTask, string(schemaRaw))
+}
+
+func TestGenerator_GenerateJSON_RetriesOnInvalidJSON(t *testing.T) {
+	agent := &stubAgent{outputs: []string{"not-json", "still-bad", `{"summary":"done"}`}}
+	generator, err := NewGenerator(agent, Config{Provider: "openai", Model: "model"}, nil)
+	require.NoError(t, err)
+
+	result, err := generator.GenerateJSON(context.Background(), contracts.GenerateParams{
+		SystemPrompt: "system",
+		Messages:     []string{"hello"},
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, "done", result["summary"])
+	require.Equal(t, 3, agent.calls)
+}
+
+func TestGenerator_GenerateJSON_ReturnsDecodeError(t *testing.T) {
+	agent := &stubAgent{outputs: []string{"not-json"}}
+	generator, err := NewGenerator(agent, Config{Provider: "openai", Model: "model"}, nil)
+	require.NoError(t, err)
+
+	_, err = generator.GenerateJSON(context.Background(), contracts.GenerateParams{}, nil)
+	require.Error(t, err)
+	require.Equal(t, generateJSONMaxAttempts, agent.calls)
+}

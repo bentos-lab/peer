@@ -242,3 +242,33 @@ func TestClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 	require.True(t, IsInvalidAnchorError(err))
 	require.NoError(t, runner.VerifyDone())
 }
+
+func TestClient_ResolveRepositoryRequiresAuthWhenMissing(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"auth", "status"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"repo", "view", "--json", "nameWithOwner"}},
+		Result:   commandrunner.Result{Stdout: []byte(`{"nameWithOwner":"org/repo"}`)},
+	})
+	client := newTestCLIClient(runner)
+
+	repo, err := client.ResolveRepository(context.Background(), "")
+	require.NoError(t, err)
+	require.Equal(t, "org/repo", repo)
+	require.Len(t, runner.Calls(), 2)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestClient_ResolveRepositorySkipsAuthWhenProvided(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	client := newTestCLIClient(runner)
+
+	repo, err := client.ResolveRepository(context.Background(), " org/repo ")
+	require.NoError(t, err)
+	require.Equal(t, "org/repo", repo)
+	require.Len(t, runner.Calls(), 0)
+	require.NoError(t, runner.VerifyDone())
+}

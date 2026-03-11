@@ -53,7 +53,8 @@ Define the architecture and dependency rules for this repository so implementati
     - `adapter/outbound/input/gitlab`
     - `adapter/outbound/input/cli`
   - LLM:
-    - Generic provider client: `adapter/outbound/llm/openai`
+    - OpenAI-compatible client: `adapter/outbound/llm/openai`
+    - Coding-agent LLM generator: `adapter/outbound/llm/codingagent`
     - Review translator adapter: `adapter/outbound/reviewer/llm`
   - Publishers:
     - `adapter/outbound/publisher/github`

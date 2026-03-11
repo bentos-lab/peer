@@ -33,11 +33,17 @@ Global:
   - Server default when unset: `true`
   - CLI default when unset: `false`
 
-OpenAI:
+OpenAI (formatter + sanitizer only when enabled):
 
-- `OPENAI_BASE_URL` (default: `gemini`)
-- `OPENAI_API_KEY` (required for real LLM calls)
-- `OPENAI_MODEL` (default: `gemini-2.5-flash-lite`)
+- `OPENAI_BASE_URL` (empty uses coding-agent LLM; shortcuts: `gemini`, `openai`, `anthropic`)
+- `OPENAI_API_KEY` (required when `OPENAI_BASE_URL` is set)
+- `OPENAI_MODEL` (optional; defaults depend on shortcut)
+
+Coding agent:
+
+- `CODING_AGENT_NAME` (default: `opencode`)
+- `CODING_AGENT_PROVIDER` (optional, passed to opencode)
+- `CODING_AGENT_MODEL` (optional, passed to opencode)
 
 Server (webhook-only):
 

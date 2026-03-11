@@ -77,9 +77,8 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				func() (config.Config, error) {
 					return config.Config{
 						LogLevel: "info",
-						OpenAI: config.OpenAIConfig{
-							BaseURL: "gemini",
-							Model:   "gemini-2.5-flash-lite",
+						CodingAgent: config.CodingAgentConfig{
+							Agent: "opencode",
 						},
 						SuggestedChanges: config.SuggestedChangesConfig{
 							Enabled: testCase.envDefault,

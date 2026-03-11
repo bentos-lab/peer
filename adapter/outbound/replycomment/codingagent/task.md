@@ -11,13 +11,13 @@ Hard constraints:
 
 Diff commands (required):
 {{- if eq .Head "@staged" }}
-- Head uses staged workspace mode.
+- Head uses staged workspace mode. You are only allow to compare staged changes.
 - Inspect changed files:
   - `git diff --cached --name-status`
 - Inspect and anchor changed line ranges:
   - `git diff --cached --unified=0 --no-color`
 {{- else if eq .Head "@all" }}
-- Head uses full workspace mode (staged + unstaged + untracked).
+- Head uses full workspace mode (staged + unstaged + untracked). You should compare all current changes with base.
 - Inspect changed files:
   - `git diff --cached --name-status`
   - `git diff --name-status`

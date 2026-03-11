@@ -45,16 +45,17 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 	a.logger.Tracef("Open-code task: %s", task)
 
 	provider := strings.TrimSpace(opts.Provider)
-	if provider == "" {
-		return domain.CodingAgentRunResult{}, fmt.Errorf("provider is required")
-	}
-
 	model := strings.TrimSpace(opts.Model)
-	if model == "" {
-		return domain.CodingAgentRunResult{}, fmt.Errorf("model is required")
+	modelSpec, err := a.resolveModelSpec(ctx, provider, model)
+	if err != nil {
+		return domain.CodingAgentRunResult{}, err
 	}
 
-	modelSpec := provider + "/" + model
+	if modelSpec == "" {
+		a.logger.Debugf("coding-agent opencode using default model")
+	} else {
+		a.logger.Debugf("coding-agent opencode using model %s", modelSpec)
+	}
 	parser := newOpencodeJSONStreamParser(a.logger)
 	stderrBuffer := newLineBuffer(func(line string) {
 		if strings.TrimSpace(line) == "" {
@@ -63,6 +64,17 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 		a.logger.Warnf("coding-agent opencode stderr: %s", line)
 	})
 
+	args := []string{
+		"run",
+		"--format",
+		"json",
+		"--dir",
+		a.workspaceDir,
+	}
+	if modelSpec != "" {
+		args = append(args, "--model", modelSpec)
+	}
+	args = append(args, task)
 	result, err := a.runner.RunStream(
 		ctx,
 		func(chunk commandrunner.StreamChunk) {
@@ -77,14 +89,7 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 			}
 		},
 		"opencode",
-		"run",
-		"--format",
-		"json",
-		"--dir",
-		a.workspaceDir,
-		"--model",
-		modelSpec,
-		task,
+		args...,
 	)
 	stderrBuffer.Flush()
 	if err != nil {
@@ -97,6 +102,96 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 	}
 
 	return domain.CodingAgentRunResult{Text: text}, nil
+}
+
+func (a *HostOpencodeAgent) resolveModelSpec(ctx context.Context, provider string, model string) (string, error) {
+	provider = strings.TrimSpace(provider)
+	model = strings.TrimSpace(model)
+
+	if provider == "" {
+		if model != "" {
+			a.logger.Warnf("coding-agent opencode provider is empty; clearing model %q", model)
+		}
+		return "", nil
+	}
+
+	if model == "" {
+		models, err := a.listOpencodeModels(ctx, provider)
+		if err != nil {
+			a.logger.Warnf("coding-agent opencode failed to list models for provider %s: %v", provider, err)
+			return "", nil
+		}
+		if len(models) == 0 {
+			a.logger.Warnf("coding-agent opencode no models returned for provider %s", provider)
+			return "", nil
+		}
+		model = selectDefaultOpencodeModel(provider, models)
+	}
+
+	if model == "" {
+		return "", nil
+	}
+	return provider + "/" + model, nil
+}
+
+func (a *HostOpencodeAgent) listOpencodeModels(ctx context.Context, provider string) ([]string, error) {
+	result, err := a.runner.RunStream(ctx, nil, "opencode", "models", provider)
+	if err != nil {
+		return nil, formatCommandError(err, result)
+	}
+	return parseOpencodeModelList(provider, string(result.Stdout)), nil
+}
+
+func selectDefaultOpencodeModel(provider string, models []string) string {
+	defaultModel, ok := defaultOpencodeModels[strings.ToLower(provider)]
+	if ok {
+		for _, candidate := range models {
+			if strings.EqualFold(candidate, defaultModel) {
+				return candidate
+			}
+		}
+	}
+	return models[0]
+}
+
+func parseOpencodeModelList(provider string, stdout string) []string {
+	provider = strings.TrimSpace(provider)
+	providerLower := strings.ToLower(provider)
+	lines := strings.Split(stdout, "\n")
+	models := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		model := strings.TrimSpace(fields[0])
+		if model == "" {
+			continue
+		}
+		if strings.Contains(model, "/") {
+			lower := strings.ToLower(model)
+			prefix := providerLower + "/"
+			if providerLower != "" && strings.HasPrefix(lower, prefix) {
+				model = model[len(prefix):]
+			} else {
+				model = model[strings.LastIndex(model, "/")+1:]
+			}
+		}
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		models = append(models, model)
+	}
+	return models
+}
+
+var defaultOpencodeModels = map[string]string{
+	"openai":    "gpt-5.3-codex",
+	"anthropic": "claude-sonnet-4-6",
+	"gemini":    "gemini-3-pro-preview",
+	"google":    "gemini-3-pro-preview",
 }
 
 const opencodeTraceTranscriptMaxChars = 4096

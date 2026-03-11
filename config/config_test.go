@@ -43,11 +43,12 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "info", cfg.LogLevel)
 	require.Nil(t, cfg.OverviewEnabled)
-	require.Equal(t, "gemini", cfg.OpenAI.BaseURL)
-	require.Equal(t, "gemini-2.5-flash-lite", cfg.OpenAI.Model)
+	require.Equal(t, "", cfg.OpenAI.BaseURL)
+	require.Equal(t, "", cfg.OpenAI.APIKey)
+	require.Equal(t, "", cfg.OpenAI.Model)
 	require.Equal(t, "opencode", cfg.CodingAgent.Agent)
-	require.Equal(t, "openai", cfg.CodingAgent.Provider)
-	require.Equal(t, "gemini-2.5-flash-lite", cfg.CodingAgent.Model)
+	require.Equal(t, "", cfg.CodingAgent.Provider)
+	require.Equal(t, "", cfg.CodingAgent.Model)
 	require.Equal(t, "8080", cfg.Server.Port)
 	require.Equal(t, "", cfg.Server.GitHub.WebhookSecret)
 	require.Equal(t, "", cfg.Server.GitHub.AppID)
@@ -65,8 +66,8 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 
 func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "OPENAI_API_KEY")
+	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -95,16 +96,16 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=my-model\nOPENAI_API_KEY=env-key\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=gpt-4.1\nOPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.Equal(t, "openai", cfg.OpenAI.BaseURL)
-	require.Equal(t, "my-model", cfg.OpenAI.Model)
+	require.Equal(t, "gpt-4.1", cfg.OpenAI.Model)
 	require.Equal(t, "env-key", cfg.OpenAI.APIKey)
 	require.Equal(t, "opencode", cfg.CodingAgent.Agent)
-	require.Equal(t, "openai", cfg.CodingAgent.Provider)
-	require.Equal(t, "my-model", cfg.CodingAgent.Model)
+	require.Equal(t, "codingagent", cfg.CodingAgent.Provider)
+	require.Equal(t, "model-x", cfg.CodingAgent.Model)
 	require.Equal(t, "warning", cfg.LogLevel)
 	require.Nil(t, cfg.OverviewEnabled)
 	require.Equal(t, "9090", cfg.Server.Port)
@@ -120,8 +121,8 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	t.Setenv("OPENAI_MODEL", "from-env")
 	t.Setenv("OPENAI_API_KEY", "env-key")
 	t.Setenv("CODING_AGENT_NAME", "opencode")
-	t.Setenv("CODING_AGENT_PROVIDER", "anthropic")
-	t.Setenv("CODING_AGENT_MODEL", "claude-3-5-haiku-latest")
+	t.Setenv("CODING_AGENT_PROVIDER", "codingagent")
+	t.Setenv("CODING_AGENT_MODEL", "model-y")
 	t.Setenv("PORT", "7777")
 	t.Setenv("LOG_LEVEL", "error")
 	t.Setenv("OVERVIEW_ENABLED", "true")
@@ -147,7 +148,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=from-dotenv\nOPENAI_API_KEY=dotenv-key\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=from-dotenv\nOPENAI_API_KEY=dotenv-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=dotenv-provider\nCODING_AGENT_MODEL=dotenv-model\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -155,8 +156,8 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	require.Equal(t, "from-env", cfg.OpenAI.Model)
 	require.Equal(t, "env-key", cfg.OpenAI.APIKey)
 	require.Equal(t, "opencode", cfg.CodingAgent.Agent)
-	require.Equal(t, "anthropic", cfg.CodingAgent.Provider)
-	require.Equal(t, "claude-3-5-haiku-latest", cfg.CodingAgent.Model)
+	require.Equal(t, "codingagent", cfg.CodingAgent.Provider)
+	require.Equal(t, "model-y", cfg.CodingAgent.Model)
 	require.Equal(t, "error", cfg.LogLevel)
 	require.NotNil(t, cfg.OverviewEnabled)
 	require.True(t, *cfg.OverviewEnabled)
@@ -177,8 +178,8 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 
 func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "OPENAI_API_KEY")
+	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -207,7 +208,7 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=\"unterminated\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("CODING_AGENT_NAME=\"unterminated\n"), 0o644))
 
 	_, err = Load()
 	require.Error(t, err)
@@ -215,8 +216,8 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 
 func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
 	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "OPENAI_API_KEY")
+	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -252,8 +253,8 @@ func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
 
 func TestLoadReturnsErrorForInvalidOverviewEnabled(t *testing.T) {
 	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "OPENAI_API_KEY")
+	unsetEnv(t, "OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")

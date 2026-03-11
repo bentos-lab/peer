@@ -41,8 +41,8 @@ if err != nil {
 }
 
 result, err := agent.Run(ctx, "Task abc", domain.CodingAgentRunOptions{
-	Provider: "openai",
-	Model:    "o4-mini",
+	Provider: "gemini",
+	Model:    "gemini-3-pro-preview",
 })
 if err != nil {
 	return err
@@ -50,6 +50,13 @@ if err != nil {
 
 _ = result.Text
 ```
+
+## Provider and Model Resolution
+
+- `CodingAgentRunOptions.Provider` and `CodingAgentRunOptions.Model` are optional when using the `opencode` host agent.
+- If both are empty, the agent runs without `--model` and opencode uses its default.
+- If provider is set and model is empty, the agent queries available models for the provider and selects a default if available.
+- If provider is empty and model is set, the agent clears the model and logs a warning.
 
 ## Host Environment Behavior
 

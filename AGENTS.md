@@ -42,6 +42,7 @@
 - Run all tests: `go test ./...`
 - Run a specific test: `go test <package_or_test_path>`
 - Run application entrypoint: `go run cmd/main.go --parameters`
+- Commit message must contain a title and a detailed description of what changes, and the description must not exceed the maximum length.
 
 
 ## Coding Style and Naming Conventions

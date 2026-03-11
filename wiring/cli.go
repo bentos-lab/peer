@@ -1,16 +1,11 @@
 package wiring
 
 import (
-	"fmt"
-	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
 	autogencodingagent "bentos-backend/adapter/outbound/autogen/codingagent"
 	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
-	openai "bentos-backend/adapter/outbound/llm/openai"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
@@ -22,30 +17,31 @@ import (
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
+	"bentos-backend/usecase/contracts"
 	"bentos-backend/usecase/rulepack"
 )
 
-// CLILLMOptions contains CLI-only LLM overrides.
-type CLILLMOptions struct {
-	OpenAIBaseURL string
-	OpenAIModel   string
-	OpenAIAPIKey  string
-}
-
 // BuildCLIReviewCommand wires dependencies for a single CLI review mode.
 func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.Command, error) {
-	llmConfig, err := resolveCLILLMConfig(cfg, opts)
-	if err != nil {
-		return nil, err
-	}
 	logger, err := buildLogger(cfg, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	httpClient := &http.Client{Timeout: 600 * time.Second}
-	llmClient := openai.NewClient(httpClient, llmConfig)
-	tracedLLMClient := llmtracing.NewGenerator(llmClient, logger)
+	llmSelection, err := ResolveLLMSelection(cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+	var formatter contracts.LLMGenerator
+	if llmSelection.UseOpenAI {
+		formatter = buildOpenAIGenerator(llmSelection)
+	} else {
+		formatter, err = buildCodingAgentGenerator(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tracedLLMClient := llmtracing.NewGenerator(formatter, logger)
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
 		Logger: logger,
 	})
@@ -150,18 +146,25 @@ func BuildCLIAutogenCommand(cfg config.Config, _ CLILLMOptions, logLevelOverride
 
 // BuildCLIReplyCommentCommand wires dependencies for CLI replycomment mode.
 func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.ReplyCommentCommand, error) {
-	llmConfig, err := resolveCLILLMConfig(cfg, opts)
-	if err != nil {
-		return nil, err
-	}
 	logger, err := buildLogger(cfg, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	httpClient := &http.Client{Timeout: 600 * time.Second}
-	llmClient := openai.NewClient(httpClient, llmConfig)
-	tracedLLMClient := llmtracing.NewGenerator(llmClient, logger)
+	llmSelection, err := ResolveLLMSelection(cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+	var formatter contracts.LLMGenerator
+	if llmSelection.UseOpenAI {
+		formatter = buildOpenAIGenerator(llmSelection)
+	} else {
+		formatter, err = buildCodingAgentGenerator(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tracedLLMClient := llmtracing.NewGenerator(formatter, logger)
 
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
 		Logger: logger,
@@ -197,25 +200,4 @@ func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevel
 	}
 
 	return cliinbound.NewReplyCommentCommand(replyCommentUseCase, githubClient, cfg.Server.GitHub.ReplyCommentTriggerName), nil
-}
-
-func resolveCLILLMConfig(cfg config.Config, opts CLILLMOptions) (openai.ClientConfig, error) {
-	effectiveConfig, err := ResolveEffectiveOpenAIConfig(cfg, opts)
-	if err != nil {
-		return openai.ClientConfig{}, err
-	}
-
-	resolvedAPIKey := strings.TrimSpace(cfg.OpenAI.APIKey)
-	if strings.TrimSpace(opts.OpenAIAPIKey) != "" {
-		resolvedAPIKey = strings.TrimSpace(opts.OpenAIAPIKey)
-	}
-	if resolvedAPIKey == "" {
-		return openai.ClientConfig{}, fmt.Errorf("openai API key is required")
-	}
-
-	return openai.ClientConfig{
-		BaseURL: effectiveConfig.BaseURL,
-		APIKey:  resolvedAPIKey,
-		Model:   effectiveConfig.Model,
-	}, nil
 }

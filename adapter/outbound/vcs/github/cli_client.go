@@ -336,6 +336,11 @@ func (c *CLIClient) GetPullRequestReview(ctx context.Context, repository string,
 
 // ResolveRepository resolves the effective GitHub repository slug.
 func (c *CLIClient) ResolveRepository(ctx context.Context, repository string) (string, error) {
+	if strings.TrimSpace(repository) == "" {
+		if err := c.ensureAuth(ctx); err != nil {
+			return "", err
+		}
+	}
 	return c.resolveRepository(ctx, repository)
 }
 

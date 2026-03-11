@@ -8,7 +8,6 @@ import (
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
 	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
-	openai "bentos-backend/adapter/outbound/llm/openai"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
@@ -18,10 +17,9 @@ import (
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
+	"bentos-backend/usecase/contracts"
 	"bentos-backend/usecase/rulepack"
 )
-
-const serverLLMTimeout = 600 * time.Second
 
 type codingAgentRuntimeConfig struct {
 	Agent    string
@@ -35,11 +33,19 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	openAIConfig, err := buildOpenAIClientConfig(cfg)
+	llmSelection, err := ResolveLLMSelection(cfg, CLILLMOptions{})
 	if err != nil {
 		return nil, err
 	}
-	formatterClient := openai.NewClient(&http.Client{Timeout: serverLLMTimeout}, openAIConfig)
+	var formatterClient contracts.LLMGenerator
+	if llmSelection.UseOpenAI {
+		formatterClient = buildOpenAIGenerator(llmSelection)
+	} else {
+		formatterClient, err = buildCodingAgentGenerator(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
 	tracedFormatter := llmtracing.NewGenerator(formatterClient, logger)
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
 		Logger: logger,
@@ -136,19 +142,6 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	), nil
 }
 
-func buildOpenAIClientConfig(cfg config.Config) (openai.ClientConfig, error) {
-	effectiveConfig, err := ResolveEffectiveOpenAIConfig(cfg, CLILLMOptions{})
-	if err != nil {
-		return openai.ClientConfig{}, err
-	}
-
-	return openai.ClientConfig{
-		BaseURL: effectiveConfig.BaseURL,
-		APIKey:  cfg.OpenAI.APIKey,
-		Model:   effectiveConfig.Model,
-	}, nil
-}
-
 func resolveServerOverviewEnabled(cfg config.Config) bool {
 	if cfg.OverviewEnabled == nil {
 		return true
@@ -162,17 +155,8 @@ func resolveServerSuggestionsEnabled(cfg config.Config) bool {
 
 func resolveServerCodingAgentConfig(cfg config.Config) codingAgentRuntimeConfig {
 	agent := strings.TrimSpace(cfg.CodingAgent.Agent)
-	if agent == "" {
-		agent = "opencode"
-	}
 	provider := strings.TrimSpace(cfg.CodingAgent.Provider)
-	if provider == "" {
-		provider = "openai"
-	}
 	model := strings.TrimSpace(cfg.CodingAgent.Model)
-	if model == "" {
-		model = strings.TrimSpace(cfg.OpenAI.Model)
-	}
 	return codingAgentRuntimeConfig{
 		Agent:    agent,
 		Provider: provider,

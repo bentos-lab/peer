@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	uccontracts "bentos-backend/usecase/contracts"
 )
@@ -47,12 +47,6 @@ type replyTaskPromptTemplateData struct {
 func NewAnswerer(config Config, logger usecase.Logger) (*Answerer, error) {
 	if strings.TrimSpace(config.Agent) == "" {
 		return nil, fmt.Errorf("coding agent is required")
-	}
-	if strings.TrimSpace(config.Provider) == "" {
-		return nil, fmt.Errorf("coding agent provider is required")
-	}
-	if strings.TrimSpace(config.Model) == "" {
-		return nil, fmt.Errorf("coding agent model is required")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()

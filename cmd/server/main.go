@@ -80,16 +80,25 @@ func runServer(logLevelOverride string, deps serverDeps) error {
 		return err
 	}
 	startupLogger.Infof("server startup: config loaded; port=%q log-level=%q", cfg.Server.Port, cfg.LogLevel)
-	effectiveOpenAIConfig, err := wiring.ResolveEffectiveOpenAIConfig(cfg, wiring.CLILLMOptions{})
+	selection, err := wiring.ResolveLLMSelection(cfg, wiring.CLILLMOptions{})
 	if err != nil {
-		startupLogger.Errorf("server startup failed: resolve effective openai config: %v", err)
-		return fmt.Errorf("resolve effective openai config: %w", err)
+		startupLogger.Errorf("server startup failed: resolve llm selection: %v", err)
+		return fmt.Errorf("resolve llm selection: %w", err)
 	}
-	startupLogger.Infof(
-		`server startup: llm_config base_url=%q model=%q`,
-		effectiveOpenAIConfig.BaseURL,
-		effectiveOpenAIConfig.Model,
-	)
+	if selection.UseOpenAI {
+		startupLogger.Infof(
+			`server startup: llm=openai base_url=%q model=%q`,
+			selection.OpenAI.BaseURL,
+			selection.OpenAI.Model,
+		)
+	} else {
+		startupLogger.Infof(
+			`server startup: llm=codingagent agent=%q provider=%q model=%q`,
+			cfg.CodingAgent.Agent,
+			cfg.CodingAgent.Provider,
+			cfg.CodingAgent.Model,
+		)
+	}
 
 	startupLogger.Infof("server startup: wiring GitHub handler")
 	githubHandler, err := deps.buildGitHubHandler(cfg)

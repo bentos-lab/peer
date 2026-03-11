@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHostOpencodeAgentRunRequiresTaskProviderAndModel(t *testing.T) {
+func TestHostOpencodeAgentRunRequiresTask(t *testing.T) {
 	agent := NewHostOpencodeAgent("/workspace/current", commandrunner.NewDummyCommandRunner(), nil)
 
 	_, err := agent.Run(context.Background(), "", domain.CodingAgentRunOptions{
@@ -19,18 +19,31 @@ func TestHostOpencodeAgentRunRequiresTaskProviderAndModel(t *testing.T) {
 		Model:    "gpt-4o-mini",
 	})
 	require.EqualError(t, err, "task is required")
+}
 
-	_, err = agent.Run(context.Background(), "task", domain.CodingAgentRunOptions{
-		Provider: "",
-		Model:    "gpt-4o-mini",
+func TestHostOpencodeAgentRunAllowsEmptyProviderAndModel(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	logger := &opencodeAgentTestLogger{}
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
+		},
 	})
-	require.EqualError(t, err, "provider is required")
+	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
 
-	_, err = agent.Run(context.Background(), "task", domain.CodingAgentRunOptions{
-		Provider: "openai",
-		Model:    "",
-	})
-	require.EqualError(t, err, "model is required")
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+	require.Contains(t, strings.Join(logger.debugLogs, "\n"), "using default model")
 }
 
 func TestHostOpencodeAgentRunBuildsCommandAndParsesFinalAssistantText(t *testing.T) {
@@ -70,6 +83,179 @@ func TestHostOpencodeAgentRunBuildsCommandAndParsesFinalAssistantText(t *testing
 	require.Contains(t, traceContent, `source=assistant_message`)
 	require.Contains(t, traceContent, `content="Final output"`)
 	require.NotContains(t, traceContent, "{\"type\":")
+}
+
+func TestHostOpencodeAgentRunWarnsWhenModelWithoutProvider(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	logger := &opencodeAgentTestLogger{}
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
+		},
+	})
+	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
+		Model: "gpt-4o-mini",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+	require.Contains(t, strings.Join(logger.warnLogs, "\n"), "provider is empty")
+	require.Contains(t, strings.Join(logger.debugLogs, "\n"), "using default model")
+}
+
+func TestHostOpencodeAgentRunResolvesDefaultModelFromList(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	logger := &opencodeAgentTestLogger{}
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{"models", "openai"},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("openai/gpt53-codex ready\nopenai/other-model ready\n"),
+		},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"--model", "openai/gpt53-codex",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
+		},
+	})
+	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
+		Provider: "openai",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+	require.Contains(t, strings.Join(logger.debugLogs, "\n"), "openai/gpt53-codex")
+}
+
+func TestHostOpencodeAgentRunUsesFirstModelWhenDefaultMissing(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	logger := &opencodeAgentTestLogger{}
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{"models", "openai"},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("openai/alpha ready\nopenai/beta ready\n"),
+		},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"--model", "openai/alpha",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
+		},
+	})
+	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
+		Provider: "openai",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+}
+
+func TestHostOpencodeAgentRunFallsBackWhenModelListEmpty(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	logger := &opencodeAgentTestLogger{}
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{"models", "openai"},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("\n"),
+		},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
+		},
+	})
+	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
+		Provider: "openai",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+	require.Contains(t, strings.Join(logger.warnLogs, "\n"), "no models returned")
+	require.Contains(t, strings.Join(logger.debugLogs, "\n"), "using default model")
+}
+
+func TestHostOpencodeAgentRunFallsBackWhenModelListFails(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	logger := &opencodeAgentTestLogger{}
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{"models", "openai"},
+		},
+		Err: fmt.Errorf("boom"),
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]}}\n"),
+		},
+	})
+	agent := NewHostOpencodeAgent("/workspace/current", runner, logger)
+
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
+		Provider: "openai",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+	require.Contains(t, strings.Join(logger.warnLogs, "\n"), "failed to list models")
+	require.Contains(t, strings.Join(logger.debugLogs, "\n"), "using default model")
 }
 
 func TestHostOpencodeAgentRunParsesDeltaFallback(t *testing.T) {
@@ -333,6 +519,7 @@ func TestHostOpencodeAgentRunTracesToolUseActionWithoutOutputPayload(t *testing.
 }
 
 type opencodeAgentTestLogger struct {
+	debugLogs []string
 	traceLogs []string
 	warnLogs  []string
 }
@@ -341,7 +528,9 @@ func (l *opencodeAgentTestLogger) Tracef(format string, args ...any) {
 	l.traceLogs = append(l.traceLogs, fmt.Sprintf(format, args...))
 }
 
-func (*opencodeAgentTestLogger) Debugf(string, ...any) {}
+func (l *opencodeAgentTestLogger) Debugf(format string, args ...any) {
+	l.debugLogs = append(l.debugLogs, fmt.Sprintf(format, args...))
+}
 
 func (*opencodeAgentTestLogger) Infof(string, ...any) {}
 

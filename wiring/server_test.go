@@ -15,9 +15,10 @@ func TestBuildGitHubHandlerRejectsMissingWebhookSecret(t *testing.T) {
 	_, err := BuildGitHubHandler(config.Config{
 		LogLevel: "info",
 		OpenAI: config.OpenAIConfig{
-			BaseURL: "openai",
-			APIKey:  "key",
-			Model:   "gpt-4.1-mini",
+			BaseURL: "",
+		},
+		CodingAgent: config.CodingAgentConfig{
+			Agent: "opencode",
 		},
 		Server: config.ServerConfig{
 			GitHub: config.GitHubConfig{
@@ -35,9 +36,10 @@ func TestBuildGitHubHandlerRejectsMissingAppID(t *testing.T) {
 	_, err := BuildGitHubHandler(config.Config{
 		LogLevel: "info",
 		OpenAI: config.OpenAIConfig{
-			BaseURL: "openai",
-			APIKey:  "key",
-			Model:   "gpt-4.1-mini",
+			BaseURL: "",
+		},
+		CodingAgent: config.CodingAgentConfig{
+			Agent: "opencode",
 		},
 		Server: config.ServerConfig{
 			GitHub: config.GitHubConfig{
@@ -55,9 +57,10 @@ func TestBuildGitHubHandlerBuildsWithRequiredConfig(t *testing.T) {
 	handler, err := BuildGitHubHandler(config.Config{
 		LogLevel: "info",
 		OpenAI: config.OpenAIConfig{
-			BaseURL: "openai",
-			APIKey:  "key",
-			Model:   "gpt-4.1-mini",
+			BaseURL: "",
+		},
+		CodingAgent: config.CodingAgentConfig{
+			Agent: "opencode",
 		},
 		Server: config.ServerConfig{
 			GitHub: config.GitHubConfig{

@@ -11,6 +11,7 @@ import (
 	cliinbound "bentos-backend/adapter/inbound/cli"
 	"bentos-backend/config"
 	sharedcli "bentos-backend/shared/cli"
+	"bentos-backend/usecase"
 	"bentos-backend/wiring"
 
 	"github.com/spf13/cobra"
@@ -92,7 +93,7 @@ func newRootCommand(
 	}
 
 	persistentFlags := cmd.PersistentFlags()
-	persistentFlags.StringVar(&openAIBaseURL, "openai-base-url", "gemini", "OpenAI compatible base URL override")
+	persistentFlags.StringVar(&openAIBaseURL, "openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM)")
 	persistentFlags.StringVar(&openAIModel, "openai-model", "", "OpenAI compatible model override")
 	persistentFlags.StringVar(&openAIAPIKey, "openai-api-key", "", "OpenAI compatible API key override")
 	persistentFlags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
@@ -152,15 +153,9 @@ func newReviewSubcommand(
 			if err != nil {
 				return err
 			}
-			effectiveOpenAIConfig, err := wiring.ResolveEffectiveOpenAIConfig(cfg, opts)
-			if err != nil {
+			if err := logLLMSelection(startupLogger, cfg, opts); err != nil {
 				return err
 			}
-			startupLogger.Infof(
-				`cli startup: llm_config base_url=%q model=%q`,
-				effectiveOpenAIConfig.BaseURL,
-				effectiveOpenAIConfig.Model,
-			)
 
 			cliCommand, err := buildCommand(cfg, opts, logOverride)
 			if err != nil {
@@ -227,15 +222,9 @@ func newAutogenSubcommand(
 			if err != nil {
 				return err
 			}
-			effectiveOpenAIConfig, err := wiring.ResolveEffectiveOpenAIConfig(cfg, opts)
-			if err != nil {
+			if err := logLLMSelection(startupLogger, cfg, opts); err != nil {
 				return err
 			}
-			startupLogger.Infof(
-				`cli startup: llm_config base_url=%q model=%q`,
-				effectiveOpenAIConfig.BaseURL,
-				effectiveOpenAIConfig.Model,
-			)
 
 			cliCommand, err := buildCommand(cfg, opts, logOverride)
 			if err != nil {
@@ -300,15 +289,9 @@ func newReplyCommentSubcommand(
 			if err != nil {
 				return err
 			}
-			effectiveOpenAIConfig, err := wiring.ResolveEffectiveOpenAIConfig(cfg, opts)
-			if err != nil {
+			if err := logLLMSelection(startupLogger, cfg, opts); err != nil {
 				return err
 			}
-			startupLogger.Infof(
-				`cli startup: llm_config base_url=%q model=%q`,
-				effectiveOpenAIConfig.BaseURL,
-				effectiveOpenAIConfig.Model,
-			)
 
 			cliCommand, err := buildCommand(cfg, opts, logOverride)
 			if err != nil {
@@ -339,25 +322,27 @@ func newReplyCommentSubcommand(
 func resolveLLMOptions(cmd *cobra.Command, openAIBaseURL string, openAIModel string, openAIAPIKey string, verbosity int) (wiring.CLILLMOptions, string, error) {
 	opts := wiring.CLILLMOptions{}
 	if flagChanged(cmd, "openai-base-url") {
-		value, err := validateOpenAIStringFlagValue("openai-base-url", openAIBaseURL)
-		if err != nil {
-			return opts, "", err
+		opts.OpenAIBaseURLSet = true
+		value := strings.TrimSpace(openAIBaseURL)
+		if value != "" && strings.HasPrefix(value, "-") {
+			return opts, "", fmt.Errorf("flag --openai-base-url requires a non-empty value or empty override")
 		}
 		opts.OpenAIBaseURL = value
 	}
 	if flagChanged(cmd, "openai-model") {
-		value, err := validateOpenAIStringFlagValue("openai-model", openAIModel)
-		if err != nil {
-			return opts, "", err
+		value := validateOpenAIStringFlagValue("openai-model", openAIModel)
+		if value == "" {
+			return opts, "", fmt.Errorf("flag --openai-model requires a non-empty value")
 		}
 		opts.OpenAIModel = value
 	}
 	if flagChanged(cmd, "openai-api-key") {
-		value, err := validateOpenAIStringFlagValue("openai-api-key", openAIAPIKey)
-		if err != nil {
-			return opts, "", err
+		value := validateOpenAIStringFlagValue("openai-api-key", openAIAPIKey)
+		if value == "" {
+			return opts, "", fmt.Errorf("flag --openai-api-key requires a non-empty value")
 		}
 		opts.OpenAIAPIKey = value
+		opts.OpenAIAPIKeySet = true
 	}
 	logOverride := sharedcli.LogLevelOverrideFromVerbosity(verbosity)
 	return opts, logOverride, nil
@@ -373,10 +358,32 @@ func flagChanged(cmd *cobra.Command, name string) bool {
 	return false
 }
 
-func validateOpenAIStringFlagValue(flagName string, value string) (string, error) {
+func validateOpenAIStringFlagValue(flagName string, value string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" || strings.HasPrefix(trimmed, "-") {
-		return "", fmt.Errorf("flag --%s requires a non-empty value", flagName)
+		return ""
 	}
-	return trimmed, nil
+	return trimmed
+}
+
+func logLLMSelection(logger usecase.Logger, cfg config.Config, opts wiring.CLILLMOptions) error {
+	selection, err := wiring.ResolveLLMSelection(cfg, opts)
+	if err != nil {
+		return err
+	}
+	if selection.UseOpenAI {
+		logger.Infof(
+			`cli startup: llm=openai base_url=%q model=%q`,
+			selection.OpenAI.BaseURL,
+			selection.OpenAI.Model,
+		)
+		return nil
+	}
+	logger.Infof(
+		`cli startup: llm=codingagent agent=%q provider=%q model=%q`,
+		cfg.CodingAgent.Agent,
+		cfg.CodingAgent.Provider,
+		cfg.CodingAgent.Model,
+	)
+	return nil
 }

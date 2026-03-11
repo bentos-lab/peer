@@ -59,12 +59,6 @@ func NewOverviewGenerator(formatter contracts.LLMGenerator, config Config, logge
 	if strings.TrimSpace(config.Agent) == "" {
 		return nil, fmt.Errorf("coding agent is required")
 	}
-	if strings.TrimSpace(config.Provider) == "" {
-		return nil, fmt.Errorf("coding agent provider is required")
-	}
-	if strings.TrimSpace(config.Model) == "" {
-		return nil, fmt.Errorf("coding agent model is required")
-	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}

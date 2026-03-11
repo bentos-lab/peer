@@ -85,14 +85,14 @@ func Load() (Config, error) {
 			GenerateTimeoutMS: intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_GENERATE_TIMEOUT_MS", 30000),
 		},
 		OpenAI: OpenAIConfig{
-			BaseURL: envOrDefault("OPENAI_BASE_URL", "gemini"),
+			BaseURL: envOrDefault("OPENAI_BASE_URL", ""),
 			APIKey:  os.Getenv("OPENAI_API_KEY"),
-			Model:   envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite"),
+			Model:   envOrDefault("OPENAI_MODEL", ""),
 		},
 		CodingAgent: CodingAgentConfig{
 			Agent:    envOrDefault("CODING_AGENT_NAME", "opencode"),
-			Provider: envOrDefault("CODING_AGENT_PROVIDER", "openai"),
-			Model:    envOrDefault("CODING_AGENT_MODEL", envOrDefault("OPENAI_MODEL", "gemini-2.5-flash-lite")),
+			Provider: os.Getenv("CODING_AGENT_PROVIDER"),
+			Model:    os.Getenv("CODING_AGENT_MODEL"),
 		},
 		Server: ServerConfig{
 			Port: envOrDefault("PORT", "8080"),
