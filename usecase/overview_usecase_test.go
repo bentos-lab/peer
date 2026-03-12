@@ -52,6 +52,10 @@ func (e *overviewUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, _ d
 	return nil, errors.New("not implemented")
 }
 
+func (e *overviewUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
+	return "", false, errors.New("not implemented")
+}
+
 func (e *overviewUseCaseTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, errors.New("not implemented")
 }

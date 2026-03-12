@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
-	"time"
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
@@ -65,8 +64,6 @@ func NewReviewer(generator contracts.LLMGenerator, logger usecase.Logger) (*Revi
 
 // Review generates findings from changed content by calling an LLM provider.
 func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload) (usecase.LLMReviewResult, error) {
-	startedAt := time.Now()
-	r.logger.Infof("LLM review started.")
 	r.logger.Debugf("The rule pack includes %d instructions.", len(payload.RulePack.Instructions))
 	if payload.Environment == nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")
@@ -83,18 +80,12 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 
 	systemPrompt, err := renderSystemPrompt(strings.Join(payload.RulePack.Instructions, "\n\n"))
 	if err != nil {
-		r.logger.Errorf("LLM review failed while rendering the system prompt.")
-		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		r.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMReviewResult{}, err
+		return usecase.LLMReviewResult{}, fmt.Errorf("review: render system prompt: %w", err)
 	}
 
 	userPrompt, err := renderUserPrompt(payload.Input, changedFiles)
 	if err != nil {
-		r.logger.Errorf("LLM review failed while rendering the user prompt.")
-		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		r.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMReviewResult{}, err
+		return usecase.LLMReviewResult{}, fmt.Errorf("review: render user prompt: %w", err)
 	}
 
 	outputMap, err := r.generator.GenerateJSON(ctx, contracts.GenerateParams{
@@ -102,27 +93,17 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		Messages:     []string{userPrompt},
 	}, reviewResponseSchema())
 	if err != nil {
-		r.logger.Errorf("LLM review failed while requesting JSON output.")
-		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		r.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMReviewResult{}, err
+		return usecase.LLMReviewResult{}, fmt.Errorf("review: generate JSON output: %w", err)
 	}
 
 	raw, err := json.Marshal(outputMap)
 	if err != nil {
-		r.logger.Errorf("LLM review failed while encoding model output.")
-		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		r.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMReviewResult{}, err
+		return usecase.LLMReviewResult{}, fmt.Errorf("review: encode model output: %w", err)
 	}
 
 	var decoded reviewModelOutput
 	if err := json.Unmarshal(raw, &decoded); err != nil {
-		err = fmt.Errorf("invalid review model output: %w", err)
-		r.logger.Errorf("LLM review failed because the model output is invalid.")
-		r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		r.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMReviewResult{}, err
+		return usecase.LLMReviewResult{}, fmt.Errorf("review: invalid model output: %w", err)
 	}
 
 	findings := make([]json.RawMessage, 0)
@@ -134,26 +115,21 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 	for _, findingRaw := range findings {
 		var finding domain.Finding
 		if err := json.Unmarshal(findingRaw, &finding); err != nil {
-			err = fmt.Errorf("invalid finding format: %w", err)
-			r.logger.Errorf("LLM review failed because one finding has an invalid format.")
-			r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-			r.logger.Debugf("Failure details: %v.", err)
-			return usecase.LLMReviewResult{}, err
+			return usecase.LLMReviewResult{}, fmt.Errorf("review: invalid finding format: %w", err)
 		}
 		if finding.StartLine <= 0 || finding.EndLine <= 0 || finding.StartLine > finding.EndLine {
-			err = fmt.Errorf("invalid finding range for %q: start line is %d and end line is %d", finding.FilePath, finding.StartLine, finding.EndLine)
-			r.logger.Errorf("LLM review failed because one finding has an invalid range.")
-			r.logger.Debugf("The LLM review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-			r.logger.Debugf("Failure details: %v.", err)
-			return usecase.LLMReviewResult{}, err
+			return usecase.LLMReviewResult{}, fmt.Errorf(
+				"review: invalid finding range for %q: start line is %d and end line is %d",
+				finding.FilePath,
+				finding.StartLine,
+				finding.EndLine,
+			)
 		}
 		resultFindings = append(resultFindings, finding)
 	}
 	changedRangesByFile := buildChangedRangesByFile(changedFiles, r.logger)
 	filteredFindings := splitFindingsByChangedRanges(resultFindings, changedRangesByFile, r.logger)
 
-	r.logger.Infof("LLM review completed.")
-	r.logger.Debugf("The LLM review completed in %d ms.", time.Since(startedAt).Milliseconds())
 	r.logger.Debugf("The LLM review produced %d findings after changed-line alignment.", len(filteredFindings))
 
 	return usecase.LLMReviewResult{

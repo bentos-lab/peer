@@ -33,15 +33,16 @@ type Generator struct {
 }
 
 type autogenTaskPromptTemplateData struct {
-	Repository  string
-	RepoURL     string
-	Base        string
-	Head        string
-	Title       string
-	Description string
-	Docs        bool
-	Tests       bool
-	HeadBranch  string
+	Repository    string
+	RepoURL       string
+	Base          string
+	Head          string
+	Title         string
+	Description   string
+	Docs          bool
+	Tests         bool
+	HeadBranch    string
+	ExtraGuidance string
 }
 
 // NewGenerator creates a coding-agent autogen adapter.
@@ -82,15 +83,16 @@ func (g *Generator) Generate(ctx context.Context, payload usecase.AutogenPayload
 	}
 
 	taskPrompt, err := renderSimpleTemplate("autogen_task_prompt", autogenTaskPromptTemplateRaw, autogenTaskPromptTemplateData{
-		Repository:  payload.Input.Target.Repository,
-		RepoURL:     payload.Input.RepoURL,
-		Base:        normalizedBase,
-		Head:        normalizedHead,
-		Title:       payload.Input.Title,
-		Description: sharedtext.SingleLine(payload.Input.Description),
-		Docs:        payload.Docs,
-		Tests:       payload.Tests,
-		HeadBranch:  strings.TrimSpace(payload.HeadBranch),
+		Repository:    payload.Input.Target.Repository,
+		RepoURL:       payload.Input.RepoURL,
+		Base:          normalizedBase,
+		Head:          normalizedHead,
+		Title:         payload.Input.Title,
+		Description:   sharedtext.SingleLine(payload.Input.Description),
+		Docs:          payload.Docs,
+		Tests:         payload.Tests,
+		HeadBranch:    strings.TrimSpace(payload.HeadBranch),
+		ExtraGuidance: strings.TrimSpace(payload.ExtraGuidance),
 	})
 	if err != nil {
 		return "", err

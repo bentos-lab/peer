@@ -36,10 +36,11 @@ type ReplyCommentUseCase interface {
 
 // ReplyCommentAnswerPayload is the payload for the coding agent adapter.
 type ReplyCommentAnswerPayload struct {
-	Input       domain.ChangeRequestInput
-	Thread      domain.CommentThread
-	Question    string
-	Environment uccontracts.CodeEnvironment
+	Input         domain.ChangeRequestInput
+	Thread        domain.CommentThread
+	Question      string
+	Environment   uccontracts.CodeEnvironment
+	ExtraGuidance string
 }
 
 // ReplyCommentAnswerer generates an answer from code context.
@@ -61,11 +62,12 @@ type SafetySanitizer interface {
 
 // ReplyCommentPublishResult is the payload for publishing a reply.
 type ReplyCommentPublishResult struct {
-	Target     domain.ChangeRequestTarget
-	CommentID  int64
-	Kind       domain.CommentKindEnum
-	Body       string
-	ShouldPost bool
+	Target         domain.ChangeRequestTarget
+	CommentID      int64
+	Kind           domain.CommentKindEnum
+	Body           string
+	ShouldPost     bool
+	RecipeWarnings []string
 }
 
 // ReplyCommentPublisher publishes replycomment answers.

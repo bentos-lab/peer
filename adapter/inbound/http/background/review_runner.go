@@ -29,15 +29,19 @@ func RunReviewAsync(
 	go func() {
 		startedAt := time.Now()
 		logger.Infof("%s webhook background review started.", providerName)
-		logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-		logger.Debugf("Webhook action is %q.", action)
+		logger.Debugf("Webhook context repo=%q pr=%d action=%q.", request.Repository, request.ChangeRequestNumber, action)
 
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				logger.Errorf("%s webhook background review panicked.", providerName)
-				logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", request.Repository, request.ChangeRequestNumber, action)
-				logger.Debugf("The background review ran for %d ms before panicking.", time.Since(startedAt).Milliseconds())
-				logger.Debugf("Panic details: %v.", recovered)
+				logger.Errorf(
+					"%s webhook background review panicked for %q#%d action=%q after %d ms: %v.",
+					providerName,
+					request.Repository,
+					request.ChangeRequestNumber,
+					action,
+					time.Since(startedAt).Milliseconds(),
+					recovered,
+				)
 			}
 		}()
 
@@ -47,15 +51,24 @@ func RunReviewAsync(
 		inboundlogging.LogChangeRequestInputSnapshot(logger, "webhook", action, request)
 
 		if err := execute(ctx, request); err != nil {
-			logger.Errorf("%s webhook background review failed.", providerName)
-			logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", request.Repository, request.ChangeRequestNumber, action)
-			logger.Debugf("The background review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-			logger.Debugf("Failure details: %v.", err)
+			logger.Debugf(
+				"%s webhook background review failed for %q#%d action=%q after %d ms.",
+				providerName,
+				request.Repository,
+				request.ChangeRequestNumber,
+				action,
+				time.Since(startedAt).Milliseconds(),
+			)
 			return
 		}
 
-		logger.Infof("%s webhook background review completed.", providerName)
-		logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", request.Repository, request.ChangeRequestNumber, action)
-		logger.Debugf("The background review completed in %d ms.", time.Since(startedAt).Milliseconds())
+		logger.Infof(
+			"%s webhook background review completed for %q#%d action=%q in %d ms.",
+			providerName,
+			request.Repository,
+			request.ChangeRequestNumber,
+			action,
+			time.Since(startedAt).Milliseconds(),
+		)
 	}()
 }

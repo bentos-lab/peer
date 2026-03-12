@@ -23,10 +23,10 @@ User messages:
 {{- end }}
 
 {{- if .HasSchema }}
-JSON schema (must obey strictly):
+Follow the JSON schema in the output (must obey strictly):
 {{ .Schema }}
 {{- end }}
 
 Output guidance:
 - Return JSON only.
-- Do not include any extra text before or after the JSON.
+- Do not include any thinking or extra text before or after the JSON.

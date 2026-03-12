@@ -26,6 +26,8 @@ type ChangeRequestRequest struct {
 	Head                string
 	EnableOverview      bool
 	EnableSuggestions   bool
+	OverviewExplicit    bool
+	SuggestionsExplicit bool
 	Metadata            map[string]string
 }
 
@@ -36,10 +38,11 @@ type RulePackProvider interface {
 
 // LLMReviewPayload is the complete review prompt payload.
 type LLMReviewPayload struct {
-	Input       domain.ChangeRequestInput
-	RulePack    RulePack
-	Environment uccontracts.CodeEnvironment
-	Suggestions bool
+	Input         domain.ChangeRequestInput
+	RulePack      RulePack
+	Environment   uccontracts.CodeEnvironment
+	Suggestions   bool
+	CustomRuleset string
 }
 
 // LLMReviewResult is normalized LLM output.
@@ -55,8 +58,9 @@ type LLMReviewer interface {
 
 // LLMOverviewPayload is the complete overview prompt payload.
 type LLMOverviewPayload struct {
-	Input       domain.ChangeRequestInput
-	Environment uccontracts.CodeEnvironment
+	Input         domain.ChangeRequestInput
+	Environment   uccontracts.CodeEnvironment
+	ExtraGuidance string
 }
 
 // LLMOverviewResult is normalized LLM overview output.
@@ -72,11 +76,12 @@ type LLMOverviewGenerator interface {
 
 // AutogenPayload is the complete autogen prompt payload.
 type AutogenPayload struct {
-	Input       domain.ChangeRequestInput
-	Docs        bool
-	Tests       bool
-	HeadBranch  string
-	Environment uccontracts.CodeEnvironment
+	Input         domain.ChangeRequestInput
+	Docs          bool
+	Tests         bool
+	HeadBranch    string
+	Environment   uccontracts.CodeEnvironment
+	ExtraGuidance string
 }
 
 // AutogenGenerator applies missing tests/docs/comments for the diff.
@@ -86,10 +91,11 @@ type AutogenGenerator interface {
 
 // ReviewPublishResult is output passed to a concrete publisher.
 type ReviewPublishResult struct {
-	Target   domain.ChangeRequestTarget
-	Messages []domain.ReviewMessage
-	Findings []domain.Finding
-	Summary  string
+	Target         domain.ChangeRequestTarget
+	Messages       []domain.ReviewMessage
+	Findings       []domain.Finding
+	Summary        string
+	RecipeWarnings []string
 }
 
 // ReviewResultPublisher publishes review results (comment or print).
@@ -99,9 +105,10 @@ type ReviewResultPublisher interface {
 
 // OverviewPublishRequest is output passed to a concrete overview publisher.
 type OverviewPublishRequest struct {
-	Target   domain.ChangeRequestTarget
-	Overview LLMOverviewResult
-	Metadata map[string]string
+	Target         domain.ChangeRequestTarget
+	Overview       LLMOverviewResult
+	Metadata       map[string]string
+	RecipeWarnings []string
 }
 
 // OverviewPublisher publishes overview results.
@@ -111,15 +118,16 @@ type OverviewPublisher interface {
 
 // AutogenPublishRequest is output passed to a concrete autogen publisher.
 type AutogenPublishRequest struct {
-	Target      domain.ChangeRequestTarget
-	Changes     []domain.AutogenChange
-	Summary     domain.AutogenSummary
-	Publish     bool
-	HeadBranch  string
-	Metadata    map[string]string
-	AgentOutput string
-	Environment uccontracts.CodeEnvironment
-	PushOptions domain.CodeEnvironmentPushOptions
+	Target         domain.ChangeRequestTarget
+	Changes        []domain.AutogenChange
+	Summary        domain.AutogenSummary
+	Publish        bool
+	HeadBranch     string
+	Metadata       map[string]string
+	AgentOutput    string
+	Environment    uccontracts.CodeEnvironment
+	PushOptions    domain.CodeEnvironmentPushOptions
+	RecipeWarnings []string
 }
 
 // AutogenPublisher publishes autogen results.
@@ -131,6 +139,7 @@ type AutogenPublisher interface {
 type ReviewRequest struct {
 	Input       domain.ChangeRequestInput
 	Suggestions bool
+	Recipe      domain.CustomRecipe
 }
 
 // ReviewExecutionResult is the review-usecase output.
@@ -147,7 +156,8 @@ type ReviewUseCase interface {
 
 // OverviewRequest is the overview-usecase input.
 type OverviewRequest struct {
-	Input domain.ChangeRequestInput
+	Input  domain.ChangeRequestInput
+	Recipe domain.CustomRecipe
 }
 
 // OverviewExecutionResult is the overview-usecase output.

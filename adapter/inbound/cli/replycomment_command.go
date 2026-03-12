@@ -35,7 +35,7 @@ type ReplyCommentCommand struct {
 
 // ReplyCommentRunParams contains already-parsed replycomment parameters.
 type ReplyCommentRunParams struct {
-	Provider      string
+	VCSProvider   string
 	Repo          string
 	ChangeRequest string
 	CommentID     string
@@ -61,12 +61,12 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		return errors.New("github client is not configured")
 	}
 
-	provider := strings.TrimSpace(strings.ToLower(params.Provider))
+	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
 	if provider == "" {
 		provider = "github"
 	}
 	if provider != "github" {
-		return fmt.Errorf("unsupported provider: %s", provider)
+		return fmt.Errorf("unsupported vcs provider: %s", provider)
 	}
 
 	if strings.TrimSpace(params.ChangeRequest) == "" {

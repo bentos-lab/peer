@@ -32,3 +32,4 @@ test_data
 # Python
 __pycache__
 *.pem
+.autogit

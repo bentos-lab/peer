@@ -59,7 +59,6 @@
 - Before implementation, validate all guidelines and design decisions against Clean Architecture and SOLID principles.
 - All function/method name must be neutral if is is posible.
 
-
 ## Testing Guidelines
 
 - Testing framework: `stretchr/testify`

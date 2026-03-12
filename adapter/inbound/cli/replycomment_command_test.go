@@ -65,7 +65,7 @@ func TestReplyCommentCommandRejectsQuestionWithCommentFlag(t *testing.T) {
 	command := NewReplyCommentCommand(useCase, client, "autogitbot")
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		Repo:          "owner/repo",
 		ChangeRequest: "7",
 		Question:      "What changed?",
@@ -91,7 +91,7 @@ func TestReplyCommentCommandQuestionBuildsInlineThread(t *testing.T) {
 	command := NewReplyCommentCommand(useCase, client, "autogitbot")
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		ChangeRequest: "7",
 		Question:      "What changed?",
 	})
@@ -126,7 +126,7 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 	command := NewReplyCommentCommand(useCase, client, "autogitbot")
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		Repo:          "owner/repo",
 		ChangeRequest: "7",
 		Question:      "What changed?",
@@ -170,7 +170,7 @@ func TestReplyCommentCommandParsesDiscussionAnchor(t *testing.T) {
 	command := NewReplyCommentCommand(useCase, client, "autogitbot")
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		ChangeRequest: "7",
 		CommentID:     "discussion_r2909490245",
 		Comment:       true,
@@ -200,7 +200,7 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 	command := NewReplyCommentCommand(useCase, client, "autogitbot")
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		ChangeRequest: "7",
 		CommentID:     "issuecomment-12345",
 		Comment:       true,

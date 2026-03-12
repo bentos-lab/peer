@@ -33,14 +33,15 @@ type Answerer struct {
 }
 
 type replyTaskPromptTemplateData struct {
-	Repository  string
-	RepoURL     string
-	Base        string
-	Head        string
-	Title       string
-	Description string
-	Question    string
-	Thread      string
+	Repository    string
+	RepoURL       string
+	Base          string
+	Head          string
+	Title         string
+	Description   string
+	Question      string
+	Thread        string
+	ExtraGuidance string
 }
 
 // NewAnswerer creates a coding-agent replycomment adapter.
@@ -77,14 +78,15 @@ func (a *Answerer) Answer(ctx context.Context, payload usecase.ReplyCommentAnswe
 
 	threadText := formatThread(payload.Thread)
 	taskPrompt, err := renderSimpleTemplate("reply_task_prompt", replyTaskPromptTemplateRaw, replyTaskPromptTemplateData{
-		Repository:  payload.Input.Target.Repository,
-		RepoURL:     payload.Input.RepoURL,
-		Base:        normalizedBase,
-		Head:        normalizedHead,
-		Title:       payload.Input.Title,
-		Description: sharedtext.SingleLine(payload.Input.Description),
-		Question:    payload.Question,
-		Thread:      threadText,
+		Repository:    payload.Input.Target.Repository,
+		RepoURL:       payload.Input.RepoURL,
+		Base:          normalizedBase,
+		Head:          normalizedHead,
+		Title:         payload.Input.Title,
+		Description:   sharedtext.SingleLine(payload.Input.Description),
+		Question:      payload.Question,
+		Thread:        threadText,
+		ExtraGuidance: strings.TrimSpace(payload.ExtraGuidance),
 	})
 	if err != nil {
 		return "", err

@@ -34,9 +34,12 @@ type CodeEnvironmentPushResult struct {
 type CodingAgentRunOptions struct {
 	Provider string
 	Model    string
+	// SessionID continues a prior agent session when available.
+	SessionID string
 }
 
 // CodingAgentRunResult is the output from one coding task execution.
 type CodingAgentRunResult struct {
-	Text string
+	Text      string
+	SessionID string
 }

@@ -12,9 +12,9 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	unsetEnv(t, "PORT")
 	unsetEnv(t, "LOG_LEVEL")
 	unsetEnv(t, "OVERVIEW_ENABLED")
-	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_API_KEY")
-	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "LLM_OPENAI_BASE_URL")
+	unsetEnv(t, "LLM_OPENAI_API_KEY")
+	unsetEnv(t, "LLM_OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -65,9 +65,9 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 }
 
 func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
-	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_API_KEY")
-	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "LLM_OPENAI_BASE_URL")
+	unsetEnv(t, "LLM_OPENAI_API_KEY")
+	unsetEnv(t, "LLM_OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -96,7 +96,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=gpt-4.1\nOPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=gpt-4.1\nLLM_OPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -117,9 +117,9 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 }
 
 func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
-	t.Setenv("OPENAI_BASE_URL", "gemini")
-	t.Setenv("OPENAI_MODEL", "from-env")
-	t.Setenv("OPENAI_API_KEY", "env-key")
+	t.Setenv("LLM_OPENAI_BASE_URL", "gemini")
+	t.Setenv("LLM_OPENAI_MODEL", "from-env")
+	t.Setenv("LLM_OPENAI_API_KEY", "env-key")
 	t.Setenv("CODING_AGENT_NAME", "opencode")
 	t.Setenv("CODING_AGENT_PROVIDER", "codingagent")
 	t.Setenv("CODING_AGENT_MODEL", "model-y")
@@ -148,7 +148,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("OPENAI_BASE_URL=openai\nOPENAI_MODEL=from-dotenv\nOPENAI_API_KEY=dotenv-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=dotenv-provider\nCODING_AGENT_MODEL=dotenv-model\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=from-dotenv\nLLM_OPENAI_API_KEY=dotenv-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=dotenv-provider\nCODING_AGENT_MODEL=dotenv-model\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -177,9 +177,9 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 }
 
 func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
-	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_API_KEY")
-	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "LLM_OPENAI_BASE_URL")
+	unsetEnv(t, "LLM_OPENAI_API_KEY")
+	unsetEnv(t, "LLM_OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -215,9 +215,9 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 }
 
 func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
-	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_API_KEY")
-	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "LLM_OPENAI_BASE_URL")
+	unsetEnv(t, "LLM_OPENAI_API_KEY")
+	unsetEnv(t, "LLM_OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")
@@ -252,9 +252,9 @@ func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
 }
 
 func TestLoadReturnsErrorForInvalidOverviewEnabled(t *testing.T) {
-	unsetEnv(t, "OPENAI_BASE_URL")
-	unsetEnv(t, "OPENAI_API_KEY")
-	unsetEnv(t, "OPENAI_MODEL")
+	unsetEnv(t, "LLM_OPENAI_BASE_URL")
+	unsetEnv(t, "LLM_OPENAI_API_KEY")
+	unsetEnv(t, "LLM_OPENAI_MODEL")
 	unsetEnv(t, "CODING_AGENT_NAME")
 	unsetEnv(t, "CODING_AGENT_PROVIDER")
 	unsetEnv(t, "CODING_AGENT_MODEL")

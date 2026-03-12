@@ -16,10 +16,11 @@ import (
 
 // autogenUseCase is the concrete AutogenUseCase implementation.
 type autogenUseCase struct {
-	generator  AutogenGenerator
-	publisher  AutogenPublisher
-	envFactory uccontracts.CodeEnvironmentFactory
-	logger     Logger
+	generator    AutogenGenerator
+	publisher    AutogenPublisher
+	envFactory   uccontracts.CodeEnvironmentFactory
+	recipeLoader CustomRecipeLoader
+	logger       Logger
 }
 
 // NewAutogenUseCase constructs an autogen usecase.
@@ -27,19 +28,21 @@ func NewAutogenUseCase(
 	generator AutogenGenerator,
 	publisher AutogenPublisher,
 	envFactory uccontracts.CodeEnvironmentFactory,
+	recipeLoader CustomRecipeLoader,
 	logger Logger,
 ) (AutogenUseCase, error) {
-	if generator == nil || publisher == nil || envFactory == nil {
+	if generator == nil || publisher == nil || envFactory == nil || recipeLoader == nil {
 		return nil, errors.New("autogen usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &autogenUseCase{
-		generator:  generator,
-		publisher:  publisher,
-		envFactory: envFactory,
-		logger:     logger,
+		generator:    generator,
+		publisher:    publisher,
+		envFactory:   envFactory,
+		recipeLoader: recipeLoader,
+		logger:       logger,
 	}, nil
 }
 
@@ -47,7 +50,7 @@ func NewAutogenUseCase(
 func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (AutogenExecutionResult, error) {
 	startedAt := time.Now()
 	target := request.Input.Target
-	logExecutionStarted(u.logger, "autogen", target)
+	logExecution(u.logger, "autogen", target, "start", startedAt, "")
 
 	if !request.Docs && !request.Tests {
 		return AutogenExecutionResult{}, fmt.Errorf("autogen requires --docs and/or --tests")
@@ -66,7 +69,7 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 		RepoURL: request.Input.RepoURL,
 	})
 	if err != nil {
-		logStageFailure(u.logger, "autogen", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
+		logStage(u.logger, "autogen", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", err)
 		return AutogenExecutionResult{}, err
 	}
 	defer func() {
@@ -74,24 +77,35 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
 		}
 	}()
-	logStageSuccess(u.logger, "autogen", "initialize_code_environment", target, initializeEnvironmentStartedAt)
+	logStage(u.logger, "autogen", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
+
+	headRef := strings.TrimSpace(request.Input.Head)
+	if headRef == "" {
+		headRef = "HEAD"
+	}
+	recipe, err := u.recipeLoader.Load(ctx, environment, headRef)
+	if err != nil {
+		logStage(u.logger, "autogen", "load_recipe", target, "failure", initializeEnvironmentStartedAt, "%v", err)
+		return AutogenExecutionResult{}, err
+	}
 
 	generateStartedAt := time.Now()
 	agentOutput, err := u.generator.Generate(ctx, AutogenPayload{
-		Input:       request.Input,
-		Docs:        request.Docs,
-		Tests:       request.Tests,
-		HeadBranch:  request.HeadBranch,
-		Environment: environment,
+		Input:         request.Input,
+		Docs:          request.Docs,
+		Tests:         request.Tests,
+		HeadBranch:    request.HeadBranch,
+		Environment:   environment,
+		ExtraGuidance: strings.TrimSpace(recipe.AutogenGuidance),
 	})
 	if err != nil {
-		logStageFailure(u.logger, "autogen", "generate_autogen", target, generateStartedAt, err)
+		logStage(u.logger, "autogen", "generate_autogen", target, "failure", generateStartedAt, "%v", err)
 		return AutogenExecutionResult{}, err
 	}
 	if request.Publish && strings.TrimSpace(agentOutput) == "" {
 		return AutogenExecutionResult{}, fmt.Errorf("autogen publish requires agent output")
 	}
-	logStageSuccess(u.logger, "autogen", "generate_autogen", target, generateStartedAt)
+	logStage(u.logger, "autogen", "generate_autogen", target, "success", generateStartedAt, "")
 
 	collectStartedAt := time.Now()
 	changedFiles, err := environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
@@ -102,13 +116,13 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 			u.logger.Infof("No autogen changes detected; skipping content summary.")
 			changedFiles = nil
 		} else {
-			logStageFailure(u.logger, "autogen", "collect_autogen_changes", target, collectStartedAt, err)
+			logStage(u.logger, "autogen", "collect_autogen_changes", target, "failure", collectStartedAt, "%v", err)
 			return AutogenExecutionResult{}, err
 		}
 	}
 	changes := buildAutogenChanges(changedFiles)
 	summary := buildAutogenSummary(changes)
-	logStageSuccess(u.logger, "autogen", "collect_autogen_changes", target, collectStartedAt)
+	logStage(u.logger, "autogen", "collect_autogen_changes", target, "success", collectStartedAt, "")
 
 	publishStartedAt := time.Now()
 	if err := u.publisher.PublishAutogen(ctx, AutogenPublishRequest{
@@ -125,16 +139,18 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 			CommitMessage: "autogen: add tests/docs/comments",
 			RemoteName:    "origin",
 		},
+		RecipeWarnings: recipe.MissingPaths,
 	}); err != nil {
-		logStageFailure(u.logger, "autogen", "publish_autogen_result", target, publishStartedAt, err)
+		logStage(u.logger, "autogen", "publish_autogen_result", target, "failure", publishStartedAt, "%v", err)
 		return AutogenExecutionResult{}, err
 	}
-	logStageSuccess(u.logger, "autogen", "publish_autogen_result", target, publishStartedAt)
+	logStage(u.logger, "autogen", "publish_autogen_result", target, "success", publishStartedAt, "")
 
-	logExecutionCompleted(
+	logExecution(
 		u.logger,
 		"autogen",
 		target,
+		"complete",
 		startedAt,
 		"Autogen execution took %d ms and produced %d change blocks.",
 		time.Since(startedAt).Milliseconds(),

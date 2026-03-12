@@ -24,6 +24,10 @@ func (e *dummyCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.Code
 	return []domain.ChangedFile{}, nil
 }
 
+func (e *dummyCodeEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
 func (e *dummyCodeEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }

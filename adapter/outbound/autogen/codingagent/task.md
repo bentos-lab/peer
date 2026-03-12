@@ -72,6 +72,11 @@ Metadata:
 - Description: {{ .Description }}
 - Head branch (if PR): {{ .HeadBranch }}
 
+{{- if .ExtraGuidance }}
+Custom recipe guidance:
+{{ .ExtraGuidance }}
+
+{{- end }}
 Output guidance:
 - Make the changes directly in the repository.
 - Keep changes minimal and scoped to the diff.

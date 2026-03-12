@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"bentos-backend/domain"
@@ -32,6 +33,10 @@ func (e *autogenTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.Co
 	return nil, nil
 }
 
+func (e *autogenTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
 func (e *autogenTestEnvironment) PushChanges(_ context.Context, opts domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	e.pushCalls++
 	e.lastOptions = opts
@@ -49,13 +54,14 @@ func TestAutogenPublisherPushesWithEnvironment(t *testing.T) {
 	publisher := NewAutogenPublisher(client, nil)
 
 	err := publisher.PublishAutogen(context.Background(), usecase.AutogenPublishRequest{
-		Target:      domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 9},
-		Publish:     true,
-		HeadBranch:  "feature",
-		Changes:     []domain.AutogenChange{{FilePath: "foo.go", StartLine: 1, EndLine: 1, Content: "// add"}},
-		Summary:     domain.AutogenSummary{},
-		AgentOutput: "Autogen agent report",
-		Environment: env,
+		Target:         domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 9},
+		Publish:        true,
+		HeadBranch:     "feature",
+		Changes:        []domain.AutogenChange{{FilePath: "foo.go", StartLine: 1, EndLine: 1, Content: "// add"}},
+		Summary:        domain.AutogenSummary{},
+		AgentOutput:    "Autogen agent report",
+		RecipeWarnings: []string{".autogit/autogen.md"},
+		Environment:    env,
 		PushOptions: domain.CodeEnvironmentPushOptions{
 			TargetBranch:  "feature",
 			CommitMessage: "autogen: add tests/docs/comments",
@@ -64,6 +70,7 @@ func TestAutogenPublisherPushesWithEnvironment(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
+	require.True(t, strings.HasPrefix(client.bodies[0], "> [!WARNING]"))
 	require.Contains(t, client.bodies[0], "Agent output")
 	require.Equal(t, 1, env.pushCalls)
 	require.Equal(t, "feature", env.lastOptions.TargetBranch)

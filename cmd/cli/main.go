@@ -81,6 +81,9 @@ func newRootCommand(
 	var openAIBaseURL string
 	var openAIModel string
 	var openAIAPIKey string
+	var codeAgent string
+	var codeAgentProvider string
+	var codeAgentModel string
 	var verbosity int
 
 	var cmd *cobra.Command
@@ -96,11 +99,14 @@ func newRootCommand(
 	persistentFlags.StringVar(&openAIBaseURL, "openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM)")
 	persistentFlags.StringVar(&openAIModel, "openai-model", "", "OpenAI compatible model override")
 	persistentFlags.StringVar(&openAIAPIKey, "openai-api-key", "", "OpenAI compatible API key override")
+	persistentFlags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config)")
+	persistentFlags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config)")
+	persistentFlags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config)")
 	persistentFlags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
 
-	cmd.AddCommand(newReviewSubcommand(ctx, loadConfig, buildReviewCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &verbosity))
-	cmd.AddCommand(newAutogenSubcommand(ctx, loadConfig, buildAutogenCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &verbosity))
-	cmd.AddCommand(newReplyCommentSubcommand(ctx, loadConfig, buildReplyCommentCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &verbosity))
+	cmd.AddCommand(newReviewSubcommand(ctx, loadConfig, buildReviewCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
+	cmd.AddCommand(newAutogenSubcommand(ctx, loadConfig, buildAutogenCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
+	cmd.AddCommand(newReplyCommentSubcommand(ctx, loadConfig, buildReplyCommentCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
 	cmd.AddCommand(newInstallSubcommand(ctx))
 
 	return cmd
@@ -113,9 +119,12 @@ func newReviewSubcommand(
 	openAIBaseURL *string,
 	openAIModel *string,
 	openAIAPIKey *string,
+	codeAgent *string,
+	codeAgentProvider *string,
+	codeAgentModel *string,
 	verbosity *int,
 ) *cobra.Command {
-	var provider string
+	var vcsProvider string
 	var repo string
 	var changeRequest string
 	var base string
@@ -128,7 +137,7 @@ func newReviewSubcommand(
 		Use:   "review",
 		Short: "Run review and overview via GitHub context",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *verbosity)
+			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel, *verbosity)
 			if err != nil {
 				return err
 			}
@@ -137,14 +146,16 @@ func newReviewSubcommand(
 				return cliConfigLoadError{cause: err}
 			}
 
+			overviewExplicit := cmd.Flags().Changed("overview")
+			suggestExplicit := cmd.Flags().Changed("suggest")
 			effectiveOverview := false
-			if cmd.Flags().Changed("overview") {
+			if overviewExplicit {
 				effectiveOverview = overview
 			} else if cfg.OverviewEnabled != nil {
 				effectiveOverview = *cfg.OverviewEnabled
 			}
 			effectiveSuggest := false
-			if cmd.Flags().Changed("suggest") {
+			if suggestExplicit {
 				effectiveSuggest = suggest
 			} else {
 				effectiveSuggest = cfg.SuggestedChanges.Enabled
@@ -164,20 +175,22 @@ func newReviewSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cliinbound.RunParams{
-				Provider:      provider,
-				Repo:          repo,
-				ChangeRequest: changeRequest,
-				Base:          base,
-				Head:          head,
-				Comment:       comment,
-				Overview:      effectiveOverview,
-				Suggest:       effectiveSuggest,
+				VCSProvider:      vcsProvider,
+				Repo:             repo,
+				ChangeRequest:    changeRequest,
+				Base:             base,
+				Head:             head,
+				Comment:          comment,
+				Overview:         effectiveOverview,
+				Suggest:          effectiveSuggest,
+				OverviewExplicit: overviewExplicit,
+				SuggestExplicit:  suggestExplicit,
 			})
 		},
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&provider, "provider", "github", "provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
 	flags.StringVar(&repo, "repo", "", "repository (GitHub URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "GitHub pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -195,9 +208,12 @@ func newAutogenSubcommand(
 	openAIBaseURL *string,
 	openAIModel *string,
 	openAIAPIKey *string,
+	codeAgent *string,
+	codeAgentProvider *string,
+	codeAgentModel *string,
 	verbosity *int,
 ) *cobra.Command {
-	var provider string
+	var vcsProvider string
 	var repo string
 	var changeRequest string
 	var base string
@@ -210,7 +226,7 @@ func newAutogenSubcommand(
 		Use:   "autogen",
 		Short: "Run autogen (lazywork) for tests/docs/comments",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *verbosity)
+			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel, *verbosity)
 			if err != nil {
 				return err
 			}
@@ -233,7 +249,7 @@ func newAutogenSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cliinbound.AutogenRunParams{
-				Provider:      provider,
+				VCSProvider:   vcsProvider,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
 				Base:          base,
@@ -246,7 +262,7 @@ func newAutogenSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&provider, "provider", "github", "provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
 	flags.StringVar(&repo, "repo", "", "repository (GitHub URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "GitHub pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -264,9 +280,12 @@ func newReplyCommentSubcommand(
 	openAIBaseURL *string,
 	openAIModel *string,
 	openAIAPIKey *string,
+	codeAgent *string,
+	codeAgentProvider *string,
+	codeAgentModel *string,
 	verbosity *int,
 ) *cobra.Command {
-	var provider string
+	var vcsProvider string
 	var repo string
 	var changeRequest string
 	var commentID string
@@ -277,7 +296,7 @@ func newReplyCommentSubcommand(
 		Use:   "replycomment",
 		Short: "Answer a PR comment question",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *verbosity)
+			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel, *verbosity)
 			if err != nil {
 				return err
 			}
@@ -300,7 +319,7 @@ func newReplyCommentSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cliinbound.ReplyCommentRunParams{
-				Provider:      provider,
+				VCSProvider:   vcsProvider,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
 				CommentID:     commentID,
@@ -311,7 +330,7 @@ func newReplyCommentSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&provider, "provider", "github", "provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
 	flags.StringVar(&repo, "repo", "", "repository (GitHub URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "GitHub pull request number")
 	flags.StringVar(&commentID, "comment-id", "", "GitHub comment id to answer")
@@ -363,7 +382,7 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 	return sub
 }
 
-func resolveLLMOptions(cmd *cobra.Command, openAIBaseURL string, openAIModel string, openAIAPIKey string, verbosity int) (wiring.CLILLMOptions, string, error) {
+func resolveLLMOptions(cmd *cobra.Command, openAIBaseURL string, openAIModel string, openAIAPIKey string, codeAgent string, codeAgentProvider string, codeAgentModel string, verbosity int) (wiring.CLILLMOptions, string, error) {
 	opts := wiring.CLILLMOptions{}
 	if flagChanged(cmd, "openai-base-url") {
 		opts.OpenAIBaseURLSet = true
@@ -388,6 +407,30 @@ func resolveLLMOptions(cmd *cobra.Command, openAIBaseURL string, openAIModel str
 		opts.OpenAIAPIKey = value
 		opts.OpenAIAPIKeySet = true
 	}
+	if flagChanged(cmd, "code-agent") {
+		value := validateNonEmptyOverrideFlag(codeAgent)
+		if value == "" {
+			return opts, "", fmt.Errorf("flag --code-agent requires a non-empty value")
+		}
+		opts.CodeAgent = value
+		opts.CodeAgentSet = true
+	}
+	if flagChanged(cmd, "code-agent-provider") {
+		value := validateNonEmptyOverrideFlag(codeAgentProvider)
+		if value == "" {
+			return opts, "", fmt.Errorf("flag --code-agent-provider requires a non-empty value")
+		}
+		opts.CodeAgentProvider = value
+		opts.CodeAgentProviderSet = true
+	}
+	if flagChanged(cmd, "code-agent-model") {
+		value := validateNonEmptyOverrideFlag(codeAgentModel)
+		if value == "" {
+			return opts, "", fmt.Errorf("flag --code-agent-model requires a non-empty value")
+		}
+		opts.CodeAgentModel = value
+		opts.CodeAgentModelSet = true
+	}
 	logOverride := sharedcli.LogLevelOverrideFromVerbosity(verbosity)
 	return opts, logOverride, nil
 }
@@ -410,6 +453,14 @@ func validateOpenAIStringFlagValue(flagName string, value string) string {
 	return trimmed
 }
 
+func validateNonEmptyOverrideFlag(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+		return ""
+	}
+	return trimmed
+}
+
 func logLLMSelection(logger usecase.Logger, cfg config.Config, opts wiring.CLILLMOptions) error {
 	selection, err := wiring.ResolveLLMSelection(cfg, opts)
 	if err != nil {
@@ -423,11 +474,12 @@ func logLLMSelection(logger usecase.Logger, cfg config.Config, opts wiring.CLILL
 		)
 		return nil
 	}
+	codingAgentConfig := wiring.ResolveCLICodingAgentConfig(cfg, opts)
 	logger.Infof(
 		`cli startup: llm=codingagent agent=%q provider=%q model=%q`,
-		cfg.CodingAgent.Agent,
-		cfg.CodingAgent.Provider,
-		cfg.CodingAgent.Model,
+		codingAgentConfig.Agent,
+		codingAgentConfig.Provider,
+		codingAgentConfig.Model,
 	)
 	return nil
 }

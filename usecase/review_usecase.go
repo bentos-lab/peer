@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"bentos-backend/domain"
@@ -47,24 +48,26 @@ func NewReviewUseCase(
 func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (ReviewExecutionResult, error) {
 	startedAt := time.Now()
 	target := request.Input.Target
-	logExecutionStarted(u.logger, "review", target)
+	logExecution(u.logger, "review", target, "start", startedAt, "")
 
 	loadRulePackStartedAt := time.Now()
 	pack, err := u.ruleProvider.CorePack(ctx)
 	if err != nil {
-		logStageFailure(u.logger, "review", "load_rule_pack", target, loadRulePackStartedAt, err)
+		logStage(u.logger, "review", "load_rule_pack", target, "failure", loadRulePackStartedAt, "%v", err)
 		return ReviewExecutionResult{}, err
 	}
-	u.logger.Infof("Review rule pack loaded.")
-	logStageSuccess(u.logger, "review", "load_rule_pack", target, loadRulePackStartedAt)
-	u.logger.Debugf("Loading the rule pack took %d ms and returned %d instructions.", time.Since(loadRulePackStartedAt).Milliseconds(), len(pack.Instructions))
+	logStage(u.logger, "review", "load_rule_pack", target, "success", loadRulePackStartedAt, "")
+	if strings.TrimSpace(request.Recipe.ReviewRuleset) != "" {
+		pack.Instructions = []string{strings.TrimSpace(request.Recipe.ReviewRuleset)}
+	}
+	u.logger.Debugf("Review rule pack loaded with %d instructions.", len(pack.Instructions))
 
 	initializeEnvironmentStartedAt := time.Now()
 	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
 		RepoURL: request.Input.RepoURL,
 	})
 	if err != nil {
-		logStageFailure(u.logger, "review", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
+		logStage(u.logger, "review", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", err)
 		return ReviewExecutionResult{}, err
 	}
 	defer func() {
@@ -72,45 +75,44 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
 		}
 	}()
-	u.logger.Infof("Code environment initialized.")
-	logStageSuccess(u.logger, "review", "initialize_code_environment", target, initializeEnvironmentStartedAt)
-	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())
+	logStage(u.logger, "review", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
 
 	reviewDiffStartedAt := time.Now()
 	llmResult, err := u.llmReviewer.Review(ctx, LLMReviewPayload{
-		Input:       request.Input,
-		RulePack:    pack,
-		Environment: environment,
-		Suggestions: request.Suggestions,
+		Input:         request.Input,
+		RulePack:      pack,
+		Environment:   environment,
+		Suggestions:   request.Suggestions,
+		CustomRuleset: strings.TrimSpace(request.Recipe.ReviewRuleset),
 	})
 	if err != nil {
-		logStageFailure(u.logger, "review", "review_diff", target, reviewDiffStartedAt, err)
+		logStage(u.logger, "review", "review_diff", target, "failure", reviewDiffStartedAt, "%v", err)
 		return ReviewExecutionResult{}, err
 	}
-	u.logger.Infof("LLM review completed.")
-	logStageSuccess(u.logger, "review", "review_diff", target, reviewDiffStartedAt)
+	logStage(u.logger, "review", "review_diff", target, "success", reviewDiffStartedAt, "")
 	u.logger.Debugf("The LLM review produced %d findings.", len(llmResult.Findings))
 
 	publishStartedAt := time.Now()
 	messages := BuildMessages(llmResult.Findings, llmResult.Summary)
 	publishInput := ReviewPublishResult{
-		Target:   request.Input.Target,
-		Messages: messages,
-		Findings: llmResult.Findings,
-		Summary:  llmResult.Summary,
+		Target:         request.Input.Target,
+		Messages:       messages,
+		Findings:       llmResult.Findings,
+		Summary:        llmResult.Summary,
+		RecipeWarnings: request.Recipe.MissingPaths,
 	}
 	if err := u.publisher.Publish(ctx, publishInput); err != nil {
-		logStageFailure(u.logger, "review", "publish_review_result", target, publishStartedAt, err)
+		logStage(u.logger, "review", "publish_review_result", target, "failure", publishStartedAt, "%v", err)
 		return ReviewExecutionResult{}, err
 	}
-	u.logger.Infof("Review result publishing completed.")
-	logStageSuccess(u.logger, "review", "publish_review_result", target, publishStartedAt)
-	u.logger.Debugf("Publishing review messages took %d ms and sent %d messages.", time.Since(publishStartedAt).Milliseconds(), len(messages))
+	logStage(u.logger, "review", "publish_review_result", target, "success", publishStartedAt, "")
+	u.logger.Debugf("Published %d review messages.", len(messages))
 
-	logExecutionCompleted(
+	logExecution(
 		u.logger,
 		"review",
 		target,
+		"complete",
 		startedAt,
 		"Full execution took %d ms and produced %d findings with %d messages.",
 		time.Since(startedAt).Milliseconds(),

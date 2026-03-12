@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
-	"time"
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
@@ -58,8 +57,6 @@ func NewOverviewGenerator(generator contracts.LLMGenerator, logger usecase.Logge
 
 // GenerateOverview creates categorized and walkthrough overview data from changed content.
 func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecase.LLMOverviewPayload) (usecase.LLMOverviewResult, error) {
-	startedAt := time.Now()
-	g.logger.Infof("LLM overview generation started.")
 	if payload.Environment == nil {
 		return usecase.LLMOverviewResult{}, fmt.Errorf("code environment must not be nil")
 	}
@@ -75,18 +72,12 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 
 	systemPrompt, err := renderOverviewSystemPrompt()
 	if err != nil {
-		g.logger.Errorf("LLM overview generation failed while rendering the system prompt.")
-		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		g.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("overview: render system prompt: %w", err)
 	}
 
 	userPrompt, err := renderOverviewUserPrompt(payload.Input, changedFiles)
 	if err != nil {
-		g.logger.Errorf("LLM overview generation failed while rendering the user prompt.")
-		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		g.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("overview: render user prompt: %w", err)
 	}
 
 	outputMap, err := g.generator.GenerateJSON(ctx, contracts.GenerateParams{
@@ -94,38 +85,23 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 		Messages:     []string{userPrompt},
 	}, overviewResponseSchema())
 	if err != nil {
-		g.logger.Errorf("LLM overview generation failed while requesting JSON output.")
-		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		g.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("overview: generate JSON output: %w", err)
 	}
 
 	raw, err := json.Marshal(outputMap)
 	if err != nil {
-		g.logger.Errorf("LLM overview generation failed while encoding model output.")
-		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		g.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("overview: encode model output: %w", err)
 	}
 
 	var decoded overviewModelOutput
 	if err := json.Unmarshal(raw, &decoded); err != nil {
-		err = fmt.Errorf("invalid overview model output: %w", err)
-		g.logger.Errorf("LLM overview generation failed because the model output is invalid.")
-		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		g.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("overview: invalid model output: %w", err)
 	}
 
 	if err := validateOverviewCategories(decoded.Categories); err != nil {
-		g.logger.Errorf("LLM overview generation failed because one category is invalid.")
-		g.logger.Debugf("The LLM overview generation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		g.logger.Debugf("Failure details: %v.", err)
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("overview: invalid category: %w", err)
 	}
 
-	g.logger.Infof("LLM overview generation completed.")
-	g.logger.Debugf("The LLM overview generation completed in %d ms.", time.Since(startedAt).Milliseconds())
 	g.logger.Debugf("The LLM overview generation produced %d categories and %d walkthrough groups.", len(decoded.Categories), len(decoded.Walkthroughs))
 
 	return usecase.LLMOverviewResult{

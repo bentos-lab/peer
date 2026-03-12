@@ -76,7 +76,12 @@ Metadata:
 - Include Suggested Changes: {{ .Suggestions }}
 
 Rule pack (hard constraints):
+{{- if .CustomRuleset }}
+- Use the custom recipe ruleset below; it replaces the default rules.
+{{ .CustomRuleset }}
+{{- else }}
 {{ .RulePackText }}
+{{- end }}
 
 Output guidance:
 - Return plain text only.

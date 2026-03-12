@@ -8,6 +8,7 @@ import (
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
 	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
+	customrecipe "bentos-backend/adapter/outbound/customrecipe"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
@@ -99,9 +100,27 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	recipeReadOnlySanitizer, err := safetysanitizer.NewSanitizer(tracedFormatter, safetysanitizer.Options{
+		EnforceReadOnly: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeReadWriteSanitizer, err := safetysanitizer.NewSanitizer(tracedFormatter, safetysanitizer.Options{
+		EnforceReadOnly: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeLoader, err := customrecipe.NewLoader(recipeReadOnlySanitizer, recipeReadWriteSanitizer, logger)
+	if err != nil {
+		return nil, err
+	}
 	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
 		reviewUseCase,
 		overviewUseCase,
+		codeEnvironmentFactory,
+		recipeLoader,
 		logger,
 	)
 	if err != nil {
@@ -121,12 +140,17 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	replyRecipeLoader, err := customrecipe.NewLoader(replySanitizer, recipeReadWriteSanitizer, logger)
+	if err != nil {
+		return nil, err
+	}
 	replyPublisher := githubpublisher.NewReplyCommentPublisher(ghClient, logger)
 	replyUseCase, err := usecase.NewReplyCommentUseCase(
 		replySanitizer,
 		replyAnswerer,
 		replyPublisher,
 		codeEnvironmentFactory,
+		replyRecipeLoader,
 		logger,
 	)
 	if err != nil {

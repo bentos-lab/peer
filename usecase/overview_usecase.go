@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"bentos-backend/domain"
@@ -43,14 +44,14 @@ func NewOverviewUseCase(
 func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) (OverviewExecutionResult, error) {
 	startedAt := time.Now()
 	target := request.Input.Target
-	logExecutionStarted(u.logger, "overview", target)
+	logExecution(u.logger, "overview", target, "start", startedAt, "")
 
 	initializeEnvironmentStartedAt := time.Now()
 	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
 		RepoURL: request.Input.RepoURL,
 	})
 	if err != nil {
-		logStageFailure(u.logger, "overview", "initialize_code_environment", target, initializeEnvironmentStartedAt, err)
+		logStage(u.logger, "overview", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", err)
 		return OverviewExecutionResult{}, err
 	}
 	defer func() {
@@ -58,38 +59,36 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
 		}
 	}()
-	u.logger.Infof("Code environment initialized.")
-	logStageSuccess(u.logger, "overview", "initialize_code_environment", target, initializeEnvironmentStartedAt)
-	u.logger.Debugf("Code environment initialization took %d ms.", time.Since(initializeEnvironmentStartedAt).Milliseconds())
+	logStage(u.logger, "overview", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
 
 	overviewStartedAt := time.Now()
 	overviewResult, err := u.llmOverview.GenerateOverview(ctx, LLMOverviewPayload{
-		Input:       request.Input,
-		Environment: environment,
+		Input:         request.Input,
+		Environment:   environment,
+		ExtraGuidance: strings.TrimSpace(request.Recipe.ReviewOverviewGuidance),
 	})
 	if err != nil {
-		logStageFailure(u.logger, "overview", "generate_overview", target, overviewStartedAt, err)
+		logStage(u.logger, "overview", "generate_overview", target, "failure", overviewStartedAt, "%v", err)
 		return OverviewExecutionResult{}, err
 	}
-	u.logger.Infof("Overview generation completed.")
-	logStageSuccess(u.logger, "overview", "generate_overview", target, overviewStartedAt)
-	u.logger.Debugf("Overview generation took %d ms.", time.Since(overviewStartedAt).Milliseconds())
+	logStage(u.logger, "overview", "generate_overview", target, "success", overviewStartedAt, "")
 
 	publishStartedAt := time.Now()
 	if err := u.overviewPub.PublishOverview(ctx, OverviewPublishRequest{
-		Target:   request.Input.Target,
-		Overview: overviewResult,
-		Metadata: request.Input.Metadata,
+		Target:         request.Input.Target,
+		Overview:       overviewResult,
+		Metadata:       request.Input.Metadata,
+		RecipeWarnings: request.Recipe.MissingPaths,
 	}); err != nil {
-		logStageFailure(u.logger, "overview", "publish_overview_result", target, publishStartedAt, err)
+		logStage(u.logger, "overview", "publish_overview_result", target, "failure", publishStartedAt, "%v", err)
 		return OverviewExecutionResult{}, err
 	}
-	u.logger.Infof("Overview publish completed.")
-	logStageSuccess(u.logger, "overview", "publish_overview_result", target, publishStartedAt)
-	logExecutionCompleted(
+	logStage(u.logger, "overview", "publish_overview_result", target, "success", publishStartedAt, "")
+	logExecution(
 		u.logger,
 		"overview",
 		target,
+		"complete",
 		startedAt,
 		"Overview execution took %d ms.",
 		time.Since(startedAt).Milliseconds(),

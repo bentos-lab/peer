@@ -104,6 +104,25 @@ func TestPublisher_PublishPostsAnchoredFindingsAndSummary(t *testing.T) {
 	require.True(t, containsEvent(logger.events, "trace:GitHub review summary content state=\"success\""))
 }
 
+func TestPublisher_PublishPrependsRecipeWarningToSummary(t *testing.T) {
+	client := &fakeClient{}
+	pub := NewPublisher(client, nil)
+
+	err := pub.Publish(context.Background(), usecase.ReviewPublishResult{
+		Target: domain.ChangeRequestTarget{
+			Repository:          "org/repo",
+			ChangeRequestNumber: 11,
+		},
+		Summary:        "summary",
+		RecipeWarnings: []string{".autogit/rules.md"},
+	})
+	require.NoError(t, err)
+	require.Len(t, client.bodies, 1)
+	require.True(t, strings.HasPrefix(client.bodies[0], "> [!WARNING]"))
+	require.Contains(t, client.bodies[0], ".autogit/rules.md")
+	require.Contains(t, client.bodies[0], "Review summary")
+}
+
 func TestPublisher_PublishRendersReplaceSuggestedChangeBlock(t *testing.T) {
 	client := &fakeClient{}
 	pub := NewPublisher(client, nil)

@@ -43,15 +43,16 @@ type reviewModelOutput struct {
 }
 
 type reviewTaskPromptTemplateData struct {
-	Repository   string
-	RepoURL      string
-	Base         string
-	Head         string
-	Title        string
-	Description  string
-	Language     string
-	Suggestions  bool
-	RulePackText string
+	Repository    string
+	RepoURL       string
+	Base          string
+	Head          string
+	Title         string
+	Description   string
+	Language      string
+	Suggestions   bool
+	RulePackText  string
+	CustomRuleset string
 }
 
 // NewReviewer creates a coding-agent reviewer adapter.
@@ -91,15 +92,16 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		return usecase.LLMReviewResult{}, err
 	}
 	taskPrompt, err := renderSimpleTemplate("review_task_prompt", reviewTaskPromptTemplateRaw, reviewTaskPromptTemplateData{
-		Repository:   payload.Input.Target.Repository,
-		RepoURL:      payload.Input.RepoURL,
-		Base:         normalizedBase,
-		Head:         normalizedHead,
-		Title:        payload.Input.Title,
-		Description:  sharedtext.SingleLine(payload.Input.Description),
-		Language:     resolveLanguage(payload.Input.Language),
-		Suggestions:  payload.Suggestions,
-		RulePackText: strings.Join(payload.RulePack.Instructions, "\n\n"),
+		Repository:    payload.Input.Target.Repository,
+		RepoURL:       payload.Input.RepoURL,
+		Base:          normalizedBase,
+		Head:          normalizedHead,
+		Title:         payload.Input.Title,
+		Description:   sharedtext.SingleLine(payload.Input.Description),
+		Language:      resolveLanguage(payload.Input.Language),
+		Suggestions:   payload.Suggestions,
+		RulePackText:  strings.Join(payload.RulePack.Instructions, "\n\n"),
+		CustomRuleset: strings.TrimSpace(payload.CustomRuleset),
 	})
 	if err != nil {
 		return usecase.LLMReviewResult{}, err

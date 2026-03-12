@@ -30,14 +30,16 @@ type Command struct {
 
 // RunParams contains already-parsed CLI autogit parameters.
 type RunParams struct {
-	Provider      string
-	Repo          string
-	ChangeRequest string
-	Base          string
-	Head          string
-	Comment       bool
-	Overview      bool
-	Suggest       bool
+	VCSProvider      string
+	Repo             string
+	ChangeRequest    string
+	Base             string
+	Head             string
+	Comment          bool
+	Overview         bool
+	Suggest          bool
+	OverviewExplicit bool
+	SuggestExplicit  bool
 }
 
 type repoURLBuilder func(repository string) string
@@ -66,12 +68,12 @@ func (c *Command) Run(ctx context.Context, params RunParams) error {
 		c.logger = stdlogger.Nop()
 	}
 
-	provider := strings.TrimSpace(strings.ToLower(params.Provider))
+	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
 	if provider == "" {
 		provider = "github"
 	}
 	if provider != "github" {
-		return fmt.Errorf("unsupported provider: %s", provider)
+		return fmt.Errorf("unsupported vcs provider: %s", provider)
 	}
 
 	if strings.TrimSpace(params.ChangeRequest) != "" && (strings.TrimSpace(params.Base) != "" || strings.TrimSpace(params.Head) != "") {
@@ -140,6 +142,8 @@ func (c *Command) Run(ctx context.Context, params RunParams) error {
 		Head:                head,
 		EnableOverview:      params.Overview,
 		EnableSuggestions:   params.Suggest,
+		OverviewExplicit:    params.OverviewExplicit,
+		SuggestionsExplicit: params.SuggestExplicit,
 	}
 	if !params.Comment {
 		request.ChangeRequestNumber = 0

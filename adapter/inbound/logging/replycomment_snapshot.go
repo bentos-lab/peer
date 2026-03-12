@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"sort"
 	"strings"
 
 	"bentos-backend/shared/logger/stdlogger"
@@ -43,28 +42,11 @@ func LogReplyCommentInputSnapshot(logger usecase.Logger, source string, action s
 		trimmedAction,
 		request.Base,
 		request.Head,
-		strings.Join(sortedReplyMetadataKeys(request.Metadata), ","),
+		strings.Join(sortedMetadataKeys(request.Metadata), ","),
 		len(request.Metadata),
 		len(request.Title),
 		len(request.Description),
 		len(request.Question),
 		len(request.Thread.Comments),
 	)
-}
-
-func sortedReplyMetadataKeys(metadata map[string]string) []string {
-	if len(metadata) == 0 {
-		return nil
-	}
-
-	keys := make([]string, 0, len(metadata))
-	for key := range metadata {
-		trimmed := strings.TrimSpace(key)
-		if trimmed == "" {
-			continue
-		}
-		keys = append(keys, trimmed)
-	}
-	sort.Strings(keys)
-	return keys
 }

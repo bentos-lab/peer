@@ -6,6 +6,7 @@ import (
 	cliinbound "bentos-backend/adapter/inbound/cli"
 	autogencodingagent "bentos-backend/adapter/outbound/autogen/codingagent"
 	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
+	customrecipe "bentos-backend/adapter/outbound/customrecipe"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
@@ -32,11 +33,14 @@ func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverri
 	if err != nil {
 		return nil, err
 	}
+	codingAgentConfig := ResolveCLICodingAgentConfig(cfg, opts)
+	cfgWithOverrides := cfg
+	cfgWithOverrides.CodingAgent = codingAgentConfig
 	var formatter contracts.LLMGenerator
 	if llmSelection.UseOpenAI {
 		formatter = buildOpenAIGenerator(llmSelection)
 	} else {
-		formatter, err = buildCodingAgentGenerator(cfg, logger)
+		formatter, err = buildCodingAgentGenerator(cfgWithOverrides, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -45,7 +49,6 @@ func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverri
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
 		Logger: logger,
 	})
-	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
 	codingReviewer, err := reviewercodingagent.NewReviewer(tracedLLMClient, reviewercodingagent.Config{
 		Agent:    codingAgentConfig.Agent,
 		Provider: codingAgentConfig.Provider,
@@ -74,6 +77,23 @@ func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverri
 		githubpublisher.NewOverviewPublisher(githubClient, logger),
 	)
 
+	recipeReadOnlySanitizer, err := safetysanitizer.NewSanitizer(tracedLLMClient, safetysanitizer.Options{
+		EnforceReadOnly: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeReadWriteSanitizer, err := safetysanitizer.NewSanitizer(tracedLLMClient, safetysanitizer.Options{
+		EnforceReadOnly: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeLoader, err := customrecipe.NewLoader(recipeReadOnlySanitizer, recipeReadWriteSanitizer, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	reviewUseCase, err := usecase.NewReviewUseCase(
 		ruleProvider,
 		codingReviewer,
@@ -96,6 +116,8 @@ func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverri
 	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
 		reviewUseCase,
 		overviewUseCase,
+		codeEnvironmentFactory,
+		recipeLoader,
 		logger,
 	)
 	if err != nil {
@@ -106,16 +128,33 @@ func BuildCLIReviewCommand(cfg config.Config, opts CLILLMOptions, logLevelOverri
 }
 
 // BuildCLIAutogenCommand wires dependencies for a single CLI autogen mode.
-func BuildCLIAutogenCommand(cfg config.Config, _ CLILLMOptions, logLevelOverride string) (*cliinbound.AutogenCommand, error) {
+func BuildCLIAutogenCommand(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (*cliinbound.AutogenCommand, error) {
 	logger, err := buildLogger(cfg, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
+	llmSelection, err := ResolveLLMSelection(cfg, opts)
+	if err != nil {
+		return nil, err
+	}
+	codingAgentConfig := ResolveCLICodingAgentConfig(cfg, opts)
+	cfgWithOverrides := cfg
+	cfgWithOverrides.CodingAgent = codingAgentConfig
+	var formatter contracts.LLMGenerator
+	if llmSelection.UseOpenAI {
+		formatter = buildOpenAIGenerator(llmSelection)
+	} else {
+		formatter, err = buildCodingAgentGenerator(cfgWithOverrides, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tracedLLMClient := llmtracing.NewGenerator(formatter, logger)
+
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
 		Logger: logger,
 	})
-	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
 	autogenGenerator, err := autogencodingagent.NewGenerator(autogencodingagent.Config{
 		Agent:    codingAgentConfig.Agent,
 		Provider: codingAgentConfig.Provider,
@@ -131,10 +170,28 @@ func BuildCLIAutogenCommand(cfg config.Config, _ CLILLMOptions, logLevelOverride
 		githubpublisher.NewAutogenPublisher(githubClient, logger),
 	)
 
+	recipeReadOnlySanitizer, err := safetysanitizer.NewSanitizer(tracedLLMClient, safetysanitizer.Options{
+		EnforceReadOnly: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeReadWriteSanitizer, err := safetysanitizer.NewSanitizer(tracedLLMClient, safetysanitizer.Options{
+		EnforceReadOnly: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeLoader, err := customrecipe.NewLoader(recipeReadOnlySanitizer, recipeReadWriteSanitizer, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	autogenUseCase, err := usecase.NewAutogenUseCase(
 		autogenGenerator,
 		autogenPublisher,
 		codeEnvironmentFactory,
+		recipeLoader,
 		logger,
 	)
 	if err != nil {
@@ -155,11 +212,14 @@ func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevel
 	if err != nil {
 		return nil, err
 	}
+	codingAgentConfig := ResolveCLICodingAgentConfig(cfg, opts)
+	cfgWithOverrides := cfg
+	cfgWithOverrides.CodingAgent = codingAgentConfig
 	var formatter contracts.LLMGenerator
 	if llmSelection.UseOpenAI {
 		formatter = buildOpenAIGenerator(llmSelection)
 	} else {
-		formatter, err = buildCodingAgentGenerator(cfg, logger)
+		formatter, err = buildCodingAgentGenerator(cfgWithOverrides, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +229,6 @@ func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevel
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
 		Logger: logger,
 	})
-	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
 	answerer, err := replycommentcodingagent.NewAnswerer(replycommentcodingagent.Config{
 		Agent:    codingAgentConfig.Agent,
 		Provider: codingAgentConfig.Provider,
@@ -184,6 +243,16 @@ func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevel
 	if err != nil {
 		return nil, err
 	}
+	recipeReadWriteSanitizer, err := safetysanitizer.NewSanitizer(tracedLLMClient, safetysanitizer.Options{
+		EnforceReadOnly: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	recipeLoader, err := customrecipe.NewLoader(sanitizer, recipeReadWriteSanitizer, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	githubClient := githubvcs.NewCLIClient()
 	publisher := routerpublisher.NewReplyCommentPublisher(
@@ -195,6 +264,7 @@ func BuildCLIReplyCommentCommand(cfg config.Config, opts CLILLMOptions, logLevel
 		answerer,
 		publisher,
 		codeEnvironmentFactory,
+		recipeLoader,
 		logger,
 	)
 	if err != nil {

@@ -78,6 +78,9 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 		"--dir",
 		a.workspaceDir,
 	}
+	if sessionID := strings.TrimSpace(opts.SessionID); sessionID != "" {
+		args = append(args, "--session", sessionID)
+	}
 	if modelSpec != "" {
 		args = append(args, "--model", modelSpec)
 	}
@@ -108,7 +111,7 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 		return domain.CodingAgentRunResult{}, err
 	}
 
-	return domain.CodingAgentRunResult{Text: text}, nil
+	return domain.CodingAgentRunResult{Text: text, SessionID: parser.sessionID}, nil
 }
 
 func (a *HostOpencodeAgent) resolveModelSpec(ctx context.Context, provider string, model string) (string, error) {
@@ -208,7 +211,7 @@ func (a *HostOpencodeAgent) ensureOpencodeInstalled(ctx context.Context) error {
 	return a.installer.EnsureOpencodeInstalled(ctx)
 }
 
-const opencodeTraceTranscriptMaxChars = 4096
+const opencodeTraceTranscriptMaxChars = 16000
 
 type parsedOpencodeEvent struct {
 	Type   string
@@ -226,6 +229,7 @@ type opencodeJSONStreamParser struct {
 	assistantDeltaCount   int
 	lineNumber            int
 	firstError            error
+	sessionID             string
 }
 
 func newOpencodeJSONStreamParser(logger usecase.Logger) *opencodeJSONStreamParser {
@@ -302,6 +306,12 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 	if err := json.Unmarshal([]byte(line), &event); err != nil {
 		p.firstError = fmt.Errorf("failed to parse opencode json output at line %d: %w", p.lineNumber, err)
 		return
+	}
+	if sessionID, ok := event["sessionID"].(string); ok {
+		sessionID = strings.TrimSpace(sessionID)
+		if sessionID != "" {
+			p.sessionID = sessionID
+		}
 	}
 
 	parsedEvent := extractParsedOpencodeEvent(event)

@@ -442,7 +442,7 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 		t.Fatal("expected review usecase execution")
 	}
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, "error:GitHub webhook background review failed.")
+		return containsEvent(logger.events, "debug:GitHub webhook background review failed for")
 	}, time.Second, 10*time.Millisecond)
 }
 
@@ -472,7 +472,7 @@ func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, "error:GitHub webhook background review panicked.")
+		return containsEvent(logger.events, "error:GitHub webhook background review panicked for")
 	}, time.Second, 10*time.Millisecond)
 }
 

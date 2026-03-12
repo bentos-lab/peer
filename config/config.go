@@ -85,9 +85,9 @@ func Load() (Config, error) {
 			GenerateTimeoutMS: intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_GENERATE_TIMEOUT_MS", 30000),
 		},
 		OpenAI: OpenAIConfig{
-			BaseURL: envOrDefault("OPENAI_BASE_URL", ""),
-			APIKey:  os.Getenv("OPENAI_API_KEY"),
-			Model:   envOrDefault("OPENAI_MODEL", ""),
+			BaseURL: envOrDefault("LLM_OPENAI_BASE_URL", ""),
+			APIKey:  os.Getenv("LLM_OPENAI_API_KEY"),
+			Model:   envOrDefault("LLM_OPENAI_MODEL", ""),
 		},
 		CodingAgent: CodingAgentConfig{
 			Agent:    envOrDefault("CODING_AGENT_NAME", "opencode"),
@@ -95,7 +95,13 @@ func Load() (Config, error) {
 			Model:    os.Getenv("CODING_AGENT_MODEL"),
 		},
 		Server: ServerConfig{
-			Port: envOrDefault("PORT", "8080"),
+			Port: func() string {
+				port := envOrDefault("PORT", "8080")
+				if p, err := strconv.Atoi(port); err == nil && p > 0 && p <= 65535 {
+					return port
+				}
+				return "8080"
+			}(),
 			GitHub: GitHubConfig{
 				WebhookSecret:           os.Getenv("GITHUB_WEBHOOK_SECRET"),
 				AppID:                   os.Getenv("GITHUB_APP_ID"),

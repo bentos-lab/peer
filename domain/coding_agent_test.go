@@ -11,6 +11,7 @@ func TestCodingAgentRunOptionsZeroValue(t *testing.T) {
 
 	require.Equal(t, "", options.Provider)
 	require.Equal(t, "", options.Model)
+	require.Equal(t, "", options.SessionID)
 }
 
 func TestCodingAgentSetupOptionsZeroValue(t *testing.T) {
@@ -24,4 +25,5 @@ func TestCodingAgentRunResultZeroValue(t *testing.T) {
 	var result CodingAgentRunResult
 
 	require.Equal(t, "", result.Text)
+	require.Equal(t, "", result.SessionID)
 }

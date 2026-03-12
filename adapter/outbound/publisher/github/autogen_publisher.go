@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
@@ -52,14 +51,11 @@ func (p *AutogenPublisher) PublishAutogen(ctx context.Context, req usecase.Autog
 		return nil
 	}
 
-	startedAt := time.Now()
-	p.logger.Infof("Publishing GitHub autogen result started.")
-	p.logger.Debugf("Repository is %q and change request number is %d.", req.Target.Repository, req.Target.ChangeRequestNumber)
-
 	body := buildAutogenSummaryBody(req)
+	if warning := usecase.FormatRecipeWarning(req.RecipeWarnings); warning != "" {
+		body = fmt.Sprintf("%s\n\n%s", warning, body)
+	}
 	if err := p.client.CreateComment(ctx, req.Target.Repository, req.Target.ChangeRequestNumber, body); err != nil {
-		p.logger.Errorf("Publishing GitHub autogen summary failed.")
-		p.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
 
@@ -67,8 +63,6 @@ func (p *AutogenPublisher) PublishAutogen(ctx context.Context, req usecase.Autog
 		return err
 	}
 
-	p.logger.Infof("Publishing GitHub autogen result completed.")
-	p.logger.Debugf("The publish operation completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
 }
 

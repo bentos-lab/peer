@@ -38,12 +38,13 @@ type OverviewGenerator struct {
 }
 
 type overviewTaskPromptTemplateData struct {
-	Repository  string
-	RepoURL     string
-	Base        string
-	Head        string
-	Title       string
-	Description string
+	Repository    string
+	RepoURL       string
+	Base          string
+	Head          string
+	Title         string
+	Description   string
+	ExtraGuidance string
 }
 
 type overviewModelOutput struct {
@@ -87,12 +88,13 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 		return usecase.LLMOverviewResult{}, fmt.Errorf("failed to setup coding agent: %w", err)
 	}
 	taskPrompt, err := renderSimpleTemplate("overview_task_prompt", overviewTaskPromptTemplateRaw, overviewTaskPromptTemplateData{
-		Repository:  payload.Input.Target.Repository,
-		RepoURL:     payload.Input.RepoURL,
-		Base:        normalizedBase,
-		Head:        normalizedHead,
-		Title:       payload.Input.Title,
-		Description: sharedtext.SingleLine(payload.Input.Description),
+		Repository:    payload.Input.Target.Repository,
+		RepoURL:       payload.Input.RepoURL,
+		Base:          normalizedBase,
+		Head:          normalizedHead,
+		Title:         payload.Input.Title,
+		Description:   sharedtext.SingleLine(payload.Input.Description),
+		ExtraGuidance: strings.TrimSpace(payload.ExtraGuidance),
 	})
 	if err != nil {
 		return usecase.LLMOverviewResult{}, err

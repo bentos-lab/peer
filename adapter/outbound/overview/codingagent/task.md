@@ -73,6 +73,11 @@ Metadata:
 - Title: {{ .Title }}
 - Description: {{ .Description }}
 
+{{- if .ExtraGuidance }}
+Custom recipe guidance:
+{{ .ExtraGuidance }}
+
+{{- end }}
 Output guidance:
 - Return plain text only.
 - Do not output markdown tables or JSON.

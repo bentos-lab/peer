@@ -26,42 +26,41 @@ go test ./...
 
 ## Environment Variables
 
-Global:
+LLM_OPENAI (formatter + sanitizer only when enabled):
 
-- `LOG_LEVEL` (default: `info`)
-- `OVERVIEW_ENABLED` (optional bool)
-  - Server default when unset: `true`
-  - CLI default when unset: `false`
+- `LLM_OPENAI_BASE_URL` (empty uses coding-agent LLM; shortcuts: `gemini`, `openai`, `anthropic`)
+- `LLM_OPENAI_API_KEY` (required when `LLM_OPENAI_BASE_URL` is set)
+- `LLM_OPENAI_MODEL` (optional; defaults depend on shortcut)
 
-OpenAI (formatter + sanitizer only when enabled):
-
-- `OPENAI_BASE_URL` (empty uses coding-agent LLM; shortcuts: `gemini`, `openai`, `anthropic`)
-- `OPENAI_API_KEY` (required when `OPENAI_BASE_URL` is set)
-- `OPENAI_MODEL` (optional; defaults depend on shortcut)
-
-Coding agent:
+CODE AGENT:
 
 - `CODING_AGENT_NAME` (default: `opencode`)
 - `CODING_AGENT_PROVIDER` (optional, passed to opencode)
 - `CODING_AGENT_MODEL` (optional, passed to opencode)
 
-Server (webhook-only):
+Feature: Core
+
+- `LOG_LEVEL` (default: `info`)
+- `OVERVIEW_ENABLED` (optional bool; server default when unset: `true`, CLI default when unset: `false`)
+
+Feature: Server (webhook-only)
 
 - `PORT` (default: `8080`)
 
-Server GitHub webhook flow:
+Feature: GitHub webhook
 
 - `GITHUB_WEBHOOK_SECRET` (required)
 - `GITHUB_APP_ID` (required)
 - `GITHUB_APP_PRIVATE_KEY` (required, PEM content or path to PEM file; escaped `\n` is supported for inline mode)
 - `GITHUB_API_BASE_URL` (optional, default: `https://api.github.com`)
 
-Examples:
+Example: Inline PEM mode:
 
-- Inline PEM mode:
-  - `GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----`
-- File path mode:
-  - `GITHUB_APP_PRIVATE_KEY=/run/secrets/github_app_private_key.pem`
+`GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----`
+
+Example: File path mode:
+
+`GITHUB_APP_PRIVATE_KEY=/run/secrets/github_app_private_key.pem`
 
 `.env` is auto-loaded when present in current working directory.
 
@@ -69,8 +68,9 @@ Examples:
 
 1. Create a GitHub App.
 2. Configure permissions:
+- `Contents`: `Read and write` (autogen publish needs push access)
 - `Pull requests`: `Read and write`
-- `Contents`: `Read-only`
+- `Issues`: `Read and write` (overview and reply comments)
 - `Metadata`: `Read-only`
 3. Subscribe to webhook event: `Pull requests`.
 4. Set webhook URL to your server endpoint:
@@ -85,11 +85,16 @@ Examples:
 
 ## Run Server (Webhook Mode)
 
+Basic run:
+
 ```bash
 go run ./cmd/server
-go run ./cmd/server -v
+```
+
+Verbose logging (optional `-v`/`-vv`/`-vvv`):
+
+```bash
 go run ./cmd/server -vv
-go run ./cmd/server -vvv
 ```
 
 Webhook routes:
@@ -111,67 +116,34 @@ For each trigger, the service:
 
 ## Run CLI Reviewer
 
+Review a GitHub PR by number:
+
 ```bash
-go run ./cmd/cli --provider github
-go run ./cmd/cli --provider github -v
-go run ./cmd/cli --provider github -vv
-go run ./cmd/cli --provider github -vvv
-go run ./cmd/cli --provider github --repo org/repo
-go run ./cmd/cli --provider github --repo https://github.com/org/repo.git
-go run ./cmd/cli --provider github --repo git@github.com:org/repo.git
-go run ./cmd/cli --provider github --head @staged
-go run ./cmd/cli --provider github --head @all
-go run ./cmd/cli --provider github --base main --head feature/ref
-go run ./cmd/cli --provider github --change-request 123
-go run ./cmd/cli --provider github --change-request 123 --publish
-go run ./cmd/cli --overview
-go run ./cmd/cli --suggest
-go run ./cmd/cli --suggest=false
-go run ./cmd/cli autogen --docs
-go run ./cmd/cli autogen --tests
-go run ./cmd/cli autogen --docs --tests
-go run ./cmd/cli autogen --base main --head feature/ref --docs
-go run ./cmd/cli autogen --change-request 123 --publish --docs --tests
-go run ./cmd/cli install gh --login
-go run ./cmd/cli install opencode
-go run ./cmd/cli install quickstart
+go run ./cmd/cli --vcs-provider github --change-request 123
+```
+
+Review local staged changes:
+
+```bash
+go run ./cmd/cli --vcs-provider github --head @staged
+```
+
+Publish review comments (optional `--publish`):
+
+```bash
+go run ./cmd/cli --vcs-provider github --change-request 123 --publish
 ```
 
 CLI notes:
 
-- CLI uses authenticated GitHub CLI (`gh auth login`) for repo/PR resolution.
-- `autogit install gh --login` installs `gh` and prompts for `gh auth login`.
-- `autogit install opencode` installs OpenCode.
-- `autogit install quickstart` installs `gh` (with login) and `opencode`.
-- `--provider` currently supports only `github`.
-- `-v/-vv/-vvv` sets log verbosity to info/debug/trace.
-- `--repo` supports:
-  - `owner/repo`
-  - `https://github.com/owner/repo.git` (or `http://...`)
-  - `git@github.com:owner/repo.git`
-  - `ssh://git@github.com/owner/repo.git`
-- `--change-request` and `--base`/`--head` are mutually exclusive.
-- `--publish` requires `--change-request`.
-- `--head` supports:
-  - `@staged`: staged workspace changes (token mode, not a git ref).
-  - `@all`: staged + unstaged + untracked workspace changes (token mode, not a git ref).
-  - any git ref/commit (ref mode).
-- If `--head` is empty, it defaults to:
-  - `@staged` in local workspace mode (without `--repo`).
-  - `HEAD` when `--repo` is provided.
-- If `--base` is empty while `--head` is non-empty, `--base` defaults to `HEAD`.
-- `@staged` and `@all` require local workspace mode (omit `--repo`).
-- When `--repo` is provided, `--head` must be a real git ref/commit.
-- GitHub App auth is for server webhook flow.
-- `--overview` always generates overview and sends it to the mode's configured overview publisher/output.
-- If `--overview` is not provided, CLI uses `OVERVIEW_ENABLED` when set; otherwise overview is disabled by default.
-- Explicit CLI flag value (`--overview` or `--overview=false`) takes precedence over `OVERVIEW_ENABLED`.
-- `--suggest` enables structured suggested code changes in findings.
-- If `--suggest` is not provided, CLI uses `REVIEW_SUGGESTED_CHANGES_ENABLED`.
-- Explicit CLI flag value (`--suggest` or `--suggest=false`) takes precedence over `REVIEW_SUGGESTED_CHANGES_ENABLED`.
-- `autogen` adds missing tests/docs/comments for the merge-base diff between `--base` and `--head`.
-- `autogen --docs` generates docs and code comments; `autogen --tests` generates tests.
-- `autogen --publish` requires `--change-request` and pushes changes to the PR head branch.
+See `go run ./cmd/cli --help` for flags and defaults.
+
+## Custom Recipe
+
+- Repo-local configuration lives in `.autogit/config.toml`.
+- Supported keys (high level): review ruleset, review suggestions/overview toggles, overview/reply/autogen extra guidance.
+- All recipe paths are relative to `.autogit/` (for example `rules.md` is `.autogit/rules.md`).
+- Example config: [Custom Recipe](/docs/custom-recipe.md).
 
 ## Troubleshooting
 
@@ -183,10 +155,3 @@ CLI notes:
   - verify PEM format in `GITHUB_APP_PRIVATE_KEY`.
 - `failed to read github app private key file`:
   - verify `GITHUB_APP_PRIVATE_KEY` points to an existing readable PEM file.
-
-## Specs
-
-- [Architecture Spec](/docs/architecture.md)
-- [Review Spec](/docs/review-spec.md)
-- [Autogen Spec](/docs/autogen-spec.md)
-- [Agent Handoff](/docs/agent-handoff.md)

@@ -74,6 +74,11 @@ Thread history:
 User question:
 {{ .Question }}
 
+{{- if .ExtraGuidance }}
+Custom recipe guidance:
+{{ .ExtraGuidance }}
+
+{{- end }}
 Response guidance:
 - Answer clearly and concisely.
 - Reference relevant files/lines when available.

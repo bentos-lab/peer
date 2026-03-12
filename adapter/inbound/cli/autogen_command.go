@@ -23,7 +23,7 @@ type AutogenCommand struct {
 
 // AutogenRunParams contains already-parsed CLI autogen parameters.
 type AutogenRunParams struct {
-	Provider      string
+	VCSProvider   string
 	Repo          string
 	ChangeRequest string
 	Base          string
@@ -57,12 +57,12 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		c.logger = stdlogger.Nop()
 	}
 
-	provider := strings.TrimSpace(strings.ToLower(params.Provider))
+	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
 	if provider == "" {
 		provider = "github"
 	}
 	if provider != "github" {
-		return fmt.Errorf("unsupported provider: %s", provider)
+		return fmt.Errorf("unsupported vcs provider: %s", provider)
 	}
 
 	if strings.TrimSpace(params.ChangeRequest) != "" && (strings.TrimSpace(params.Base) != "" || strings.TrimSpace(params.Head) != "") {
@@ -149,6 +149,8 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		Head:                request.Input.Head,
 		EnableOverview:      false,
 		EnableSuggestions:   false,
+		OverviewExplicit:    false,
+		SuggestionsExplicit: false,
 		Metadata:            request.Input.Metadata,
 	})
 

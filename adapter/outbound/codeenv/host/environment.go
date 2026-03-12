@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"bentos-backend/adapter/outbound/commandrunner"
 	"bentos-backend/domain"
@@ -35,6 +37,7 @@ type HostCodeEnvironment struct {
 	logger       usecase.Logger
 	workspaceDir string
 	isRemote     bool
+	mu           sync.Mutex
 }
 
 const hostCodeEnvironmentTempBaseDirName = ".sisutmp"
@@ -144,6 +147,33 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 	return files, nil
 }
 
+// ReadFile reads a repository-relative file at the provided ref.
+func (e *HostCodeEnvironment) ReadFile(ctx context.Context, path string, ref string) (string, bool, error) {
+	workspaceDir, err := e.workspaceDirForRun()
+	if err != nil {
+		return "", false, err
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", false, fmt.Errorf("path is required")
+	}
+	ref = strings.TrimSpace(ref)
+
+	if isWorkspaceTokenRef(ref) {
+		content, found, err := e.readWorkspaceFile(ctx, workspaceDir, path)
+		if err != nil {
+			return "", false, err
+		}
+		return content, found, nil
+	}
+
+	content, found, err := e.readRefFile(ctx, workspaceDir, path, ref)
+	if err != nil {
+		return "", false, err
+	}
+	return content, found, nil
+}
+
 // Cleanup removes any temporary workspace created for remote repositories.
 func (e *HostCodeEnvironment) Cleanup(_ context.Context) error {
 	if !e.isRemote {
@@ -241,6 +271,8 @@ func (e *HostCodeEnvironment) prepareWorkspace(ctx context.Context, repoURL stri
 }
 
 func (e *HostCodeEnvironment) workspaceDirForRun() (string, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if strings.TrimSpace(e.workspaceDir) == "" {
 		workspaceDir, err := e.getwd()
 		if err != nil {
@@ -393,6 +425,45 @@ func (e *HostCodeEnvironment) readPathContent(ctx context.Context, workspaceDir 
 	return strings.TrimSpace(string(result.Stdout)), nil
 }
 
+func (e *HostCodeEnvironment) readWorkspaceFile(ctx context.Context, workspaceDir string, path string) (string, bool, error) {
+	raw, err := os.ReadFile(filepath.Join(workspaceDir, path))
+	if err == nil {
+		return string(raw), true, nil
+	}
+	readErr := err
+	if !errors.Is(readErr, os.ErrNotExist) {
+		e.logger.Debugf("Failed to read file %s from workspace: %v", path, readErr)
+	}
+
+	result, showErr := e.git(ctx, workspaceDir, "show", fmt.Sprintf(":%s", path))
+	if showErr != nil {
+		if isGitPathMissing(showErr) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read file content for %q: %w (index fallback failed: %v)", path, readErr, showErr)
+	}
+	return strings.TrimSpace(string(result.Stdout)), true, nil
+}
+
+func (e *HostCodeEnvironment) readRefFile(ctx context.Context, workspaceDir string, path string, ref string) (string, bool, error) {
+	_, err := e.git(ctx, workspaceDir, "cat-file", "-e", fmt.Sprintf("%s:%s", ref, path))
+	if err != nil {
+		if isGitPathMissing(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to verify file %q at ref %q: %w", path, ref, err)
+	}
+
+	result, err := e.git(ctx, workspaceDir, "show", fmt.Sprintf("%s:%s", ref, path))
+	if err != nil {
+		if isGitPathMissing(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to read file content for %q at ref %q: %w", path, ref, err)
+	}
+	return strings.TrimSpace(string(result.Stdout)), true, nil
+}
+
 func (e *HostCodeEnvironment) getCurrentHead(ctx context.Context, workspaceDir string) (string, error) {
 	result, err := e.git(ctx, workspaceDir, "rev-parse", "HEAD")
 	if err != nil {
@@ -474,6 +545,29 @@ func formatCommandError(err error, result commandrunner.Result) error {
 	}
 
 	return err
+}
+
+func isGitPathMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "does not exist") {
+		return true
+	}
+	if strings.Contains(message, "not in the index") {
+		return true
+	}
+	if strings.Contains(message, "unknown revision or path not in the working tree") {
+		return true
+	}
+	if strings.Contains(message, "ambiguous argument") {
+		return true
+	}
+	if strings.Contains(message, "pathspec") && strings.Contains(message, "did not match") {
+		return true
+	}
+	return false
 }
 
 func (e *HostCodeEnvironment) resolveDiffRefs(ctx context.Context, workspaceDir string, base string, head string) (string, string, string, error) {

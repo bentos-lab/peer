@@ -43,6 +43,10 @@ func (e *overviewTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.C
 	return e.changedFiles, nil
 }
 
+func (e *overviewTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
 func (e *overviewTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }

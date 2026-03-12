@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
@@ -31,27 +30,25 @@ func NewOverviewPublisher(client OverviewCommentClient, logger usecase.Logger) *
 
 // PublishOverview posts a markdown overview comment to one GitHub pull request.
 func (p *OverviewPublisher) PublishOverview(ctx context.Context, req usecase.OverviewPublishRequest) error {
-	startedAt := time.Now()
 	if !shouldPublishOverviewForAction(req.Metadata["action"]) {
-		p.logger.Infof("Skipped GitHub overview comment because webhook action is not initial creation.")
-		p.logger.Debugf("Repository is %q and change request number is %d.", req.Target.Repository, req.Target.ChangeRequestNumber)
+		p.logger.Infof(
+			"Skipped GitHub overview comment for %q#%d action=%q.",
+			req.Target.Repository,
+			req.Target.ChangeRequestNumber,
+			req.Metadata["action"],
+		)
 		return nil
 	}
 
 	body := formatOverviewMarkdown(req.Overview)
+	if warning := usecase.FormatRecipeWarning(req.RecipeWarnings); warning != "" {
+		body = fmt.Sprintf("%s\n\n%s", warning, body)
+	}
 	if err := p.client.CreateComment(ctx, req.Target.Repository, req.Target.ChangeRequestNumber, body); err != nil {
 		p.logOverviewPayload("failed", req, body)
-		p.logger.Errorf("Publishing GitHub overview failed.")
-		p.logger.Debugf("Repository is %q and change request number is %d.", req.Target.Repository, req.Target.ChangeRequestNumber)
-		p.logger.Debugf("The publish operation ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-		p.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
 	p.logOverviewPayload("success", req, body)
-
-	p.logger.Infof("Publishing GitHub overview completed.")
-	p.logger.Debugf("Repository is %q and change request number is %d.", req.Target.Repository, req.Target.ChangeRequestNumber)
-	p.logger.Debugf("The publish operation completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
 }
 

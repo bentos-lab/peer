@@ -237,6 +237,8 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 		Head:                head,
 		EnableOverview:      h.enableOverview && isInitialPROpenedAction(event.Action),
 		EnableSuggestions:   h.enableSuggestions,
+		OverviewExplicit:    false,
+		SuggestionsExplicit: false,
 		Metadata: map[string]string{
 			"action": event.Action,
 		},

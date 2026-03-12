@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"bentos-backend/domain"
@@ -47,6 +48,25 @@ func TestOverviewPublisher_PublishOverview_PostsMarkdown(t *testing.T) {
 	require.Contains(t, client.bodies[0], "| Group | Summary |")
 	require.True(t, containsEvent(logger.events, "debug:GitHub overview comment metadata state=\"success\""))
 	require.True(t, containsEvent(logger.events, "trace:GitHub overview comment content state=\"success\""))
+}
+
+func TestOverviewPublisher_PublishOverviewPrependsRecipeWarning(t *testing.T) {
+	client := &fakeOverviewClient{}
+	publisher := NewOverviewPublisher(client, nil)
+
+	err := publisher.PublishOverview(context.Background(), usecase.OverviewPublishRequest{
+		Target: domain.ChangeRequestTarget{
+			Repository:          "org/repo",
+			ChangeRequestNumber: 7,
+		},
+		Overview:       usecase.LLMOverviewResult{},
+		Metadata:       map[string]string{"action": "opened"},
+		RecipeWarnings: []string{".autogit/overview.md"},
+	})
+	require.NoError(t, err)
+	require.Len(t, client.bodies, 1)
+	require.True(t, strings.HasPrefix(client.bodies[0], "> [!WARNING]"))
+	require.Contains(t, client.bodies[0], ".autogit/overview.md")
 }
 
 func TestOverviewPublisher_PublishOverview_SkipsNonOpenedAction(t *testing.T) {

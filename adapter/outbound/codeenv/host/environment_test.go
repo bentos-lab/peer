@@ -167,6 +167,172 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRef(t *testing.T) {
 	require.NoError(t, runner.VerifyDone())
 }
 
+func TestHostCodeEnvironment_ReadFileWorkspace(t *testing.T) {
+	workspaceDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "README.md"), []byte("hello"), 0o644))
+
+	runner := commandrunner.NewDummyCommandRunner()
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+	})
+
+	content, found, err := env.ReadFile(context.Background(), "README.md", "@staged")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "hello", content)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ReadFileWorkspaceIndexFallback(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "show", ":README.md"},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("from-index"),
+		},
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+	})
+
+	content, found, err := env.ReadFile(context.Background(), "README.md", "@staged")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "from-index", content)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ReadFileWorkspaceMissingUsesAmbiguousArgument(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "show", ":.autogit/rules.md"},
+		},
+		Result: commandrunner.Result{
+			Stderr: []byte("fatal: ambiguous argument ':.autogit/rules.md': unknown revision or path not in the working tree."),
+		},
+		Err: errors.New("exit status 128"),
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+	})
+
+	content, found, err := env.ReadFile(context.Background(), ".autogit/rules.md", "@staged")
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Equal(t, "", content)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ReadFileRef(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "cat-file", "-e", "HEAD:README.md"},
+		},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "show", "HEAD:README.md"},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("from-ref"),
+		},
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+	})
+
+	content, found, err := env.ReadFile(context.Background(), "README.md", "HEAD")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "from-ref", content)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ReadFileRefMissing(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "cat-file", "-e", "HEAD:missing.txt"},
+		},
+		Result: commandrunner.Result{
+			Stderr: []byte("fatal: Path 'missing.txt' does not exist in 'HEAD'"),
+		},
+		Err: errors.New("exit status 1"),
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+	})
+
+	content, found, err := env.ReadFile(context.Background(), "missing.txt", "HEAD")
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Equal(t, "", content)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ReadFileRefInvalid(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "cat-file", "-e", "nope:README.md"},
+		},
+		Result: commandrunner.Result{
+			Stderr: []byte("fatal: Not a valid object name nope"),
+		},
+		Err: errors.New("exit status 128"),
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+	})
+
+	_, _, err := env.ReadFile(context.Background(), "README.md", "nope")
+	require.Error(t, err)
+	require.NoError(t, runner.VerifyDone())
+}
+
 func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefReturnsErrorWhenCheckoutHeadFails(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 	runner.Enqueue(commandrunner.CommandStep{

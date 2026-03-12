@@ -28,15 +28,19 @@ func RunReplyCommentAsync(
 	go func() {
 		startedAt := time.Now()
 		logger.Infof("%s webhook background replycomment started.", providerName)
-		logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-		logger.Debugf("Webhook action is %q.", action)
+		logger.Debugf("Webhook context repo=%q pr=%d action=%q.", request.Repository, request.ChangeRequestNumber, action)
 
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				logger.Errorf("%s webhook background replycomment panicked.", providerName)
-				logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", request.Repository, request.ChangeRequestNumber, action)
-				logger.Debugf("The background replycomment ran for %d ms before panicking.", time.Since(startedAt).Milliseconds())
-				logger.Debugf("Panic details: %v.", recovered)
+				logger.Errorf(
+					"%s webhook background replycomment panicked for %q#%d action=%q after %d ms: %v.",
+					providerName,
+					request.Repository,
+					request.ChangeRequestNumber,
+					action,
+					time.Since(startedAt).Milliseconds(),
+					recovered,
+				)
 			}
 		}()
 
@@ -45,15 +49,24 @@ func RunReplyCommentAsync(
 		ctx = decorateContext(ctx)
 
 		if err := execute(ctx, request); err != nil {
-			logger.Errorf("%s webhook background replycomment failed.", providerName)
-			logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", request.Repository, request.ChangeRequestNumber, action)
-			logger.Debugf("The background replycomment ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
-			logger.Debugf("Failure details: %v.", err)
+			logger.Debugf(
+				"%s webhook background replycomment failed for %q#%d action=%q after %d ms.",
+				providerName,
+				request.Repository,
+				request.ChangeRequestNumber,
+				action,
+				time.Since(startedAt).Milliseconds(),
+			)
 			return
 		}
 
-		logger.Infof("%s webhook background replycomment completed.", providerName)
-		logger.Debugf("Repository is %q, change request number is %d, and webhook action is %q.", request.Repository, request.ChangeRequestNumber, action)
-		logger.Debugf("The background replycomment completed in %d ms.", time.Since(startedAt).Milliseconds())
+		logger.Infof(
+			"%s webhook background replycomment completed for %q#%d action=%q in %d ms.",
+			providerName,
+			request.Repository,
+			request.ChangeRequestNumber,
+			action,
+			time.Since(startedAt).Milliseconds(),
+		)
 	}()
 }

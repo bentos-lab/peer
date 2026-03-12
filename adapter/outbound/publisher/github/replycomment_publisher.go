@@ -41,17 +41,20 @@ func (p *ReplyCommentPublisher) Publish(ctx context.Context, result usecase.Repl
 		return fmt.Errorf("pull request number must be positive")
 	}
 
+	body := result.Body
+	if warning := usecase.FormatRecipeWarning(result.RecipeWarnings); warning != "" {
+		body = fmt.Sprintf("%s\n\n%s", warning, body)
+	}
+
 	var err error
 	switch result.Kind {
 	case domain.CommentKindReview:
-		err = p.client.CreateReviewReply(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, result.CommentID, result.Body)
+		err = p.client.CreateReviewReply(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, result.CommentID, body)
 	default:
-		err = p.client.CreateComment(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, result.Body)
+		err = p.client.CreateComment(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, body)
 	}
 	if err != nil {
-		p.logger.Debugf("GitHub replycomment publish failed: %v.", err)
 		return err
 	}
-	p.logger.Debugf("GitHub replycomment publish succeeded.")
 	return nil
 }

@@ -339,10 +339,42 @@ func TestHostOpencodeAgentRunParsesOpencodeTextPartEvents(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "Hello! How can I help you today?", result.Text)
+	require.Equal(t, "ses_1", result.SessionID)
 	require.NoError(t, runner.VerifyDone())
 	traceContent := strings.Join(logger.traceLogs, "\n")
 	require.Contains(t, traceContent, `action="agent produced assistant message"`)
 	require.Contains(t, traceContent, `action="agent finalized assistant transcript"`)
+}
+
+func TestHostOpencodeAgentRunPassesSessionID(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "opencode",
+			Args: []string{
+				"run",
+				"--format", "json",
+				"--dir", "/workspace/current",
+				"--session", "ses_123",
+				"--model", "openai/gpt-4o-mini",
+				"Task abc",
+			},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("{\"type\":\"assistant_message\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Done\"}]},\"sessionID\":\"ses_123\"}\n"),
+		},
+	})
+	agent := newTestHostOpencodeAgent("/workspace/current", runner, nil)
+
+	result, err := agent.Run(context.Background(), "Task abc", domain.CodingAgentRunOptions{
+		Provider:  "openai",
+		Model:     "gpt-4o-mini",
+		SessionID: "ses_123",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Done", result.Text)
+	require.Equal(t, "ses_123", result.SessionID)
+	require.NoError(t, runner.VerifyDone())
 }
 
 func TestHostOpencodeAgentRunReturnsErrorWhenJSONIsMalformed(t *testing.T) {

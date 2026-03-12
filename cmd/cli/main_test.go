@@ -37,30 +37,35 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 		args            []string
 		envDefault      bool
 		expectedSuggest bool
+		explicit        bool
 	}{
 		{
 			name:            "flag absent uses config false",
 			args:            []string{},
 			envDefault:      false,
 			expectedSuggest: false,
+			explicit:        false,
 		},
 		{
 			name:            "flag absent uses config true",
 			args:            []string{},
 			envDefault:      true,
 			expectedSuggest: true,
+			explicit:        false,
 		},
 		{
 			name:            "explicit false overrides config true",
 			args:            []string{"--suggest=false"},
 			envDefault:      true,
 			expectedSuggest: false,
+			explicit:        true,
 		},
 		{
 			name:            "explicit true overrides config false",
 			args:            []string{"--suggest"},
 			envDefault:      false,
 			expectedSuggest: true,
+			explicit:        true,
 		},
 	}
 
@@ -98,6 +103,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, changeRequestUseCase.requests, 1)
 			require.Equal(t, testCase.expectedSuggest, changeRequestUseCase.requests[0].EnableSuggestions)
+			require.Equal(t, testCase.explicit, changeRequestUseCase.requests[0].SuggestionsExplicit)
 		})
 	}
 }

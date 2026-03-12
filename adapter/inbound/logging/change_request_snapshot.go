@@ -2,7 +2,6 @@ package logging
 
 import (
 	"net/url"
-	"sort"
 	"strings"
 
 	"bentos-backend/shared/logger/stdlogger"
@@ -51,23 +50,6 @@ func LogChangeRequestInputSnapshot(logger usecase.Logger, source string, action 
 		hasRepoURL,
 		safeRepoURL,
 	)
-}
-
-func sortedMetadataKeys(metadata map[string]string) []string {
-	if len(metadata) == 0 {
-		return nil
-	}
-
-	keys := make([]string, 0, len(metadata))
-	for key := range metadata {
-		trimmed := strings.TrimSpace(key)
-		if trimmed == "" {
-			continue
-		}
-		keys = append(keys, trimmed)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 func sanitizeRepoURL(rawRepoURL string) (string, bool) {

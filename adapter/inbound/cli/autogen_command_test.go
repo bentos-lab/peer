@@ -24,7 +24,7 @@ func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 	cmd := NewAutogenCommand(useCase, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		Repo:          "org/repo",
 		ChangeRequest: "123",
 		Base:          "main",
@@ -40,9 +40,9 @@ func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
 	cmd := NewAutogenCommand(useCase, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
-		Provider: "github",
-		Publish:  true,
-		Docs:     true,
+		VCSProvider: "github",
+		Publish:     true,
+		Docs:        true,
 	})
 	require.ErrorContains(t, err, "--publish")
 }
@@ -53,8 +53,8 @@ func TestAutogenCommandDefaultsLocalWorkspace(t *testing.T) {
 	cmd := NewAutogenCommand(useCase, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
-		Provider: "github",
-		Docs:     true,
+		VCSProvider: "github",
+		Docs:        true,
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
@@ -79,7 +79,7 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 	cmd := NewAutogenCommand(useCase, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
-		Provider:      "github",
+		VCSProvider:   "github",
 		ChangeRequest: "7",
 		Publish:       true,
 		Docs:          true,

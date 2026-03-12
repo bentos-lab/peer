@@ -38,6 +38,15 @@ func (p *autogenUseCaseTestPublisher) PublishAutogen(_ context.Context, req Auto
 	return p.err
 }
 
+type autogenUseCaseTestRecipeLoader struct {
+	recipe domain.CustomRecipe
+	err    error
+}
+
+func (l *autogenUseCaseTestRecipeLoader) Load(_ context.Context, _ uccontracts.CodeEnvironment, _ string) (domain.CustomRecipe, error) {
+	return l.recipe, l.err
+}
+
 type autogenUseCaseTestEnvironment struct {
 	files     []domain.ChangedFile
 	loadCalls int
@@ -56,6 +65,10 @@ func (e *autogenUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, opts
 		return nil, e.loadErr
 	}
 	return e.files, nil
+}
+
+func (e *autogenUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
+	return "", false, nil
 }
 
 func (e *autogenUseCaseTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
@@ -84,7 +97,7 @@ func TestAutogenUseCaseRequiresFlags(t *testing.T) {
 	generator := &autogenUseCaseTestGenerator{output: "report"}
 	publisher := &autogenUseCaseTestPublisher{}
 	factory := &autogenUseCaseTestEnvironmentFactory{environment: &autogenUseCaseTestEnvironment{}}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
@@ -99,7 +112,7 @@ func TestAutogenUseCaseRequiresHeadBranchWhenPublishing(t *testing.T) {
 	generator := &autogenUseCaseTestGenerator{output: "report"}
 	publisher := &autogenUseCaseTestPublisher{}
 	factory := &autogenUseCaseTestEnvironmentFactory{environment: &autogenUseCaseTestEnvironment{}}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
@@ -116,7 +129,7 @@ func TestAutogenUseCaseRequiresAgentOutputWhenPublishing(t *testing.T) {
 	generator := &autogenUseCaseTestGenerator{output: ""}
 	publisher := &autogenUseCaseTestPublisher{}
 	factory := &autogenUseCaseTestEnvironmentFactory{environment: &autogenUseCaseTestEnvironment{}}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
@@ -140,7 +153,7 @@ func TestAutogenUseCaseBuildsSummaryAndPublishes(t *testing.T) {
 	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
 	generator := &autogenUseCaseTestGenerator{output: "agent report"}
 	publisher := &autogenUseCaseTestPublisher{}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
@@ -170,7 +183,7 @@ func TestAutogenUseCasePropagatesGeneratorError(t *testing.T) {
 	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
 	generator := &autogenUseCaseTestGenerator{err: errors.New("generator failed")}
 	publisher := &autogenUseCaseTestPublisher{}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
@@ -187,7 +200,7 @@ func TestAutogenUseCaseSkipsErrorWhenNoChangesDetected(t *testing.T) {
 	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
 	generator := &autogenUseCaseTestGenerator{output: "agent report"}
 	publisher := &autogenUseCaseTestPublisher{}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
 	require.NoError(t, err)
 
 	result, err := useCase.Execute(context.Background(), AutogenRequest{

@@ -10,11 +10,17 @@ import (
 
 // CLILLMOptions contains CLI-only LLM overrides.
 type CLILLMOptions struct {
-	OpenAIBaseURL    string
-	OpenAIBaseURLSet bool
-	OpenAIModel      string
-	OpenAIAPIKey     string
-	OpenAIAPIKeySet  bool
+	OpenAIBaseURL        string
+	OpenAIBaseURLSet     bool
+	OpenAIModel          string
+	OpenAIAPIKey         string
+	OpenAIAPIKeySet      bool
+	CodeAgent            string
+	CodeAgentSet         bool
+	CodeAgentProvider    string
+	CodeAgentProviderSet bool
+	CodeAgentModel       string
+	CodeAgentModelSet    bool
 }
 
 // EffectiveOpenAIConfig contains the resolved OpenAI-compatible endpoint and model.
@@ -25,8 +31,8 @@ type EffectiveOpenAIConfig struct {
 
 // LLMSelection represents the resolved LLM mode for formatting/sanitization.
 type LLMSelection struct {
-	UseOpenAI   bool
-	OpenAI      EffectiveOpenAIConfig
+	UseOpenAI    bool
+	OpenAI       EffectiveOpenAIConfig
 	OpenAIAPIKey string
 }
 
