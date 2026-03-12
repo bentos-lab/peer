@@ -9,17 +9,19 @@ import (
 	"time"
 
 	inboundlogging "bentos-backend/adapter/inbound/logging"
-	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
 
 // AutogenCommand runs autogen flow with the shared autogen usecase.
 type AutogenCommand struct {
-	autogenUseCase usecase.AutogenUseCase
-	githubClient   GitHubClient
-	logger         usecase.Logger
+	autogenUseCaseBuilder AutogenUseCaseBuilder
+	githubClient          GitHubClient
+	logger                usecase.Logger
 }
+
+// AutogenUseCaseBuilder builds an autogen usecase for a specific repo.
+type AutogenUseCaseBuilder func(repoURL string) (usecase.AutogenUseCase, error)
 
 // AutogenRunParams contains already-parsed CLI autogen parameters.
 type AutogenRunParams struct {
@@ -34,20 +36,20 @@ type AutogenRunParams struct {
 }
 
 // NewAutogenCommand creates a new CLI command for autogen.
-func NewAutogenCommand(autogenUseCase usecase.AutogenUseCase, githubClient GitHubClient, logger usecase.Logger) *AutogenCommand {
+func NewAutogenCommand(autogenUseCaseBuilder AutogenUseCaseBuilder, githubClient GitHubClient, logger usecase.Logger) *AutogenCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &AutogenCommand{
-		autogenUseCase: autogenUseCase,
-		githubClient:   githubClient,
-		logger:         logger,
+		autogenUseCaseBuilder: autogenUseCaseBuilder,
+		githubClient:          githubClient,
+		logger:                logger,
 	}
 }
 
 // Run executes the CLI autogen flow.
 func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error {
-	if c.autogenUseCase == nil {
+	if c.autogenUseCaseBuilder == nil {
 		return errors.New("autogen usecase is not configured")
 	}
 	if c.githubClient == nil {
@@ -123,6 +125,11 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		return fmt.Errorf("--head %s requires local workspace mode; omit --repo", head)
 	}
 
+	autogenUseCase, err := c.autogenUseCaseBuilder(repoURL)
+	if err != nil {
+		return err
+	}
+
 	request := usecase.AutogenRequest{
 		Input:      domainChangeRequestInputForAutogen(repository, prNumber, repoURL, base, head, title, description),
 		Docs:       params.Docs,
@@ -147,14 +154,16 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		Description:         request.Input.Description,
 		Base:                request.Input.Base,
 		Head:                request.Input.Head,
+		EnableReview:        false,
 		EnableOverview:      false,
 		EnableSuggestions:   false,
+		ReviewExplicit:      true,
 		OverviewExplicit:    false,
 		SuggestionsExplicit: false,
 		Metadata:            request.Input.Metadata,
 	})
 
-	_, err = c.autogenUseCase.Execute(ctx, request)
+	_, err = autogenUseCase.Execute(ctx, request)
 	if err != nil {
 		c.logger.Errorf("CLI autogen failed.")
 		c.logger.Debugf("The autogen target was repository %q and change request %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
@@ -167,17 +176,4 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 	c.logger.Debugf("The autogen target was repository %q and change request %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	c.logger.Debugf("The CLI autogen completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
-}
-
-func domainChangeRequestInputForAutogen(repository string, prNumber int, repoURL string, base string, head string, title string, description string) domain.ChangeRequestInput {
-	return domain.ChangeRequestInput{
-		Target:      domain.ChangeRequestTarget{Repository: repository, ChangeRequestNumber: prNumber},
-		RepoURL:     repoURL,
-		Base:        base,
-		Head:        head,
-		Title:       title,
-		Description: description,
-		Language:    "English",
-		Metadata:    map[string]string{},
-	}
 }

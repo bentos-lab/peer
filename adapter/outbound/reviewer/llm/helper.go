@@ -1,12 +1,15 @@
 package llm
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"bentos-backend/domain"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 )
 
@@ -16,6 +19,121 @@ type lineRange struct {
 }
 
 var unifiedDiffHunkPattern = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
+
+func reviewResponseSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"summary", "findings"},
+		"properties": map[string]any{
+			"summary": map[string]any{
+				"type": "string",
+			},
+			"findings": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required": []string{
+						"filePath",
+						"startLine",
+						"endLine",
+						"severity",
+						"title",
+						"detail",
+						"suggestion",
+					},
+					"properties": map[string]any{
+						"filePath": map[string]any{
+							"type": "string",
+						},
+						"startLine": map[string]any{
+							"type":    "integer",
+							"minimum": 1,
+						},
+						"endLine": map[string]any{
+							"type":    "integer",
+							"minimum": 1,
+						},
+						"severity": map[string]any{
+							"type": "string",
+							"enum": []string{
+								string(domain.FindingSeverityCritical),
+								string(domain.FindingSeverityMajor),
+								string(domain.FindingSeverityMinor),
+								string(domain.FindingSeverityNit),
+							},
+						},
+						"title": map[string]any{
+							"type": "string",
+						},
+						"detail": map[string]any{
+							"type": "string",
+						},
+						"suggestion": map[string]any{
+							"type": "string",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func renderSystemPrompt(rulePackText string) (string, error) {
+	parsedTemplate, err := template.New("reviewer_system_prompt").Parse(reviewSystemPromptTemplateRaw)
+	if err != nil {
+		return "", err
+	}
+
+	var rendered bytes.Buffer
+	if err := parsedTemplate.Execute(&rendered, reviewSystemPromptTemplateData{
+		RulePackText: rulePackText,
+	}); err != nil {
+		return "", err
+	}
+
+	return rendered.String(), nil
+}
+
+func renderUserPrompt(input domain.ChangeRequestInput, changedFiles []domain.ChangedFile) (string, error) {
+	files := make([]reviewUserPromptFileData, 0, len(changedFiles))
+	for _, file := range changedFiles {
+		changedText := file.DiffSnippet
+		if changedText == "" {
+			changedText = file.Content
+		}
+		if changedText == "" {
+			continue
+		}
+		files = append(files, reviewUserPromptFileData{
+			Path:        file.Path,
+			ChangedText: changedText,
+		})
+	}
+
+	language := input.Language
+	if language == "" {
+		language = "English"
+	}
+
+	parsedTemplate, err := template.New("reviewer_user_prompt").Parse(reviewUserPromptTemplateRaw)
+	if err != nil {
+		return "", err
+	}
+
+	var rendered bytes.Buffer
+	if err := parsedTemplate.Execute(&rendered, reviewUserPromptTemplateData{
+		Title:       input.Title,
+		Description: sharedtext.SingleLine(input.Description),
+		Language:    language,
+		Files:       files,
+	}); err != nil {
+		return "", err
+	}
+
+	return rendered.String(), nil
+}
 
 func buildChangedRangesByFile(changedFiles []domain.ChangedFile, logger usecase.Logger) map[string][]lineRange {
 	rangesByFile := make(map[string][]lineRange, len(changedFiles))

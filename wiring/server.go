@@ -7,68 +7,20 @@ import (
 	"time"
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
-	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
-	customrecipe "bentos-backend/adapter/outbound/customrecipe"
-	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
-	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
-	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
-	replycommentcodingagent "bentos-backend/adapter/outbound/replycomment/codingagent"
-	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
-	safetysanitizer "bentos-backend/adapter/outbound/safetysanitizer"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
-	"bentos-backend/usecase/rulepack"
 )
-
-type codingAgentRuntimeConfig struct {
-	Agent    string
-	Provider string
-	Model    string
-}
 
 // BuildGitHubHandler wires dependencies for GitHub webhook flow.
 func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
-	logger, err := buildLogger(cfg, "")
+	cfgWithOverrides := cfg
+	cfgWithOverrides.CodingAgent = resolveCodingAgentConfig(cfg)
+	logger, err := BuildLogger(cfgWithOverrides, "")
 	if err != nil {
 		return nil, err
 	}
-	llmSelection, err := ResolveLLMSelection(cfg, CLILLMOptions{})
-	if err != nil {
-		return nil, err
-	}
-	var formatterClient contracts.LLMGenerator
-	if llmSelection.UseOpenAI {
-		formatterClient = buildOpenAIGenerator(llmSelection)
-	} else {
-		formatterClient, err = buildCodingAgentGenerator(cfg, logger)
-		if err != nil {
-			return nil, err
-		}
-	}
-	tracedFormatter := llmtracing.NewGenerator(formatterClient, logger)
-	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{
-		Logger: logger,
-	})
-	codingAgentConfig := resolveServerCodingAgentConfig(cfg)
 
-	codingReviewer, err := reviewercodingagent.NewReviewer(tracedFormatter, reviewercodingagent.Config{
-		Agent:    codingAgentConfig.Agent,
-		Provider: codingAgentConfig.Provider,
-		Model:    codingAgentConfig.Model,
-	}, logger)
-	if err != nil {
-		return nil, err
-	}
-	codingOverview, err := overviewcodingagent.NewOverviewGenerator(tracedFormatter, overviewcodingagent.Config{
-		Agent:    codingAgentConfig.Agent,
-		Provider: codingAgentConfig.Provider,
-		Model:    codingAgentConfig.Model,
-	}, logger)
-	if err != nil {
-		return nil, err
-	}
 	if strings.TrimSpace(cfg.Server.GitHub.WebhookSecret) == "" {
 		return nil, fmt.Errorf("github webhook secret is required")
 	}
@@ -81,109 +33,41 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	reviewUseCase, err := usecase.NewReviewUseCase(
-		rulepack.NewCoreRulePackProvider(),
-		codingReviewer,
-		githubpublisher.NewPublisher(ghClient, logger),
-		codeEnvironmentFactory,
-		logger,
-	)
-	if err != nil {
-		return nil, err
+
+	changeRequestBuilder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
+		return BuildChangeRequestUseCase(cfgWithOverrides, CLILLMOptions{}, "", repoURL)
 	}
-	overviewUseCase, err := usecase.NewOverviewUseCase(
-		codingOverview,
-		githubpublisher.NewOverviewPublisher(ghClient, logger),
-		codeEnvironmentFactory,
-		logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-	recipeReadOnlySanitizer, err := safetysanitizer.NewSanitizer(tracedFormatter, safetysanitizer.Options{
-		EnforceReadOnly: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	recipeReadWriteSanitizer, err := safetysanitizer.NewSanitizer(tracedFormatter, safetysanitizer.Options{
-		EnforceReadOnly: false,
-	})
-	if err != nil {
-		return nil, err
-	}
-	recipeLoader, err := customrecipe.NewLoader(recipeReadOnlySanitizer, recipeReadWriteSanitizer, logger)
-	if err != nil {
-		return nil, err
-	}
-	changeRequestUseCase, err := usecase.NewChangeRequestUseCase(
-		reviewUseCase,
-		overviewUseCase,
-		codeEnvironmentFactory,
-		recipeLoader,
-		logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-	replyAnswerer, err := replycommentcodingagent.NewAnswerer(replycommentcodingagent.Config{
-		Agent:    codingAgentConfig.Agent,
-		Provider: codingAgentConfig.Provider,
-		Model:    codingAgentConfig.Model,
-	}, logger)
-	if err != nil {
-		return nil, err
-	}
-	replySanitizer, err := safetysanitizer.NewSanitizer(tracedFormatter, safetysanitizer.Options{
-		EnforceReadOnly: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	replyRecipeLoader, err := customrecipe.NewLoader(replySanitizer, recipeReadWriteSanitizer, logger)
-	if err != nil {
-		return nil, err
-	}
-	replyPublisher := githubpublisher.NewReplyCommentPublisher(ghClient, logger)
-	replyUseCase, err := usecase.NewReplyCommentUseCase(
-		replySanitizer,
-		replyAnswerer,
-		replyPublisher,
-		codeEnvironmentFactory,
-		replyRecipeLoader,
-		logger,
-	)
-	if err != nil {
-		return nil, err
+	replyBuilder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
+		return BuildReplyCommentUseCase(cfgWithOverrides, CLILLMOptions{}, "", repoURL)
 	}
 	return githubinbound.NewHandler(
-		changeRequestUseCase,
-		replyUseCase,
+		changeRequestBuilder,
+		replyBuilder,
 		ghClient,
 		logger,
 		cfg.Server.GitHub.WebhookSecret,
 		cfg.Server.GitHub.ReplyCommentTriggerName,
-		resolveServerOverviewEnabled(cfg),
-		resolveServerSuggestionsEnabled(cfg),
+		resolveOverviewEnabled(cfg),
+		resolveSuggestionsEnabled(cfg),
 	), nil
 }
 
-func resolveServerOverviewEnabled(cfg config.Config) bool {
+func resolveOverviewEnabled(cfg config.Config) bool {
 	if cfg.OverviewEnabled == nil {
 		return true
 	}
 	return *cfg.OverviewEnabled
 }
 
-func resolveServerSuggestionsEnabled(cfg config.Config) bool {
+func resolveSuggestionsEnabled(cfg config.Config) bool {
 	return cfg.SuggestedChanges.Enabled
 }
 
-func resolveServerCodingAgentConfig(cfg config.Config) codingAgentRuntimeConfig {
+func resolveCodingAgentConfig(cfg config.Config) config.CodingAgentConfig {
 	agent := strings.TrimSpace(cfg.CodingAgent.Agent)
 	provider := strings.TrimSpace(cfg.CodingAgent.Provider)
 	model := strings.TrimSpace(cfg.CodingAgent.Model)
-	return codingAgentRuntimeConfig{
+	return config.CodingAgentConfig{
 		Agent:    agent,
 		Provider: provider,
 		Model:    model,

@@ -90,8 +90,14 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 						},
 					}, nil
 				},
-				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.Command, error) {
-					return cliinbound.NewCommand(changeRequestUseCase, githubClient, nil), nil
+				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+					builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
+						return changeRequestUseCase, nil
+					}
+					return cliinbound.NewReviewCommand(builder, githubClient, nil), nil
+				},
+				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+					return nil, nil
 				},
 				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 					return nil, nil
@@ -102,8 +108,52 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 			)
 			require.NoError(t, err)
 			require.Len(t, changeRequestUseCase.requests, 1)
+			require.True(t, changeRequestUseCase.requests[0].EnableReview)
 			require.Equal(t, testCase.expectedSuggest, changeRequestUseCase.requests[0].EnableSuggestions)
+			require.True(t, changeRequestUseCase.requests[0].ReviewExplicit)
 			require.Equal(t, testCase.explicit, changeRequestUseCase.requests[0].SuggestionsExplicit)
 		})
 	}
+}
+
+func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
+	changeRequestUseCase := &mainTestChangeRequestUseCase{}
+	githubClient := &mainTestGitHubClient{}
+
+	err := runCLI(
+		context.Background(),
+		[]string{"overview"},
+		func() (config.Config, error) {
+			return config.Config{
+				LogLevel: "info",
+				CodingAgent: config.CodingAgentConfig{
+					Agent: "opencode",
+				},
+			}, nil
+		},
+		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
+				return changeRequestUseCase, nil
+			}
+			return cliinbound.NewReviewCommand(builder, githubClient, nil), nil
+		},
+		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
+				return changeRequestUseCase, nil
+			}
+			return cliinbound.NewOverviewCommand(builder, githubClient, nil), nil
+		},
+		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+			return nil, nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, changeRequestUseCase.requests, 1)
+	require.False(t, changeRequestUseCase.requests[0].EnableReview)
+	require.True(t, changeRequestUseCase.requests[0].EnableOverview)
+	require.True(t, changeRequestUseCase.requests[0].ReviewExplicit)
+	require.True(t, changeRequestUseCase.requests[0].OverviewExplicit)
 }

@@ -21,7 +21,10 @@ func (f *fakeAutogenUseCase) Execute(_ context.Context, request usecase.AutogenR
 func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 	useCase := &fakeAutogenUseCase{}
 	githubClient := &fakeGitHubClient{}
-	cmd := NewAutogenCommand(useCase, githubClient, nil)
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	cmd := NewAutogenCommand(builder, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider:   "github",
@@ -37,7 +40,10 @@ func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
 	useCase := &fakeAutogenUseCase{}
 	githubClient := &fakeGitHubClient{}
-	cmd := NewAutogenCommand(useCase, githubClient, nil)
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	cmd := NewAutogenCommand(builder, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider: "github",
@@ -50,7 +56,10 @@ func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
 func TestAutogenCommandDefaultsLocalWorkspace(t *testing.T) {
 	useCase := &fakeAutogenUseCase{}
 	githubClient := &fakeGitHubClient{resolvedRepository: "org/repo"}
-	cmd := NewAutogenCommand(useCase, githubClient, nil)
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	cmd := NewAutogenCommand(builder, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider: "github",
@@ -76,7 +85,10 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 			HeadRefName: "feature-branch",
 		},
 	}
-	cmd := NewAutogenCommand(useCase, githubClient, nil)
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	cmd := NewAutogenCommand(builder, githubClient, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider:   "github",

@@ -63,10 +63,11 @@ func TestLoaderReadsAndSanitizesRecipeFiles(t *testing.T) {
 	env := &recipeTestEnvironment{files: map[string]string{
 		".autogit/config.toml": `
 [review]
+enabled = false
 ruleset = "rules.md"
 suggestions = true
 
-[review.overview]
+[overview]
 enabled = false
 extra_guidance = "overview.md"
 
@@ -85,13 +86,15 @@ extra_guidance = "autogen.md"
 	recipe, err := loader.Load(context.Background(), env, "HEAD")
 	require.NoError(t, err)
 	require.Equal(t, "rules", recipe.ReviewRuleset)
-	require.Equal(t, "overview", recipe.ReviewOverviewGuidance)
+	require.Equal(t, "overview", recipe.OverviewGuidance)
 	require.Equal(t, "reply", recipe.AutoreplyGuidance)
 	require.Equal(t, "autogen", recipe.AutogenGuidance)
+	require.NotNil(t, recipe.ReviewEnabled)
+	require.False(t, *recipe.ReviewEnabled)
 	require.NotNil(t, recipe.ReviewSuggestions)
 	require.True(t, *recipe.ReviewSuggestions)
-	require.NotNil(t, recipe.ReviewOverview)
-	require.False(t, *recipe.ReviewOverview)
+	require.NotNil(t, recipe.OverviewEnabled)
+	require.False(t, *recipe.OverviewEnabled)
 }
 
 func TestLoaderIgnoresInvalidRecipePath(t *testing.T) {
@@ -119,7 +122,7 @@ func TestLoaderRecordsMissingRecipePaths(t *testing.T) {
 [review]
 ruleset = "rules.md"
 
-[review.overview]
+[overview]
 enabled = true
 extra_guidance = "overview.md"
 `,

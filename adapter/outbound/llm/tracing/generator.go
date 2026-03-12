@@ -2,8 +2,6 @@ package tracing
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -46,19 +44,4 @@ func (g *Generator) GenerateJSON(ctx context.Context, params contracts.GenerateP
 	compact := toCompactJSON(output)
 	g.tracef("llm response method=GenerateJSON bytes=%d output=%s", len(compact), compact)
 	return output, nil
-}
-
-func (g *Generator) tracef(format string, args ...any) {
-	if g.logger == nil {
-		return
-	}
-	g.logger.Tracef(format, args...)
-}
-
-func toCompactJSON(value any) string {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Sprintf(`{"marshal_error":%q}`, err.Error())
-	}
-	return string(raw)
 }

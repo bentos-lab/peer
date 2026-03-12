@@ -58,9 +58,13 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 		return ChangeRequestExecutionResult{}, err
 	}
 
+	effectiveReview := request.EnableReview
+	if !request.ReviewExplicit && recipe.ReviewEnabled != nil {
+		effectiveReview = *recipe.ReviewEnabled
+	}
 	effectiveOverview := request.EnableOverview
-	if !request.OverviewExplicit && recipe.ReviewOverview != nil {
-		effectiveOverview = *recipe.ReviewOverview
+	if !request.OverviewExplicit && recipe.OverviewEnabled != nil {
+		effectiveOverview = *recipe.OverviewEnabled
 	}
 	effectiveSuggestions := request.EnableSuggestions
 	if !request.SuggestionsExplicit && recipe.ReviewSuggestions != nil {
@@ -84,17 +88,21 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 		overviewResult = &overviewExecResult
 	}
 
-	reviewStartedAt := time.Now()
-	reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{
-		Input:       input,
-		Suggestions: effectiveSuggestions,
-		Recipe:      recipe,
-	})
-	if err != nil {
-		logStage(u.logger, "change request", "review_diff", target, "failure", reviewStartedAt, "%v", err)
-		return ChangeRequestExecutionResult{}, err
+	if effectiveReview {
+		reviewStartedAt := time.Now()
+		reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{
+			Input:       input,
+			Suggestions: effectiveSuggestions,
+			Recipe:      recipe,
+		})
+		if err != nil {
+			logStage(u.logger, "change request", "review_diff", target, "failure", reviewStartedAt, "%v", err)
+			return ChangeRequestExecutionResult{}, err
+		}
+		logStage(u.logger, "change request", "review_diff", target, "success", reviewStartedAt, "")
+	} else {
+		logStage(u.logger, "change request", "review_diff", target, "skipped", time.Now(), "")
 	}
-	logStage(u.logger, "change request", "review_diff", target, "success", reviewStartedAt, "")
 
 	logExecution(
 		u.logger,

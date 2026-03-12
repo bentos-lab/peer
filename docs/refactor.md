@@ -9,6 +9,8 @@ The agent is allowed to aggressively refactor Go code to improve readability, ma
 - Reduce cognitive complexity of functions and files.
 - Avoid premature generalization.
 - Favor idiomatic Go patterns.
+- Always aggressively cleanup any unnecessary components (tests, functions, methods, structs, fields, etc.).
+- Change file name for consistent if necessary.
 
 ### Function Refactoring
 
@@ -20,7 +22,7 @@ The agent MAY:
   - do trivial transformations
   - only pass parameters through
 
-- **Delete unused functions**.
+- **Delete unnecessary components**.
 
 - **Merge related functions** if:
   - they are tightly coupled

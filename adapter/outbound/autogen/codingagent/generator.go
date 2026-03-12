@@ -1,19 +1,16 @@
 package codingagent
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
 	"strings"
-	"text/template"
 	"time"
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
 )
 
 //go:embed task.md
@@ -82,7 +79,7 @@ func (g *Generator) Generate(ctx context.Context, payload usecase.AutogenPayload
 		return "", fmt.Errorf("failed to setup coding agent: %w", err)
 	}
 
-	taskPrompt, err := renderSimpleTemplate("autogen_task_prompt", autogenTaskPromptTemplateRaw, autogenTaskPromptTemplateData{
+	taskPrompt, err := sharedtext.RenderSimpleTemplate("autogen_task_prompt", autogenTaskPromptTemplateRaw, autogenTaskPromptTemplateData{
 		Repository:    payload.Input.Target.Repository,
 		RepoURL:       payload.Input.RepoURL,
 		Base:          normalizedBase,
@@ -106,52 +103,4 @@ func (g *Generator) Generate(ctx context.Context, payload usecase.AutogenPayload
 	g.logger.Infof("Coding-agent autogen completed.")
 	g.logger.Debugf("Coding-agent autogen took %d ms.", time.Since(startedAt).Milliseconds())
 	return output, nil
-}
-
-func normalizePromptRefs(base string, head string) (string, string) {
-	normalizedBase := strings.TrimSpace(base)
-	normalizedHead := strings.TrimSpace(head)
-	if normalizedHead == "@staged" || normalizedHead == "@all" {
-		return "", normalizedHead
-	}
-	return normalizedBase, normalizedHead
-}
-
-func ensureDiffContentAvailable(ctx context.Context, environment uccontracts.CodeEnvironment, base string, head string) error {
-	changedFiles, err := environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
-		Base: base,
-		Head: head,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to load changed files: %w", err)
-	}
-	for _, file := range changedFiles {
-		if strings.TrimSpace(file.DiffSnippet) != "" {
-			return nil
-		}
-	}
-	return fmt.Errorf("diff content is empty for base %q and head %q", base, head)
-}
-
-func runTask(ctx context.Context, agent uccontracts.CodingAgent, cfg Config, task string) (string, error) {
-	result, err := agent.Run(ctx, strings.TrimSpace(task), domain.CodingAgentRunOptions{
-		Provider: cfg.Provider,
-		Model:    cfg.Model,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to run coding agent task: %w", err)
-	}
-	return strings.TrimSpace(result.Text), nil
-}
-
-func renderSimpleTemplate(templateName string, templateRaw string, input any) (string, error) {
-	parsedTemplate, err := template.New(templateName).Parse(templateRaw)
-	if err != nil {
-		return "", err
-	}
-	var rendered bytes.Buffer
-	if err := parsedTemplate.Execute(&rendered, input); err != nil {
-		return "", err
-	}
-	return rendered.String(), nil
 }

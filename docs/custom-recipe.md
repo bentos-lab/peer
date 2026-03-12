@@ -6,10 +6,11 @@ Custom recipes let a repository provide extra guidance for review, overview, rep
 
 ```toml
 [review]
+enabled = true
 ruleset = "rules.md"
 suggestions = true
 
-[review.overview]
+[overview]
 enabled = true
 extra_guidance = "overview.md"
 

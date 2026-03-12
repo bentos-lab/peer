@@ -24,8 +24,10 @@ type ChangeRequestRequest struct {
 	Description         string
 	Base                string
 	Head                string
+	EnableReview        bool
 	EnableOverview      bool
 	EnableSuggestions   bool
+	ReviewExplicit      bool
 	OverviewExplicit    bool
 	SuggestionsExplicit bool
 	Metadata            map[string]string

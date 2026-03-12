@@ -75,7 +75,7 @@ func TestBuildGitHubHandlerBuildsWithRequiredConfig(t *testing.T) {
 	require.NotNil(t, handler)
 }
 
-func TestResolveServerOverviewEnabled(t *testing.T) {
+func TestResolveOverviewEnabled(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    config.Config
@@ -104,13 +104,13 @@ func TestResolveServerOverviewEnabled(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := resolveServerOverviewEnabled(testCase.input)
+			actual := resolveOverviewEnabled(testCase.input)
 			require.Equal(t, testCase.expected, actual)
 		})
 	}
 }
 
-func TestResolveServerSuggestionsEnabled(t *testing.T) {
+func TestResolveSuggestionsEnabled(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    config.Config
@@ -143,7 +143,7 @@ func TestResolveServerSuggestionsEnabled(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual := resolveServerSuggestionsEnabled(testCase.input)
+			actual := resolveSuggestionsEnabled(testCase.input)
 			require.Equal(t, testCase.expected, actual)
 		})
 	}

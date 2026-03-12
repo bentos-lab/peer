@@ -3,7 +3,6 @@ package customrecipe
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"bentos-backend/domain"
@@ -63,8 +62,9 @@ func (l *Loader) Load(ctx context.Context, env uccontracts.CodeEnvironment, head
 	}
 
 	recipe := domain.CustomRecipe{
+		ReviewEnabled:     parsed.Review.Enabled,
 		ReviewSuggestions: parsed.Review.Suggestions,
-		ReviewOverview:    parsed.Review.Overview.Enabled,
+		OverviewEnabled:   parsed.Overview.Enabled,
 	}
 
 	reviewRuleset, missingPath, err := l.readAndSanitize(ctx, env, headRef, parsed.Review.Ruleset, l.readOnlySanitizer)
@@ -76,14 +76,14 @@ func (l *Loader) Load(ctx context.Context, env uccontracts.CodeEnvironment, head
 	}
 	recipe.ReviewRuleset = reviewRuleset
 
-	overviewGuidance, missingPath, err := l.readAndSanitize(ctx, env, headRef, parsed.Review.Overview.ExtraGuidance, l.readOnlySanitizer)
+	overviewGuidance, missingPath, err := l.readAndSanitize(ctx, env, headRef, parsed.Overview.ExtraGuidance, l.readOnlySanitizer)
 	if err != nil {
 		return domain.CustomRecipe{}, err
 	}
 	if missingPath != "" {
 		recipe.MissingPaths = append(recipe.MissingPaths, missingPath)
 	}
-	recipe.ReviewOverviewGuidance = overviewGuidance
+	recipe.OverviewGuidance = overviewGuidance
 
 	autoreplyGuidance, missingPath, err := l.readAndSanitize(ctx, env, headRef, parsed.Autoreply.ExtraGuidance, l.readOnlySanitizer)
 	if err != nil {
@@ -106,69 +106,17 @@ func (l *Loader) Load(ctx context.Context, env uccontracts.CodeEnvironment, head
 	return recipe, nil
 }
 
-func (l *Loader) readAndSanitize(ctx context.Context, env uccontracts.CodeEnvironment, headRef string, rawPath string, sanitizer usecase.SafetySanitizer) (string, string, error) {
-	path, err := resolveRecipePath(rawPath)
-	if err != nil {
-		l.logger.Warnf("Custom recipe path %q is invalid: %v", rawPath, err)
-		return "", "", nil
-	}
-	if path == "" {
-		return "", "", nil
-	}
-
-	fullPath := filepath.Join(".autogit", path)
-	content, found, err := env.ReadFile(ctx, fullPath, headRef)
-	if err != nil {
-		return "", "", err
-	}
-	if !found {
-		l.logger.Warnf("Custom recipe file %q was not found.", fullPath)
-		return "", fullPath, nil
-	}
-
-	trimmed := strings.TrimSpace(content)
-	if trimmed == "" {
-		return "", "", nil
-	}
-	result, err := sanitizer.Sanitize(ctx, trimmed)
-	if err != nil {
-		return "", "", err
-	}
-	if result.Status != domain.PromptSafetyStatusOK {
-		l.logger.Warnf("Custom recipe file %q was rejected by sanitizer.", fullPath)
-		return "", "", nil
-	}
-	return strings.TrimSpace(result.SanitizedPrompt), "", nil
-}
-
-func resolveRecipePath(value string) (string, error) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return "", nil
-	}
-	if filepath.IsAbs(trimmed) {
-		return "", fmt.Errorf("path must be relative to .autogit")
-	}
-	cleaned := filepath.Clean(trimmed)
-	if cleaned == "." {
-		return "", fmt.Errorf("path must be a file")
-	}
-	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path must remain within .autogit")
-	}
-	return cleaned, nil
-}
-
 type recipeConfig struct {
 	Review    recipeReviewConfig    `toml:"review"`
+	Overview  recipeOverviewConfig  `toml:"overview"`
 	Autoreply recipeAutoreplyConfig `toml:"autoreply"`
 	Autogen   recipeAutogenConfig   `toml:"autogen"`
 }
 
 type recipeReviewConfig struct {
-	Ruleset     string               `toml:"ruleset"`
-	Suggestions *bool                `toml:"suggestions"`
-	Overview    recipeOverviewConfig `toml:"overview"`
+	Enabled     *bool  `toml:"enabled"`
+	Ruleset     string `toml:"ruleset"`
+	Suggestions *bool  `toml:"suggestions"`
 }
 
 type recipeAutoreplyConfig struct {

@@ -1,0 +1,87 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"testing"
+	"time"
+
+	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/usecase"
+	"github.com/stretchr/testify/require"
+)
+
+func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T) {
+	changeRequestUC := &fakeChangeRequestUseCase{}
+	githubClient := &fakeGitHubClient{
+		resolvedRepository: "owner/repo",
+		pullRequestInfo: githubvcs.PullRequestInfo{
+			Repository:  "owner/repo",
+			BaseRef:     "main",
+			HeadRef:     "feature/ref",
+			Title:       "Super secret PR title",
+			Description: "Confidential PR description",
+		},
+	}
+	logger := &commandTestSpyLogger{}
+	builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
+		return changeRequestUC, nil
+	}
+	command := NewReviewCommand(builder, githubClient, logger)
+
+	err := command.Run(context.Background(), ReviewParams{
+		Repo:          "https://github.com/owner/repo.git",
+		ChangeRequest: "9",
+		Comment:       true,
+		Suggest:       true,
+	})
+
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return containsLogEvent(logger.events, "info:Pre-usecase input snapshot source=\"cli\" repository=\"owner/repo\" changeRequestNumber=9 enableReview=true enableOverview=false enableSuggestions=true.")
+	}, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		return containsLogEvent(logger.events, "debug:Pre-usecase input details source=\"cli\" action=\"\" base=\"main\" head=\"feature/ref\"")
+	}, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		return containsLogEvent(logger.events, "repoURLPresent=true repoURLSafe=\"https://github.com/owner/repo.git\"")
+	}, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		return containsLogEvent(logger.events, "titleLength=21 descriptionLength=27")
+	}, time.Second, 10*time.Millisecond)
+	require.False(t, containsLogEvent(logger.events, "Super secret PR title"))
+	require.False(t, containsLogEvent(logger.events, "Confidential PR description"))
+}
+
+type fakeChangeRequestUseCase struct {
+	requests []usecase.ChangeRequestRequest
+}
+
+func (f *fakeChangeRequestUseCase) Execute(_ context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
+	f.requests = append(f.requests, request)
+	return usecase.ChangeRequestExecutionResult{}, nil
+}
+
+type commandTestSpyLogger struct {
+	events []string
+}
+
+func (s *commandTestSpyLogger) Tracef(format string, args ...any) {
+	s.events = append(s.events, "trace:"+fmt.Sprintf(format, args...))
+}
+
+func (s *commandTestSpyLogger) Debugf(format string, args ...any) {
+	s.events = append(s.events, "debug:"+fmt.Sprintf(format, args...))
+}
+
+func (s *commandTestSpyLogger) Infof(format string, args ...any) {
+	s.events = append(s.events, "info:"+fmt.Sprintf(format, args...))
+}
+
+func (s *commandTestSpyLogger) Warnf(format string, args ...any) {
+	s.events = append(s.events, "warn:"+fmt.Sprintf(format, args...))
+}
+
+func (s *commandTestSpyLogger) Errorf(format string, args ...any) {
+	s.events = append(s.events, "error:"+fmt.Sprintf(format, args...))
+}

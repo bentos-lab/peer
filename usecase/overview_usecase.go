@@ -65,7 +65,7 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 	overviewResult, err := u.llmOverview.GenerateOverview(ctx, LLMOverviewPayload{
 		Input:         request.Input,
 		Environment:   environment,
-		ExtraGuidance: strings.TrimSpace(request.Recipe.ReviewOverviewGuidance),
+		ExtraGuidance: strings.TrimSpace(request.Recipe.OverviewGuidance),
 	})
 	if err != nil {
 		logStage(u.logger, "overview", "generate_overview", target, "failure", overviewStartedAt, "%v", err)

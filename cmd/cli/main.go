@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
+	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	sharedcli "bentos-backend/shared/cli"
 	"bentos-backend/usecase"
@@ -41,14 +42,41 @@ func main() {
 		context.Background(),
 		os.Args[1:],
 		config.Load,
-		func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.Command, error) {
-			return wiring.BuildCLIReviewCommand(cfg, opts, logLevelOverride)
+		func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReviewCommand, error) {
+			logger, err := wiring.BuildLogger(cfg, logLevelOverride)
+			if err != nil {
+				return nil, err
+			}
+			builder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
+				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride, repoURL)
+			}
+			return cliinbound.NewReviewCommand(builder, githubvcs.NewCLIClient(), logger), nil
+		},
+		func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.OverviewCommand, error) {
+			logger, err := wiring.BuildLogger(cfg, logLevelOverride)
+			if err != nil {
+				return nil, err
+			}
+			builder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
+				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride, repoURL)
+			}
+			return cliinbound.NewOverviewCommand(builder, githubvcs.NewCLIClient(), logger), nil
 		},
 		func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.AutogenCommand, error) {
-			return wiring.BuildCLIAutogenCommand(cfg, opts, logLevelOverride)
+			logger, err := wiring.BuildLogger(cfg, logLevelOverride)
+			if err != nil {
+				return nil, err
+			}
+			builder := func(repoURL string) (usecase.AutogenUseCase, error) {
+				return wiring.BuildAutogenUseCase(cfg, opts, logLevelOverride, repoURL)
+			}
+			return cliinbound.NewAutogenCommand(builder, githubvcs.NewCLIClient(), logger), nil
 		},
 		func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReplyCommentCommand, error) {
-			return wiring.BuildCLIReplyCommentCommand(cfg, opts, logLevelOverride)
+			builder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
+				return wiring.BuildReplyCommentUseCase(cfg, opts, logLevelOverride, repoURL)
+			}
+			return cliinbound.NewReplyCommentCommand(builder, githubvcs.NewCLIClient(), cfg.Server.GitHub.ReplyCommentTriggerName), nil
 		},
 	); err != nil {
 		if errors.Is(err, errCLIConfigLoad) {
@@ -62,11 +90,12 @@ func runCLI(
 	ctx context.Context,
 	args []string,
 	loadConfig func() (config.Config, error),
-	buildReviewCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.Command, error),
+	buildReviewCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReviewCommand, error),
+	buildOverviewCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.OverviewCommand, error),
 	buildAutogenCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.AutogenCommand, error),
 	buildReplyCommentCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReplyCommentCommand, error),
 ) error {
-	root := newRootCommand(ctx, loadConfig, buildReviewCommand, buildAutogenCommand, buildReplyCommentCommand)
+	root := newRootCommand(ctx, loadConfig, buildReviewCommand, buildOverviewCommand, buildAutogenCommand, buildReplyCommentCommand)
 	root.SetArgs(args)
 	return root.ExecuteContext(ctx)
 }
@@ -74,7 +103,8 @@ func runCLI(
 func newRootCommand(
 	ctx context.Context,
 	loadConfig func() (config.Config, error),
-	buildReviewCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.Command, error),
+	buildReviewCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReviewCommand, error),
+	buildOverviewCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.OverviewCommand, error),
 	buildAutogenCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.AutogenCommand, error),
 	buildReplyCommentCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReplyCommentCommand, error),
 ) *cobra.Command {
@@ -105,6 +135,7 @@ func newRootCommand(
 	persistentFlags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
 
 	cmd.AddCommand(newReviewSubcommand(ctx, loadConfig, buildReviewCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
+	cmd.AddCommand(newOverviewSubcommand(ctx, loadConfig, buildOverviewCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
 	cmd.AddCommand(newAutogenSubcommand(ctx, loadConfig, buildAutogenCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
 	cmd.AddCommand(newReplyCommentSubcommand(ctx, loadConfig, buildReplyCommentCommand, &openAIBaseURL, &openAIModel, &openAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
 	cmd.AddCommand(newInstallSubcommand(ctx))
@@ -115,7 +146,7 @@ func newRootCommand(
 func newReviewSubcommand(
 	ctx context.Context,
 	loadConfig func() (config.Config, error),
-	buildCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.Command, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReviewCommand, error),
 	openAIBaseURL *string,
 	openAIModel *string,
 	openAIAPIKey *string,
@@ -130,12 +161,11 @@ func newReviewSubcommand(
 	var base string
 	var head string
 	var comment bool
-	var overview bool
 	var suggest bool
 
 	sub := &cobra.Command{
 		Use:   "review",
-		Short: "Run review and overview via GitHub context",
+		Short: "Run review via GitHub context",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel, *verbosity)
 			if err != nil {
@@ -146,14 +176,7 @@ func newReviewSubcommand(
 				return cliConfigLoadError{cause: err}
 			}
 
-			overviewExplicit := cmd.Flags().Changed("overview")
 			suggestExplicit := cmd.Flags().Changed("suggest")
-			effectiveOverview := false
-			if overviewExplicit {
-				effectiveOverview = overview
-			} else if cfg.OverviewEnabled != nil {
-				effectiveOverview = *cfg.OverviewEnabled
-			}
 			effectiveSuggest := false
 			if suggestExplicit {
 				effectiveSuggest = suggest
@@ -174,17 +197,15 @@ func newReviewSubcommand(
 				return err
 			}
 
-			return cliCommand.Run(ctx, cliinbound.RunParams{
-				VCSProvider:      vcsProvider,
-				Repo:             repo,
-				ChangeRequest:    changeRequest,
-				Base:             base,
-				Head:             head,
-				Comment:          comment,
-				Overview:         effectiveOverview,
-				Suggest:          effectiveSuggest,
-				OverviewExplicit: overviewExplicit,
-				SuggestExplicit:  suggestExplicit,
+			return cliCommand.Run(ctx, cliinbound.ReviewParams{
+				VCSProvider:     vcsProvider,
+				Repo:            repo,
+				ChangeRequest:   changeRequest,
+				Base:            base,
+				Head:            head,
+				Comment:         comment,
+				Suggest:         effectiveSuggest,
+				SuggestExplicit: suggestExplicit,
 			})
 		},
 	}
@@ -196,8 +217,73 @@ func newReviewSubcommand(
 	flags.StringVar(&base, "base", "", "base ref")
 	flags.StringVar(&head, "head", "", "head ref or @staged/@all")
 	flags.BoolVar(&comment, "comment", false, "post review result as pull request comments")
-	flags.BoolVar(&overview, "overview", false, "generate and publish/print high-level overview output")
 	flags.BoolVar(&suggest, "suggest", false, "enable suggested code changes in review findings")
+	return sub
+}
+
+func newOverviewSubcommand(
+	ctx context.Context,
+	loadConfig func() (config.Config, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.OverviewCommand, error),
+	openAIBaseURL *string,
+	openAIModel *string,
+	openAIAPIKey *string,
+	codeAgent *string,
+	codeAgentProvider *string,
+	codeAgentModel *string,
+	verbosity *int,
+) *cobra.Command {
+	var vcsProvider string
+	var repo string
+	var changeRequest string
+	var base string
+	var head string
+	var comment bool
+
+	sub := &cobra.Command{
+		Use:   "overview",
+		Short: "Run overview via GitHub context",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts, logOverride, err := resolveLLMOptions(cmd, *openAIBaseURL, *openAIModel, *openAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel, *verbosity)
+			if err != nil {
+				return err
+			}
+			cfg, err := loadConfig()
+			if err != nil {
+				return cliConfigLoadError{cause: err}
+			}
+
+			startupLogger, err := wiring.BuildLogger(cfg, logOverride)
+			if err != nil {
+				return err
+			}
+			if err := logLLMSelection(startupLogger, cfg, opts); err != nil {
+				return err
+			}
+
+			cliCommand, err := buildCommand(cfg, opts, logOverride)
+			if err != nil {
+				return err
+			}
+
+			return cliCommand.Run(ctx, cliinbound.OverviewParams{
+				VCSProvider:   vcsProvider,
+				Repo:          repo,
+				ChangeRequest: changeRequest,
+				Base:          base,
+				Head:          head,
+				Comment:       comment,
+			})
+		},
+	}
+
+	flags := sub.Flags()
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
+	flags.StringVar(&repo, "repo", "", "repository (GitHub URL or owner/repo)")
+	flags.StringVar(&changeRequest, "change-request", "", "GitHub pull request number")
+	flags.StringVar(&base, "base", "", "base ref")
+	flags.StringVar(&head, "head", "", "head ref or @staged/@all")
+	flags.BoolVar(&comment, "comment", false, "post overview result as pull request comments")
 	return sub
 }
 
@@ -384,6 +470,7 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 
 func resolveLLMOptions(cmd *cobra.Command, openAIBaseURL string, openAIModel string, openAIAPIKey string, codeAgent string, codeAgentProvider string, codeAgentModel string, verbosity int) (wiring.CLILLMOptions, string, error) {
 	opts := wiring.CLILLMOptions{}
+	opts.ForceCLIPublishers = true
 	if flagChanged(cmd, "openai-base-url") {
 		opts.OpenAIBaseURLSet = true
 		value := strings.TrimSpace(openAIBaseURL)

@@ -50,16 +50,6 @@ func (c *InstallCommand) InstallQuickstart(ctx context.Context) error {
 	return c.InstallOpencode(ctx)
 }
 
-func (c *InstallCommand) resolveInstaller() ToolInstaller {
-	if c == nil {
-		return &missingInstaller{}
-	}
-	if c.installer == nil {
-		c.installer = toolinstall.NewInstaller(toolinstall.Config{})
-	}
-	return c.installer
-}
-
 type missingInstaller struct{}
 
 func (missingInstaller) EnsureGhInstalled(context.Context) error {

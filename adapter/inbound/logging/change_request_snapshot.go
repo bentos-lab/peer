@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"net/url"
 	"strings"
 
 	"bentos-backend/shared/logger/stdlogger"
@@ -17,20 +16,22 @@ func LogChangeRequestInputSnapshot(logger usecase.Logger, source string, action 
 	trimmedAction := strings.TrimSpace(action)
 	if trimmedAction == "" {
 		logger.Infof(
-			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d enableOverview=%t enableSuggestions=%t.",
+			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d enableReview=%t enableOverview=%t enableSuggestions=%t.",
 			strings.TrimSpace(source),
 			request.Repository,
 			request.ChangeRequestNumber,
+			request.EnableReview,
 			request.EnableOverview,
 			request.EnableSuggestions,
 		)
 	} else {
 		logger.Infof(
-			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d enableOverview=%t enableSuggestions=%t.",
+			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d enableReview=%t enableOverview=%t enableSuggestions=%t.",
 			strings.TrimSpace(source),
 			trimmedAction,
 			request.Repository,
 			request.ChangeRequestNumber,
+			request.EnableReview,
 			request.EnableOverview,
 			request.EnableSuggestions,
 		)
@@ -50,25 +51,4 @@ func LogChangeRequestInputSnapshot(logger usecase.Logger, source string, action 
 		hasRepoURL,
 		safeRepoURL,
 	)
-}
-
-func sanitizeRepoURL(rawRepoURL string) (string, bool) {
-	trimmed := strings.TrimSpace(rawRepoURL)
-	if trimmed == "" {
-		return "", false
-	}
-
-	parsed, err := url.Parse(trimmed)
-	if err != nil {
-		return "present", true
-	}
-
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "present", true
-	}
-
-	parsed.User = nil
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String(), true
 }

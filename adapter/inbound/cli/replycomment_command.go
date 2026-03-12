@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
@@ -28,10 +26,13 @@ type ReplyCommentGitHubClient interface {
 
 // ReplyCommentCommand runs the replycomment flow.
 type ReplyCommentCommand struct {
-	replyCommentUseCase usecase.ReplyCommentUseCase
-	githubClient        ReplyCommentGitHubClient
-	triggerName         string
+	replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder
+	githubClient               ReplyCommentGitHubClient
+	triggerName                string
 }
+
+// ReplyCommentUseCaseBuilder builds a reply comment usecase for a specific repo.
+type ReplyCommentUseCaseBuilder func(repoURL string) (usecase.ReplyCommentUseCase, error)
 
 // ReplyCommentRunParams contains already-parsed replycomment parameters.
 type ReplyCommentRunParams struct {
@@ -44,17 +45,17 @@ type ReplyCommentRunParams struct {
 }
 
 // NewReplyCommentCommand creates a new CLI command for replycomment.
-func NewReplyCommentCommand(replyCommentUseCase usecase.ReplyCommentUseCase, githubClient ReplyCommentGitHubClient, triggerName string) *ReplyCommentCommand {
+func NewReplyCommentCommand(replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder, githubClient ReplyCommentGitHubClient, triggerName string) *ReplyCommentCommand {
 	return &ReplyCommentCommand{
-		replyCommentUseCase: replyCommentUseCase,
-		githubClient:        githubClient,
-		triggerName:         strings.TrimSpace(triggerName),
+		replyCommentUseCaseBuilder: replyCommentUseCaseBuilder,
+		githubClient:               githubClient,
+		triggerName:                strings.TrimSpace(triggerName),
 	}
 }
 
 // Run executes the CLI replycomment flow.
 func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunParams) error {
-	if c.replyCommentUseCase == nil {
+	if c.replyCommentUseCaseBuilder == nil {
 		return errors.New("replycomment usecase is not configured")
 	}
 	if c.githubClient == nil {
@@ -91,6 +92,11 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 	if err != nil {
 		return err
 	}
+
+	replyCommentUseCase, err := c.replyCommentUseCaseBuilder(repoURL)
+	if err != nil {
+		return err
+	}
 	repository, err = c.githubClient.ResolveRepository(ctx, repository)
 	if err != nil {
 		return err
@@ -116,7 +122,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		request.Question = strings.TrimSpace(params.Question)
 		request.CommentKind = domain.CommentKindIssue
 		request.Thread = buildInlineQuestionThread(request.Question, prInfo)
-		_, err = c.replyCommentUseCase.Execute(ctx, request)
+		_, err = replyCommentUseCase.Execute(ctx, request)
 		return err
 	}
 
@@ -135,7 +141,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 			return err
 		}
 		request.Thread = thread
-		_, err = c.replyCommentUseCase.Execute(ctx, request)
+		_, err = replyCommentUseCase.Execute(ctx, request)
 		return err
 	}
 
@@ -153,185 +159,6 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		return err
 	}
 	request.Thread = thread
-	_, err = c.replyCommentUseCase.Execute(ctx, request)
+	_, err = replyCommentUseCase.Execute(ctx, request)
 	return err
-}
-
-func buildInlineQuestionThread(question string, prInfo githubvcs.PullRequestInfo) domain.CommentThread {
-	now := time.Now()
-	return domain.CommentThread{
-		Kind:    domain.CommentKindIssue,
-		RootID:  0,
-		Context: buildIssueThreadContext(prInfo),
-		Comments: []domain.Comment{{
-			ID:        0,
-			Body:      strings.TrimSpace(question),
-			Author:    domain.CommentAuthor{Login: "cli"},
-			CreatedAt: now,
-		}},
-	}
-}
-
-func parseCommentID(raw string) (int64, error) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return 0, fmt.Errorf("--comment-id must be a positive integer")
-	}
-
-	if strings.Contains(value, "#") {
-		parts := strings.SplitN(value, "#", 2)
-		if len(parts) == 2 {
-			value = parts[1]
-		}
-	}
-
-	switch {
-	case strings.HasPrefix(value, "discussion_r"):
-		value = strings.TrimPrefix(value, "discussion_r")
-	case strings.HasPrefix(value, "issuecomment-"):
-		value = strings.TrimPrefix(value, "issuecomment-")
-	}
-
-	parsed, err := strconv.ParseInt(value, 10, 64)
-	if err != nil || parsed <= 0 {
-		return 0, fmt.Errorf("--comment-id must be a positive integer or discussion anchor")
-	}
-	return parsed, nil
-}
-
-func buildIssueThread(ctx context.Context, client ReplyCommentGitHubClient, repository string, prNumber int, commentID int64, prInfo githubvcs.PullRequestInfo) (domain.CommentThread, error) {
-	comments, err := client.ListIssueComments(ctx, repository, prNumber)
-	if err != nil {
-		return domain.CommentThread{}, err
-	}
-	threadComments := make([]domain.Comment, 0, len(comments))
-	for _, comment := range comments {
-		threadComments = append(threadComments, comment.ToDomain())
-	}
-	sort.Slice(threadComments, func(i, j int) bool {
-		return threadComments[i].CreatedAt.Before(threadComments[j].CreatedAt)
-	})
-	return domain.CommentThread{
-		Kind:     domain.CommentKindIssue,
-		RootID:   commentID,
-		Context:  buildIssueThreadContext(prInfo),
-		Comments: threadComments,
-	}, nil
-}
-
-func buildReviewThread(ctx context.Context, client ReplyCommentGitHubClient, repository string, prNumber int, commentID int64) (domain.CommentThread, error) {
-	comments, err := client.ListReviewComments(ctx, repository, prNumber)
-	if err != nil {
-		return domain.CommentThread{}, err
-	}
-
-	byID := make(map[int64]githubvcs.ReviewComment, len(comments))
-	for _, comment := range comments {
-		byID[comment.ID] = comment
-	}
-
-	rootID := resolveReviewRootID(byID, commentID)
-	threadComments := make([]domain.Comment, 0, len(comments))
-	var root githubvcs.ReviewComment
-	if comment, ok := byID[rootID]; ok {
-		root = comment
-	}
-	reviewSummary := githubvcs.PullRequestReviewSummary{}
-	if root.ReviewID > 0 {
-		if summary, err := client.GetPullRequestReview(ctx, repository, prNumber, root.ReviewID); err == nil {
-			reviewSummary = summary
-		}
-	}
-	for _, comment := range comments {
-		if resolveReviewRootID(byID, comment.ID) == rootID {
-			threadComments = append(threadComments, comment.ToDomain())
-		}
-	}
-	sort.Slice(threadComments, func(i, j int) bool {
-		return threadComments[i].CreatedAt.Before(threadComments[j].CreatedAt)
-	})
-	return domain.CommentThread{
-		Kind:     domain.CommentKindReview,
-		RootID:   rootID,
-		Context:  buildReviewThreadContext(root, reviewSummary),
-		Comments: threadComments,
-	}, nil
-}
-
-func resolveReviewRootID(byID map[int64]githubvcs.ReviewComment, commentID int64) int64 {
-	currentID := commentID
-	for {
-		comment, ok := byID[currentID]
-		if !ok || comment.InReplyToID == 0 {
-			return currentID
-		}
-		currentID = comment.InReplyToID
-	}
-}
-
-func buildIssueThreadContext(prInfo githubvcs.PullRequestInfo) []string {
-	title := strings.TrimSpace(prInfo.Title)
-	description := strings.TrimSpace(prInfo.Description)
-	if title == "" && description == "" {
-		return nil
-	}
-	lines := []string{"PR Description:"}
-	if title != "" {
-		lines = append(lines, fmt.Sprintf("Title: %s", title))
-	}
-	if description != "" {
-		lines = append(lines, description)
-	}
-	return lines
-}
-
-func buildReviewThreadContext(root githubvcs.ReviewComment, reviewSummary githubvcs.PullRequestReviewSummary) []string {
-	lines := make([]string, 0)
-	if strings.TrimSpace(root.Path) != "" {
-		lines = append(lines, fmt.Sprintf("File: %s", strings.TrimSpace(root.Path)))
-	}
-	lineInfo := formatReviewLineInfo(root)
-	if lineInfo != "" {
-		lines = append(lines, lineInfo)
-	}
-	if strings.TrimSpace(root.DiffHunk) != "" {
-		lines = append(lines, "Diff Hunk:", "```diff", root.DiffHunk, "```")
-	}
-	if summary := formatReviewSummary(reviewSummary); summary != "" {
-		lines = append(lines, "Review Summary:", summary)
-	}
-	if len(lines) == 0 {
-		return nil
-	}
-	return lines
-}
-
-func formatReviewLineInfo(root githubvcs.ReviewComment) string {
-	if root.Line > 0 {
-		return fmt.Sprintf("Line: %d (%s)", root.Line, strings.TrimSpace(root.Side))
-	}
-	if root.OriginalLine > 0 {
-		return fmt.Sprintf("Original Line: %d", root.OriginalLine)
-	}
-	return ""
-}
-
-func formatReviewSummary(summary githubvcs.PullRequestReviewSummary) string {
-	body := strings.TrimSpace(summary.Body)
-	if body == "" {
-		return ""
-	}
-	state := strings.TrimSpace(summary.State)
-	author := strings.TrimSpace(summary.User.Login)
-	if state != "" || author != "" {
-		prefix := "Review"
-		if state != "" {
-			prefix = fmt.Sprintf("%s (%s)", prefix, state)
-		}
-		if author != "" {
-			prefix = fmt.Sprintf("%s by %s", prefix, author)
-		}
-		return fmt.Sprintf("%s:\n%s", prefix, body)
-	}
-	return body
 }

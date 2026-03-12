@@ -39,16 +39,6 @@ func (s *stubAgent) Run(_ context.Context, task string, opts domain.CodingAgentR
 	return domain.CodingAgentRunResult{Text: s.outputs[s.calls-1], SessionID: s.currentSessionID()}, nil
 }
 
-func (s *stubAgent) currentSessionID() string {
-	if len(s.sessionIDs) == 0 {
-		return ""
-	}
-	if s.calls > len(s.sessionIDs) {
-		return s.sessionIDs[len(s.sessionIDs)-1]
-	}
-	return s.sessionIDs[s.calls-1]
-}
-
 func TestNewGenerator_ValidatesInputs(t *testing.T) {
 	_, err := NewGenerator(nil, Config{Provider: "openai", Model: "model"}, nil)
 	require.EqualError(t, err, "coding agent is required")
