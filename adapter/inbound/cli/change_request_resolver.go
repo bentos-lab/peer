@@ -6,7 +6,7 @@ type ChangeRequestParams struct {
 	ChangeRequest string
 	Base          string
 	Head          string
-	Comment       bool
+	Publish       bool
 }
 
 type ChangeRequestResolution struct {

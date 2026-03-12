@@ -83,18 +83,18 @@ Example: File path mode:
 - `GITHUB_WEBHOOK_SECRET`
 8. Install the GitHub App on target org/repositories.
 
-## Run Server (Webhook Mode)
+## Run Autogit
 
-Basic run:
+Webhook server:
 
 ```bash
-go run ./cmd/server
+go run ./cmd/autogit webhook --vcs-provider github
 ```
 
 Verbose logging (optional `-v`/`-vv`/`-vvv`):
 
 ```bash
-go run ./cmd/server -vv
+go run ./cmd/autogit webhook --vcs-provider github -vv
 ```
 
 Webhook routes:
@@ -114,29 +114,43 @@ For each trigger, the service:
 3. Posts inline review comments.
 4. Posts one overview comment only for `opened`, and only when `OVERVIEW_ENABLED=true` (or unset, because server default is enabled).
 
-## Run CLI Reviewer
-
-Review a GitHub PR by number:
+CLI review (GitHub PR by number):
 
 ```bash
-go run ./cmd/cli --vcs-provider github --change-request 123
+go run ./cmd/autogit review --vcs-provider github --change-request 123
 ```
 
-Review local staged changes:
+CLI review (local staged changes):
 
 ```bash
-go run ./cmd/cli --vcs-provider github --head @staged
+go run ./cmd/autogit review --vcs-provider github --head @staged
 ```
 
-Publish review comments (optional `--publish`):
+CLI review (publish review comments):
 
 ```bash
-go run ./cmd/cli --vcs-provider github --change-request 123 --publish
+go run ./cmd/autogit review --vcs-provider github --change-request 123 --publish
 ```
 
-CLI notes:
+CLI overview:
 
-See `go run ./cmd/cli --help` for flags and defaults.
+```bash
+go run ./cmd/autogit overview --vcs-provider github --change-request 123
+```
+
+CLI replycomment (publish reply):
+
+```bash
+go run ./cmd/autogit replycomment --vcs-provider github --change-request 123 --comment-id 456789 --publish
+```
+
+CLI autogen (docs + tests, publish):
+
+```bash
+go run ./cmd/autogit autogen --vcs-provider github --change-request 123 --docs --tests --publish
+```
+
+See `go run ./cmd/autogit --help` for flags and defaults.
 
 ## Custom Recipe
 

@@ -99,6 +99,71 @@ func (e *HostCodeEnvironment) workspaceDirForRun() (string, error) {
 	return e.workspaceDir, nil
 }
 
+func (e *HostCodeEnvironment) workspaceDirForRef(ctx context.Context, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+
+	if isWorkspaceTokenRef(ref) {
+		return e.workspaceDirForRun()
+	}
+
+	e.mu.Lock()
+	if e.isRemote && strings.TrimSpace(e.workspaceDir) != "" {
+		workspaceDir := e.workspaceDir
+		e.mu.Unlock()
+		return workspaceDir, nil
+	}
+
+	localWorkspace := strings.TrimSpace(e.workspaceDir)
+	if localWorkspace == "" {
+		workspaceDir, err := e.getwd()
+		if err != nil {
+			e.mu.Unlock()
+			return "", fmt.Errorf("failed to resolve current workspace directory: %w", err)
+		}
+		localWorkspace = workspaceDir
+		e.workspaceDir = workspaceDir
+		e.isRemote = false
+	}
+	e.mu.Unlock()
+
+	originURL, err := e.resolveOriginURL(ctx, localWorkspace)
+	if err != nil {
+		return "", err
+	}
+
+	workspaceDir, err := e.makeTempDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary workspace directory: %w", err)
+	}
+	e.logger.Debugf("Code environment temporary workspace directory is %q under tmp folder %q.", workspaceDir, filepath.Dir(workspaceDir))
+
+	result, err := e.runner.Run(ctx, "git", "clone", "--depth", "1", originURL, workspaceDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to clone repository: %w", formatCommandError(err, result))
+	}
+
+	e.logger.Debugf("Cloned repo to %s (shallow=true)", workspaceDir)
+
+	e.mu.Lock()
+	e.workspaceDir = workspaceDir
+	e.isRemote = true
+	e.mu.Unlock()
+
+	return workspaceDir, nil
+}
+
+func (e *HostCodeEnvironment) resolveOriginURL(ctx context.Context, workspaceDir string) (string, error) {
+	result, err := e.git(ctx, workspaceDir, "config", "--get", "remote.origin.url")
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve remote.origin.url: %w", err)
+	}
+	originURL := strings.TrimSpace(string(result.Stdout))
+	if originURL == "" {
+		return "", fmt.Errorf("missing remote.origin.url in local workspace")
+	}
+	return originURL, nil
+}
+
 func (e *HostCodeEnvironment) syncRef(ctx context.Context, workspaceDir string, headRef string) error {
 	if isWorkspaceTokenRef(headRef) {
 		return nil

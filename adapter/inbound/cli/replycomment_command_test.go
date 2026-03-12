@@ -59,7 +59,7 @@ func (f *fakeReplyCommentGitHubClient) ListReviewComments(_ context.Context, _ s
 	return f.reviewComments, nil
 }
 
-func TestReplyCommentCommandRejectsQuestionWithCommentFlag(t *testing.T) {
+func TestReplyCommentCommandRejectsQuestionWithPublishFlag(t *testing.T) {
 	useCase := &fakeReplyCommentUseCase{}
 	client := &fakeReplyCommentGitHubClient{}
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
@@ -72,7 +72,7 @@ func TestReplyCommentCommandRejectsQuestionWithCommentFlag(t *testing.T) {
 		Repo:          "owner/repo",
 		ChangeRequest: "7",
 		Question:      "What changed?",
-		Comment:       true,
+		Publish:       true,
 	})
 	require.Error(t, err)
 	require.Empty(t, useCase.requests)
@@ -185,7 +185,7 @@ func TestReplyCommentCommandParsesDiscussionAnchor(t *testing.T) {
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		CommentID:     "discussion_r2909490245",
-		Comment:       true,
+		Publish:       true,
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
@@ -218,7 +218,7 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		CommentID:     "issuecomment-12345",
-		Comment:       true,
+		Publish:       true,
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)

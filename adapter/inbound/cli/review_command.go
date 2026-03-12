@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	inboundlogging "bentos-backend/adapter/inbound/logging"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
 )
 
@@ -34,7 +34,7 @@ type ReviewParams struct {
 	ChangeRequest   string
 	Base            string
 	Head            string
-	Comment         bool
+	Publish         bool
 	Suggest         bool
 	SuggestExplicit bool
 }
@@ -71,7 +71,7 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 		ChangeRequest: params.ChangeRequest,
 		Base:          params.Base,
 		Head:          params.Head,
-		Comment:       params.Comment,
+		Publish:       params.Publish,
 	})
 	if err != nil {
 		return err
@@ -97,14 +97,14 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 		OverviewExplicit:    false,
 		SuggestionsExplicit: params.SuggestExplicit,
 	}
-	if !params.Comment {
+	if !params.Publish {
 		request.ChangeRequestNumber = 0
 	}
 
 	startedAt := time.Now()
 	c.logger.Infof("CLI review started.")
 	c.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-	inboundlogging.LogChangeRequestInputSnapshot(c.logger, "cli", "", request)
+	sharedlogging.LogInputSnapshot(c.logger, "cli", "", request)
 
 	_, err = changeRequestUseCase.Execute(ctx, request)
 	if err != nil {

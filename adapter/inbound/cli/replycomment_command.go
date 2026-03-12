@@ -41,7 +41,7 @@ type ReplyCommentRunParams struct {
 	ChangeRequest string
 	CommentID     string
 	Question      string
-	Comment       bool
+	Publish       bool
 }
 
 // NewReplyCommentCommand creates a new CLI command for replycomment.
@@ -76,8 +76,8 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 	if strings.TrimSpace(params.CommentID) != "" && strings.TrimSpace(params.Question) != "" {
 		return errors.New("--comment-id and --question are mutually exclusive")
 	}
-	if strings.TrimSpace(params.Question) != "" && params.Comment {
-		return errors.New("--comment is not supported with --question")
+	if strings.TrimSpace(params.Question) != "" && params.Publish {
+		return errors.New("--publish is not supported with --question")
 	}
 	if strings.TrimSpace(params.CommentID) == "" && strings.TrimSpace(params.Question) == "" {
 		return errors.New("either --comment-id or --question is required")
@@ -115,7 +115,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		Description:         prInfo.Description,
 		Base:                prInfo.BaseRef,
 		Head:                prInfo.HeadRef,
-		Publish:             params.Comment,
+		Publish:             params.Publish,
 	}
 
 	if strings.TrimSpace(params.Question) != "" {

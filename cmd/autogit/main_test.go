@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
@@ -76,10 +77,8 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 
 			args := append([]string{"review"}, testCase.args...)
 
-			err := runCLI(
-				context.Background(),
-				args,
-				func() (config.Config, error) {
+			deps := autogitDeps{
+				loadConfig: func() (config.Config, error) {
 					return config.Config{
 						LogLevel: "info",
 						CodingAgent: config.CodingAgentConfig{
@@ -90,22 +89,30 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 						},
 					}, nil
 				},
-				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+				buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
 					builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 						return changeRequestUseCase, nil
 					}
 					return cliinbound.NewReviewCommand(builder, githubClient, nil), nil
 				},
-				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+				buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
 					return nil, nil
 				},
-				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+				buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 					return nil, nil
 				},
-				func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+				buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
 					return nil, nil
 				},
-			)
+				buildGitHubHandler: func(config.Config) (http.Handler, error) {
+					return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+				},
+				listenAndServe: func(string, http.Handler) error {
+					return nil
+				},
+			}
+
+			err := runAutogit(context.Background(), args, deps)
 			require.NoError(t, err)
 			require.Len(t, changeRequestUseCase.requests, 1)
 			require.True(t, changeRequestUseCase.requests[0].EnableReview)
@@ -120,10 +127,8 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 	changeRequestUseCase := &mainTestChangeRequestUseCase{}
 	githubClient := &mainTestGitHubClient{}
 
-	err := runCLI(
-		context.Background(),
-		[]string{"overview"},
-		func() (config.Config, error) {
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
 			return config.Config{
 				LogLevel: "info",
 				CodingAgent: config.CodingAgentConfig{
@@ -131,29 +136,117 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 				},
 			}, nil
 		},
-		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+		buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
 			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 				return changeRequestUseCase, nil
 			}
 			return cliinbound.NewReviewCommand(builder, githubClient, nil), nil
 		},
-		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
 			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 				return changeRequestUseCase, nil
 			}
 			return cliinbound.NewOverviewCommand(builder, githubClient, nil), nil
 		},
-		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 			return nil, nil
 		},
-		func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
 			return nil, nil
 		},
-	)
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
+
+	err := runAutogit(context.Background(), []string{"overview"}, deps)
 	require.NoError(t, err)
 	require.Len(t, changeRequestUseCase.requests, 1)
 	require.False(t, changeRequestUseCase.requests[0].EnableReview)
 	require.True(t, changeRequestUseCase.requests[0].EnableOverview)
 	require.True(t, changeRequestUseCase.requests[0].ReviewExplicit)
 	require.True(t, changeRequestUseCase.requests[0].OverviewExplicit)
+}
+
+func TestWebhookRequiresProvider(t *testing.T) {
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{}, nil
+		},
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
+
+	err := runAutogit(context.Background(), []string{"webhook"}, deps)
+	require.Error(t, err)
+}
+
+func TestWebhookRejectsUnsupportedProvider(t *testing.T) {
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{}, nil
+		},
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
+
+	err := runAutogit(context.Background(), []string{"webhook", "--vcs-provider", "gitlab"}, deps)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported vcs provider")
+}
+
+func TestWebhookOverridesConfig(t *testing.T) {
+	var captured config.Config
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{
+				LogLevel: "info",
+				CodingAgent: config.CodingAgentConfig{
+					Agent: "opencode",
+				},
+				Server: config.ServerConfig{
+					Port: "8080",
+					GitHub: config.GitHubConfig{
+						WebhookSecret:           "secret",
+						AppID:                   "123",
+						AppPrivateKey:           "key",
+						APIBaseURL:              "https://api.github.com",
+						ReplyCommentTriggerName: "autogitbot",
+					},
+				},
+			}, nil
+		},
+		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
+			captured = cfg
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
+
+	args := []string{
+		"webhook",
+		"--vcs-provider", "github",
+		"--github-app-id", "999",
+		"--overview-enabled=false",
+		"--review-suggested-changes-max-workers", "9",
+	}
+	err := runAutogit(context.Background(), args, deps)
+	require.NoError(t, err)
+	require.Equal(t, "999", captured.Server.GitHub.AppID)
+	require.NotNil(t, captured.OverviewEnabled)
+	require.False(t, *captured.OverviewEnabled)
+	require.Equal(t, 9, captured.SuggestedChanges.MaxWorkers)
 }

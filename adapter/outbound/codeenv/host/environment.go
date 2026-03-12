@@ -66,12 +66,11 @@ func (e *HostCodeEnvironment) SetupAgent(ctx context.Context, opts domain.Coding
 		return nil, fmt.Errorf("agent is required")
 	}
 
-	workspaceDir, err := e.workspaceDirForRun()
+	headRef := strings.TrimSpace(opts.Ref)
+	workspaceDir, err := e.workspaceDirForRef(ctx, headRef)
 	if err != nil {
 		return nil, err
 	}
-
-	headRef := strings.TrimSpace(opts.Ref)
 	if e.isRemote && isWorkspaceTokenRef(headRef) && headRef != "" {
 		return nil, fmt.Errorf("ref %q requires local workspace mode", headRef)
 	}
@@ -89,7 +88,7 @@ func (e *HostCodeEnvironment) SetupAgent(ctx context.Context, opts domain.Coding
 
 // LoadChangedFiles resolves changed files from the selected comparison mode.
 func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
-	workspaceDir, err := e.workspaceDirForRun()
+	workspaceDir, err := e.workspaceDirForRef(ctx, opts.Head)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +144,7 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 
 // ReadFile reads a repository-relative file at the provided ref.
 func (e *HostCodeEnvironment) ReadFile(ctx context.Context, path string, ref string) (string, bool, error) {
-	workspaceDir, err := e.workspaceDirForRun()
+	workspaceDir, err := e.workspaceDirForRef(ctx, ref)
 	if err != nil {
 		return "", false, err
 	}
@@ -158,14 +157,16 @@ func (e *HostCodeEnvironment) ReadFile(ctx context.Context, path string, ref str
 	if isWorkspaceTokenRef(ref) {
 		content, found, err := e.readWorkspaceFile(ctx, workspaceDir, path)
 		if err != nil {
-			return "", false, err
+			e.logger.Warnf("ReadFile failed for path %q at ref %q: %v", path, ref, err)
+			return "", false, nil
 		}
 		return content, found, nil
 	}
 
 	content, found, err := e.readRefFile(ctx, workspaceDir, path, ref)
 	if err != nil {
-		return "", false, err
+		e.logger.Warnf("ReadFile failed for path %q at ref %q: %v", path, ref, err)
+		return "", false, nil
 	}
 	return content, found, nil
 }

@@ -16,7 +16,6 @@ import (
 	"strings"
 
 	"bentos-backend/adapter/inbound/http/background"
-	inboundlogging "bentos-backend/adapter/inbound/logging"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
 	"bentos-backend/shared/text"
@@ -44,17 +43,13 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 	installationID := strconv.FormatInt(event.Installation.ID, 10)
 	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
 	if err != nil {
-		h.logger.Errorf("GitHub webhook failed to resolve installation token.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.PullRequest.Number)
-		h.logger.Debugf("Failure details: %v.", err)
+		h.logWebhookTokenError(event.Repository.FullName, event.PullRequest.Number, err)
 		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
 		return
 	}
 	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
 	if err != nil {
-		h.logger.Errorf("GitHub webhook failed to build repository clone URL.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.PullRequest.Number)
-		h.logger.Debugf("Failure details: %v.", err)
+		h.logWebhookRepoURLError(event.Repository.FullName, event.PullRequest.Number, err)
 		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
 		return
 	}
@@ -109,9 +104,7 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 		},
 	)
 
-	h.logger.Infof("GitHub webhook review request was accepted.")
-	h.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-	h.logger.Debugf("Webhook action is %q.", event.Action)
+	h.logWebhookAccepted("review", request.Repository, request.ChangeRequestNumber, event.Action)
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -149,17 +142,13 @@ func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request
 	installationID := strconv.FormatInt(event.Installation.ID, 10)
 	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
 	if err != nil {
-		h.logger.Errorf("GitHub webhook failed to resolve installation token.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.Issue.Number)
-		h.logger.Debugf("Failure details: %v.", err)
+		h.logWebhookTokenError(event.Repository.FullName, event.Issue.Number, err)
 		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
 		return
 	}
 	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
 	if err != nil {
-		h.logger.Errorf("GitHub webhook failed to build repository clone URL.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.Issue.Number)
-		h.logger.Debugf("Failure details: %v.", err)
+		h.logWebhookRepoURLError(event.Repository.FullName, event.Issue.Number, err)
 		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
 		return
 	}
@@ -204,7 +193,6 @@ func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request
 			return githubvcs.WithInstallationID(ctx, installationID)
 		},
 		func(ctx context.Context, req usecase.ReplyCommentRequest) error {
-			inboundlogging.LogReplyCommentInputSnapshot(h.logger, "webhook", event.Action, req)
 			if h.replyCommentBuilder == nil {
 				return errors.New("reply comment usecase builder is not configured")
 			}
@@ -217,9 +205,7 @@ func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request
 		},
 	)
 
-	h.logger.Infof("GitHub webhook replycomment request was accepted.")
-	h.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-	h.logger.Debugf("Webhook action is %q.", event.Action)
+	h.logWebhookAccepted("replycomment", request.Repository, request.ChangeRequestNumber, event.Action)
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -257,17 +243,13 @@ func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Reques
 	installationID := strconv.FormatInt(event.Installation.ID, 10)
 	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
 	if err != nil {
-		h.logger.Errorf("GitHub webhook failed to resolve installation token.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.PullRequest.Number)
-		h.logger.Debugf("Failure details: %v.", err)
+		h.logWebhookTokenError(event.Repository.FullName, event.PullRequest.Number, err)
 		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
 		return
 	}
 	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
 	if err != nil {
-		h.logger.Errorf("GitHub webhook failed to build repository clone URL.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", event.Repository.FullName, event.PullRequest.Number)
-		h.logger.Debugf("Failure details: %v.", err)
+		h.logWebhookRepoURLError(event.Repository.FullName, event.PullRequest.Number, err)
 		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
 		return
 	}
@@ -312,7 +294,6 @@ func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Reques
 			return githubvcs.WithInstallationID(ctx, installationID)
 		},
 		func(ctx context.Context, req usecase.ReplyCommentRequest) error {
-			inboundlogging.LogReplyCommentInputSnapshot(h.logger, "webhook", event.Action, req)
 			if h.replyCommentBuilder == nil {
 				return errors.New("reply comment usecase builder is not configured")
 			}
@@ -325,10 +306,26 @@ func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Reques
 		},
 	)
 
-	h.logger.Infof("GitHub webhook replycomment request was accepted.")
-	h.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-	h.logger.Debugf("Webhook action is %q.", event.Action)
+	h.logWebhookAccepted("replycomment", request.Repository, request.ChangeRequestNumber, event.Action)
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *Handler) logWebhookTokenError(repository string, prNumber int, err error) {
+	h.logger.Errorf("GitHub webhook failed to resolve installation token.")
+	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
+	h.logger.Debugf("Failure details: %v.", err)
+}
+
+func (h *Handler) logWebhookRepoURLError(repository string, prNumber int, err error) {
+	h.logger.Errorf("GitHub webhook failed to build repository clone URL.")
+	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
+	h.logger.Debugf("Failure details: %v.", err)
+}
+
+func (h *Handler) logWebhookAccepted(kind string, repository string, prNumber int, action string) {
+	h.logger.Infof("GitHub webhook %s request was accepted.", kind)
+	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
+	h.logger.Debugf("Webhook action is %q.", action)
 }
 
 func (h *Handler) ensureInstallation(installationID int64, repository string, prNumber int) error {

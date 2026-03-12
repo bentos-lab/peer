@@ -61,7 +61,8 @@ _ = result.Text
 ## Host Environment Behavior
 
 - `Factory.New` with `RepoURL` empty:
-  - uses current working directory as workspace.
+  - uses current working directory as workspace for token refs (`@staged`, `@all`, or empty),
+  - for non-token refs, reads `remote.origin.url`, clones into `~/.sisutmp`, and operates on that clone.
 - `Factory.New` with `RepoURL` non-empty:
   - creates a random temporary workspace under `~/.sisutmp`,
   - runs shallow clone (`git clone --depth 1`),
@@ -70,7 +71,7 @@ _ = result.Text
   - token refs:
     - `@staged`: workspace staged mode (not a git ref), skip checkout/sync.
     - `@all`: workspace full mode (not a git ref), skip checkout/sync.
-  - local workspace: `git fetch --all --prune` -> `git checkout <ref>` -> `git pull --ff-only`.
+  - local workspace (token refs only): no checkout/sync beyond token handling.
   - cloned workspace: verify ref availability (with fetch recovery if needed) -> `git checkout <ref>`.
   - token refs are supported only in local workspace mode (`RepoURL` empty). When `RepoURL` is provided, `Ref` must be a real git ref/commit.
 - `Agent` is selected in `SetupAgent` by string; current host implementation supports only `opencode`.

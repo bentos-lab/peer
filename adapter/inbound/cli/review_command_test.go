@@ -32,7 +32,7 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 	err := command.Run(context.Background(), ReviewParams{
 		Repo:          "https://github.com/owner/repo.git",
 		ChangeRequest: "9",
-		Comment:       true,
+		Publish:       true,
 		Suggest:       true,
 	})
 

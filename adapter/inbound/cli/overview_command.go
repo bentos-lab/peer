@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	inboundlogging "bentos-backend/adapter/inbound/logging"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
 )
 
@@ -24,7 +24,7 @@ type OverviewParams struct {
 	ChangeRequest string
 	Base          string
 	Head          string
-	Comment       bool
+	Publish       bool
 }
 
 // NewOverviewCommand creates a new CLI command for autogit overviews.
@@ -57,7 +57,7 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		ChangeRequest: params.ChangeRequest,
 		Base:          params.Base,
 		Head:          params.Head,
-		Comment:       params.Comment,
+		Publish:       params.Publish,
 	})
 	if err != nil {
 		return err
@@ -83,14 +83,14 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		OverviewExplicit:    true,
 		SuggestionsExplicit: false,
 	}
-	if !params.Comment {
+	if !params.Publish {
 		request.ChangeRequestNumber = 0
 	}
 
 	startedAt := time.Now()
 	c.logger.Infof("CLI overview started.")
 	c.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
-	inboundlogging.LogChangeRequestInputSnapshot(c.logger, "cli", "", request)
+	sharedlogging.LogInputSnapshot(c.logger, "cli", "", request)
 
 	_, err = changeRequestUseCase.Execute(ctx, request)
 	if err != nil {

@@ -12,7 +12,7 @@ The replycomment feature answers PR questions by running the coding agent agains
 Use the `replycomment` subcommand:
 
 ```bash
-autogit replycomment --repo owner/repo --change-request 123 --comment-id 456789 --comment
+autogit replycomment --repo owner/repo --change-request 123 --comment-id 456789 --publish
 ```
 
 To answer a raw question without posting a comment:

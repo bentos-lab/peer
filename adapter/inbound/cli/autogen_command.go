@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	inboundlogging "bentos-backend/adapter/inbound/logging"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
 )
 
@@ -146,7 +146,7 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 	startedAt := time.Now()
 	c.logger.Infof("CLI autogen started.")
 	c.logger.Debugf("Repository is %q and change request number is %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	inboundlogging.LogChangeRequestInputSnapshot(c.logger, "cli", "", usecase.ChangeRequestRequest{
+	sharedlogging.LogInputSnapshot(c.logger, "cli", "", usecase.ChangeRequestRequest{
 		Repository:          request.Input.Target.Repository,
 		RepoURL:             request.Input.RepoURL,
 		ChangeRequestNumber: request.Input.Target.ChangeRequestNumber,

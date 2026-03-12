@@ -40,8 +40,8 @@ func resolveChangeRequestParams(ctx context.Context, githubClient GitHubClient, 
 	if strings.TrimSpace(params.ChangeRequest) != "" && (strings.TrimSpace(params.Base) != "" || strings.TrimSpace(params.Head) != "") {
 		return ChangeRequestResolution{}, errors.New("--change-request cannot be used with --base or --head")
 	}
-	if params.Comment && strings.TrimSpace(params.ChangeRequest) == "" {
-		return ChangeRequestResolution{}, errors.New("--comment requires --change-request")
+	if params.Publish && strings.TrimSpace(params.ChangeRequest) == "" {
+		return ChangeRequestResolution{}, errors.New("--publish requires --change-request")
 	}
 
 	repository, repoURL, buildRepoURL, err := normalizeRepo(params.Repo)

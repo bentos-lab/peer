@@ -33,6 +33,6 @@ Output JSON field definitions:
 - `findings[].suggestedChange.reason`: reason for the suggested change.
 
 Constraints:
-- Respect `additionalProperties: false` at every object level.
 - Use exact field names and types required by the schema.
 - Return strictly valid JSON only.
+- Respect the indent of `suggestedChange`.`replacement` in the output.
