@@ -410,6 +410,48 @@ func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, p
 	}, nil
 }
 
+// GetIssue loads issue metadata for a repository issue.
+func (c *CLIClient) GetIssue(ctx context.Context, repository string, issueNumber int) (Issue, error) {
+	if issueNumber <= 0 {
+		return Issue{}, fmt.Errorf("issue number must be positive")
+	}
+	if err := c.ensureAuth(ctx); err != nil {
+		return Issue{}, err
+	}
+	resolvedRepo, err := c.ResolveRepository(ctx, repository)
+	if err != nil {
+		return Issue{}, err
+	}
+
+	result, err := c.runner.Run(
+		ctx,
+		"gh",
+		"api",
+		fmt.Sprintf("repos/%s/issues/%d", resolvedRepo, issueNumber),
+	)
+	if err != nil {
+		return Issue{}, fmt.Errorf("failed to load issue: %w", formatCommandError(err, result))
+	}
+
+	var payload struct {
+		Number  int    `json:"number"`
+		Title   string `json:"title"`
+		Body    string `json:"body"`
+		HTMLURL string `json:"html_url"`
+	}
+	if err := json.Unmarshal(result.Stdout, &payload); err != nil {
+		return Issue{}, fmt.Errorf("failed to parse issue metadata: %w", err)
+	}
+
+	return Issue{
+		Repository: resolvedRepo,
+		Number:     payload.Number,
+		Title:      strings.TrimSpace(payload.Title),
+		Body:       strings.TrimSpace(payload.Body),
+		URL:        strings.TrimSpace(payload.HTMLURL),
+	}, nil
+}
+
 func (c *CLIClient) getPullRequestHeadSHA(ctx context.Context, repository string, pullRequestNumber int) (string, error) {
 	result, err := c.runner.Run(
 		ctx,

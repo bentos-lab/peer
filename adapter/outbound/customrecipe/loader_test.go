@@ -71,10 +71,15 @@ suggestions = true
 enabled = false
 extra_guidance = "overview.md"
 
+[overview.issue_alignment]
+enabled = false
+
 [autoreply]
+enabled = true
 extra_guidance = "reply.md"
 
 [autogen]
+enabled = true
 extra_guidance = "autogen.md"
 `,
 		".autogit/rules.md":    "rules",
@@ -95,6 +100,12 @@ extra_guidance = "autogen.md"
 	require.True(t, *recipe.ReviewSuggestions)
 	require.NotNil(t, recipe.OverviewEnabled)
 	require.False(t, *recipe.OverviewEnabled)
+	require.NotNil(t, recipe.OverviewIssueAlignmentEnabled)
+	require.False(t, *recipe.OverviewIssueAlignmentEnabled)
+	require.NotNil(t, recipe.AutoreplyEnabled)
+	require.True(t, *recipe.AutoreplyEnabled)
+	require.NotNil(t, recipe.AutogenEnabled)
+	require.True(t, *recipe.AutogenEnabled)
 }
 
 func TestLoaderIgnoresInvalidRecipePath(t *testing.T) {

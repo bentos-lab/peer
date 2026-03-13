@@ -8,6 +8,7 @@ import (
 	"time"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
@@ -94,9 +95,15 @@ type InstallationTokenProvider interface {
 type CommentClient interface {
 	InstallationTokenProvider
 	GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (githubvcs.PullRequestInfo, error)
+	GetIssue(ctx context.Context, repository string, issueNumber int) (githubvcs.Issue, error)
 	GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (githubvcs.PullRequestReviewSummary, error)
 	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.IssueComment, error)
 	ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.ReviewComment, error)
+}
+
+// RecipeConfigLoader reads enabled toggles from the repo-scoped recipe config.
+type RecipeConfigLoader interface {
+	Load(ctx context.Context, repoURL string, headRef string) (domain.CustomRecipe, error)
 }
 
 // Handler receives GitHub webhook events and triggers review.
@@ -104,6 +111,7 @@ type Handler struct {
 	changeRequestBuilder ChangeRequestUseCaseBuilder
 	replyCommentBuilder  ReplyCommentUseCaseBuilder
 	tokenProvider        CommentClient
+	recipeConfigLoader   RecipeConfigLoader
 	logger               usecase.Logger
 	webhookSecret        string
 	replyTriggerName     string
@@ -122,6 +130,7 @@ func NewHandler(
 	changeRequestBuilder ChangeRequestUseCaseBuilder,
 	replyCommentBuilder ReplyCommentUseCaseBuilder,
 	tokenProvider CommentClient,
+	recipeConfigLoader RecipeConfigLoader,
 	logger usecase.Logger,
 	webhookSecret string,
 	replyTriggerName string,
@@ -135,6 +144,7 @@ func NewHandler(
 		changeRequestBuilder: changeRequestBuilder,
 		replyCommentBuilder:  replyCommentBuilder,
 		tokenProvider:        tokenProvider,
+		recipeConfigLoader:   recipeConfigLoader,
 		logger:               logger,
 		webhookSecret:        strings.TrimSpace(webhookSecret),
 		replyTriggerName:     strings.TrimSpace(replyTriggerName),

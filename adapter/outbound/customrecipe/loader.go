@@ -62,9 +62,12 @@ func (l *Loader) Load(ctx context.Context, env uccontracts.CodeEnvironment, head
 	}
 
 	recipe := domain.CustomRecipe{
-		ReviewEnabled:     parsed.Review.Enabled,
-		ReviewSuggestions: parsed.Review.Suggestions,
-		OverviewEnabled:   parsed.Overview.Enabled,
+		ReviewEnabled:                 parsed.Review.Enabled,
+		ReviewSuggestions:             parsed.Review.Suggestions,
+		OverviewEnabled:               parsed.Overview.Enabled,
+		OverviewIssueAlignmentEnabled: parsed.Overview.IssueAlignment.Enabled,
+		AutoreplyEnabled:              parsed.Autoreply.Enabled,
+		AutogenEnabled:                parsed.Autogen.Enabled,
 	}
 
 	reviewRuleset, missingPath, err := l.readAndSanitize(ctx, env, headRef, parsed.Review.Ruleset, l.readOnlySanitizer)
@@ -120,14 +123,21 @@ type recipeReviewConfig struct {
 }
 
 type recipeAutoreplyConfig struct {
-	ExtraGuidance string `toml:"extra_guidance"`
-}
-
-type recipeOverviewConfig struct {
 	Enabled       *bool  `toml:"enabled"`
 	ExtraGuidance string `toml:"extra_guidance"`
 }
 
+type recipeOverviewConfig struct {
+	Enabled        *bool                      `toml:"enabled"`
+	ExtraGuidance  string                     `toml:"extra_guidance"`
+	IssueAlignment recipeIssueAlignmentConfig `toml:"issue_alignment"`
+}
+
+type recipeIssueAlignmentConfig struct {
+	Enabled *bool `toml:"enabled"`
+}
+
 type recipeAutogenConfig struct {
+	Enabled       *bool  `toml:"enabled"`
 	ExtraGuidance string `toml:"extra_guidance"`
 }

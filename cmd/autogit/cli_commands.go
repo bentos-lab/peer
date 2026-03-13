@@ -224,6 +224,7 @@ func newOverviewSubcommand(
 	var base string
 	var head string
 	var publish bool
+	var issueAlignment bool
 
 	sub := &cobra.Command{
 		Use:   "overview",
@@ -252,12 +253,13 @@ func newOverviewSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cliinbound.OverviewParams{
-				VCSProvider:   vcsProvider,
-				Repo:          repo,
-				ChangeRequest: changeRequest,
-				Base:          base,
-				Head:          head,
-				Publish:       publish,
+				VCSProvider:    vcsProvider,
+				Repo:           repo,
+				ChangeRequest:  changeRequest,
+				Base:           base,
+				Head:           head,
+				Publish:        publish,
+				IssueAlignment: issueAlignment,
 			})
 		},
 	}
@@ -269,6 +271,7 @@ func newOverviewSubcommand(
 	flags.StringVar(&base, "base", "", "base ref")
 	flags.StringVar(&head, "head", "", "head ref or @staged/@all")
 	flags.BoolVar(&publish, "publish", false, "post overview result as pull request comments")
+	flags.BoolVar(&issueAlignment, "issue-alignment", false, "enable issue alignment analysis for overview")
 	return sub
 }
 

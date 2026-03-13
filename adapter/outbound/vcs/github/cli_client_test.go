@@ -149,6 +149,27 @@ func TestClient_GetPullRequestChangedFilesParsesPaginatedMultiDocumentOutput(t *
 	require.NoError(t, runner.VerifyDone())
 }
 
+func TestClient_GetIssue(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"auth", "status"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "gh", Args: []string{"api", "repos/org/repo/issues/12"}},
+		Result:   commandrunner.Result{Stdout: []byte(`{"number":12,"title":"Bug","body":"Details","html_url":"https://github.com/org/repo/issues/12"}`)},
+	})
+	client := newTestCLIClient(runner)
+
+	issue, err := client.GetIssue(context.Background(), "org/repo", 12)
+	require.NoError(t, err)
+	require.Equal(t, 12, issue.Number)
+	require.Equal(t, "Bug", issue.Title)
+	require.Equal(t, "Details", issue.Body)
+	require.Equal(t, "https://github.com/org/repo/issues/12", issue.URL)
+	require.NoError(t, runner.VerifyDone())
+}
+
 func TestClient_CreateReviewCommentSingleLine(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 	runner.Enqueue(commandrunner.CommandStep{

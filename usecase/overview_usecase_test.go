@@ -39,6 +39,22 @@ func (p *overviewUseCaseTestPublisher) PublishOverview(_ context.Context, req Ov
 	return p.err
 }
 
+type overviewUseCaseTestIssueAlignmentGenerator struct {
+	lastPayload LLMIssueAlignmentPayload
+	callCount   int
+	result      domain.IssueAlignmentResult
+	err         error
+}
+
+func (g *overviewUseCaseTestIssueAlignmentGenerator) GenerateIssueAlignment(_ context.Context, payload LLMIssueAlignmentPayload) (domain.IssueAlignmentResult, error) {
+	g.callCount++
+	g.lastPayload = payload
+	if g.err != nil {
+		return domain.IssueAlignmentResult{}, g.err
+	}
+	return g.result, nil
+}
+
 type overviewUseCaseTestEnvironment struct {
 	cleanupCalls int
 	cleanupErr   error
@@ -92,7 +108,8 @@ func TestOverviewUseCaseExecuteInitializesEnvironmentAndPassesItToGenerator(t *t
 			}},
 		},
 	}
-	useCase, err := NewOverviewUseCase(generator, &overviewUseCaseTestPublisher{}, factory, nil)
+	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
+	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
@@ -115,7 +132,8 @@ func TestOverviewUseCaseExecuteInitializesEnvironmentAndPassesItToGenerator(t *t
 func TestOverviewUseCaseExecuteReturnsFactoryError(t *testing.T) {
 	factory := &overviewUseCaseTestEnvironmentFactory{err: errors.New("factory failed")}
 	generator := &overviewUseCaseTestGenerator{}
-	useCase, err := NewOverviewUseCase(generator, &overviewUseCaseTestPublisher{}, factory, nil)
+	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
+	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
@@ -143,7 +161,8 @@ func TestOverviewUseCaseExecuteCleansUpEnvironmentOnSuccess(t *testing.T) {
 			}},
 		},
 	}
-	useCase, err := NewOverviewUseCase(generator, &overviewUseCaseTestPublisher{}, factory, nil)
+	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
+	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
@@ -162,7 +181,8 @@ func TestOverviewUseCaseExecuteCleansUpEnvironmentOnGeneratorError(t *testing.T)
 	environment := &overviewUseCaseTestEnvironment{}
 	factory := &overviewUseCaseTestEnvironmentFactory{environment: environment}
 	generator := &overviewUseCaseTestGenerator{err: errors.New("generator failed")}
-	useCase, err := NewOverviewUseCase(generator, &overviewUseCaseTestPublisher{}, factory, nil)
+	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
+	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{

@@ -17,20 +17,26 @@ type RulePack struct {
 
 // ChangeRequestRequest is the shared orchestrator input and is platform-neutral.
 type ChangeRequestRequest struct {
-	Repository          string
-	RepoURL             string
-	ChangeRequestNumber int
-	Title               string
-	Description         string
-	Base                string
-	Head                string
-	EnableReview        bool
-	EnableOverview      bool
-	EnableSuggestions   bool
-	ReviewExplicit      bool
-	OverviewExplicit    bool
-	SuggestionsExplicit bool
-	Metadata            map[string]string
+	Repository             string
+	RepoURL                string
+	ChangeRequestNumber    int
+	Title                  string
+	Description            string
+	Base                   string
+	Head                   string
+	EnableReview           bool
+	EnableOverview         bool
+	EnableSuggestions      bool
+	ReviewExplicit         bool
+	OverviewExplicit       bool
+	SuggestionsExplicit    bool
+	Metadata               map[string]string
+	OverviewIssueAlignment OverviewIssueAlignmentInput
+}
+
+// OverviewIssueAlignmentInput supplies issue alignment data for overview flows.
+type OverviewIssueAlignmentInput struct {
+	Candidates []domain.IssueContext
 }
 
 // RulePackProvider returns hardcoded rule packs.
@@ -76,6 +82,19 @@ type LLMOverviewGenerator interface {
 	GenerateOverview(ctx context.Context, payload LLMOverviewPayload) (LLMOverviewResult, error)
 }
 
+// LLMIssueAlignmentPayload is the complete issue alignment prompt payload.
+type LLMIssueAlignmentPayload struct {
+	Input          domain.ChangeRequestInput
+	IssueAlignment OverviewIssueAlignmentInput
+	Environment    uccontracts.CodeEnvironment
+	ExtraGuidance  string
+}
+
+// IssueAlignmentGenerator creates issue alignment output.
+type IssueAlignmentGenerator interface {
+	GenerateIssueAlignment(ctx context.Context, payload LLMIssueAlignmentPayload) (domain.IssueAlignmentResult, error)
+}
+
 // AutogenPayload is the complete autogen prompt payload.
 type AutogenPayload struct {
 	Input         domain.ChangeRequestInput
@@ -109,6 +128,7 @@ type ReviewResultPublisher interface {
 type OverviewPublishRequest struct {
 	Target         domain.ChangeRequestTarget
 	Overview       LLMOverviewResult
+	IssueAlignment *domain.IssueAlignmentResult
 	Metadata       map[string]string
 	RecipeWarnings []string
 }
@@ -158,13 +178,15 @@ type ReviewUseCase interface {
 
 // OverviewRequest is the overview-usecase input.
 type OverviewRequest struct {
-	Input  domain.ChangeRequestInput
-	Recipe domain.CustomRecipe
+	Input          domain.ChangeRequestInput
+	IssueAlignment OverviewIssueAlignmentInput
+	Recipe         domain.CustomRecipe
 }
 
 // OverviewExecutionResult is the overview-usecase output.
 type OverviewExecutionResult struct {
-	Overview LLMOverviewResult
+	Overview       LLMOverviewResult
+	IssueAlignment *domain.IssueAlignmentResult
 }
 
 // OverviewUseCase defines overview execution behavior.
@@ -195,10 +217,11 @@ type AutogenUseCase interface {
 
 // ChangeRequestExecutionResult is the orchestrator output.
 type ChangeRequestExecutionResult struct {
-	Messages []domain.ReviewMessage
-	Findings []domain.Finding
-	Summary  string
-	Overview LLMOverviewResult
+	Messages       []domain.ReviewMessage
+	Findings       []domain.Finding
+	Summary        string
+	Overview       LLMOverviewResult
+	IssueAlignment *domain.IssueAlignmentResult
 }
 
 // ChangeRequestUseCase defines shared orchestration behavior.

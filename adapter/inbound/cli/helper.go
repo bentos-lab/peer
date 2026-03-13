@@ -12,6 +12,7 @@ import (
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
+	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/shared/toolinstall"
 )
 
@@ -70,6 +71,7 @@ func resolveChangeRequestParams(ctx context.Context, githubClient GitHubClient, 
 	prNumber := 0
 	title := ""
 	description := ""
+	var issueCandidates []domain.IssueContext
 	if strings.TrimSpace(params.ChangeRequest) != "" {
 		parsed, parseErr := strconv.Atoi(strings.TrimSpace(params.ChangeRequest))
 		if parseErr != nil || parsed <= 0 {
@@ -88,6 +90,9 @@ func resolveChangeRequestParams(ctx context.Context, githubClient GitHubClient, 
 		head = prInfo.HeadRef
 		title = prInfo.Title
 		description = prInfo.Description
+		if params.IssueAlignment {
+			issueCandidates = resolveIssueCandidates(ctx, githubClient, repository, description)
+		}
 	}
 	if repoProvided && isWorkspaceHeadToken(head) {
 		return ChangeRequestResolution{}, fmt.Errorf("--head %s requires local workspace mode; omit --repo", head)
@@ -101,7 +106,39 @@ func resolveChangeRequestParams(ctx context.Context, githubClient GitHubClient, 
 		Description:         description,
 		Base:                base,
 		Head:                head,
+		IssueCandidates:     issueCandidates,
 	}, nil
+}
+
+func resolveIssueCandidates(ctx context.Context, githubClient GitHubClient, repository string, description string) []domain.IssueContext {
+	refs := sharedtext.ExtractIssueReferences(description, repository)
+	if len(refs) == 0 {
+		return nil
+	}
+
+	candidates := make([]domain.IssueContext, 0, len(refs))
+	for _, ref := range refs {
+		issue, err := githubClient.GetIssue(ctx, ref.Repository, ref.Number)
+		if err != nil {
+			continue
+		}
+		comments, err := githubClient.ListIssueComments(ctx, ref.Repository, ref.Number)
+		if err != nil {
+			continue
+		}
+		issueComments := make([]domain.Comment, 0, len(comments))
+		for _, comment := range comments {
+			issueComments = append(issueComments, comment.ToDomain())
+		}
+		candidates = append(candidates, domain.IssueContext{
+			Issue:    issue.ToDomain(),
+			Comments: issueComments,
+		})
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	return candidates
 }
 
 func isWorkspaceHeadToken(head string) bool {

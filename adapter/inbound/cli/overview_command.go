@@ -19,12 +19,13 @@ type OverviewCommand struct {
 
 // OverviewParams contains already-parsed CLI autogit parameters for overviews.
 type OverviewParams struct {
-	VCSProvider   string
-	Repo          string
-	ChangeRequest string
-	Base          string
-	Head          string
-	Publish       bool
+	VCSProvider    string
+	Repo           string
+	ChangeRequest  string
+	Base           string
+	Head           string
+	Publish        bool
+	IssueAlignment bool
 }
 
 // NewOverviewCommand creates a new CLI command for autogit overviews.
@@ -52,12 +53,13 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 	}
 
 	resolution, err := resolveChangeRequestParams(ctx, c.githubClient, ChangeRequestParams{
-		VCSProvider:   params.VCSProvider,
-		Repo:          params.Repo,
-		ChangeRequest: params.ChangeRequest,
-		Base:          params.Base,
-		Head:          params.Head,
-		Publish:       params.Publish,
+		VCSProvider:    params.VCSProvider,
+		Repo:           params.Repo,
+		ChangeRequest:  params.ChangeRequest,
+		Base:           params.Base,
+		Head:           params.Head,
+		Publish:        params.Publish,
+		IssueAlignment: params.IssueAlignment,
 	})
 	if err != nil {
 		return err
@@ -82,6 +84,9 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		ReviewExplicit:      true,
 		OverviewExplicit:    true,
 		SuggestionsExplicit: false,
+		OverviewIssueAlignment: usecase.OverviewIssueAlignmentInput{
+			Candidates: resolution.IssueCandidates,
+		},
 	}
 	if !params.Publish {
 		request.ChangeRequestNumber = 0

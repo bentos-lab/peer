@@ -11,7 +11,6 @@ Change title: {{ .Title }}
 Change description:
 {{ .Description }}
 {{- end }}
-
 {{- if .Files }}
 Changed files and contents:
 {{- range .Files }}

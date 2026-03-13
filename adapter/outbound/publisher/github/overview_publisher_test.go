@@ -39,12 +39,22 @@ func TestOverviewPublisher_PublishOverview_PostsMarkdown(t *testing.T) {
 				{GroupName: "Handlers", Files: []string{"a.go", "b.go"}, Summary: "Moved validation and routing logic."},
 			},
 		},
+		IssueAlignment: &domain.IssueAlignmentResult{
+			Issue:    domain.IssueReference{Number: 21, Title: "Handle edge cases"},
+			KeyIdeas: []string{"Validate empty inputs"},
+			Requirements: []domain.IssueAlignmentRequirement{
+				{Requirement: "Validate empty inputs", Coverage: "Yes - new guard in handler"},
+			},
+		},
 		Metadata: map[string]string{"action": "opened"},
 	})
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
 	require.Contains(t, client.bodies[0], "## Summary")
 	require.Contains(t, client.bodies[0], "## Walkthroughs")
+	require.Contains(t, client.bodies[0], "## Issue Alignment")
+	require.Contains(t, client.bodies[0], "Linked issue: #21 - Handle edge cases")
+	require.Contains(t, client.bodies[0], "| Requirement | Coverage |")
 	require.Contains(t, client.bodies[0], "| Group | Summary |")
 	require.True(t, containsEvent(logger.events, "debug:GitHub overview comment metadata state=\"success\""))
 	require.True(t, containsEvent(logger.events, "trace:GitHub overview comment content state=\"success\""))

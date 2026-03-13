@@ -127,5 +127,8 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 	g.logger.Infof("Coding-agent overview generation completed.")
 	g.logger.Debugf("Coding-agent overview generation completed in %d ms.", time.Since(startedAt).Milliseconds())
 
-	return usecase.LLMOverviewResult{Categories: decoded.Categories, Walkthroughs: decoded.Walkthroughs}, nil
+	return usecase.LLMOverviewResult{
+		Categories:   decoded.Categories,
+		Walkthroughs: decoded.Walkthroughs,
+	}, nil
 }

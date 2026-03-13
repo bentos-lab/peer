@@ -105,6 +105,36 @@ func TestAppClient_FailsWhenInstallationIDMissing(t *testing.T) {
 	require.Contains(t, err.Error(), "missing github app installation id")
 }
 
+func TestAppClient_GetIssue(t *testing.T) {
+	privateKey := mustGeneratePrivateKeyPEM(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/app/installations/55/access_tokens":
+			_, _ = w.Write([]byte(`{"token":"token-issue","expires_at":"2099-01-01T00:00:00Z"}`))
+		case "/repos/org/repo/issues/12":
+			require.Equal(t, "Bearer token-issue", r.Header.Get("Authorization"))
+			_, _ = w.Write([]byte(`{"number":12,"title":"Bug","body":"Details","html_url":"https://github.com/org/repo/issues/12"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewAppClient(server.Client(), AppClientConfig{
+		APIBaseURL: server.URL,
+		AppID:      "12345",
+		PrivateKey: privateKey,
+	})
+	require.NoError(t, err)
+
+	issue, err := client.GetIssue(WithInstallationID(context.Background(), "55"), "org/repo", 12)
+	require.NoError(t, err)
+	require.Equal(t, 12, issue.Number)
+	require.Equal(t, "Bug", issue.Title)
+	require.Equal(t, "Details", issue.Body)
+	require.Equal(t, "https://github.com/org/repo/issues/12", issue.URL)
+}
+
 func TestAppClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 	privateKey := mustGeneratePrivateKeyPEM(t)
 

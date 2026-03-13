@@ -23,7 +23,6 @@ Output JSON field definitions:
 - `walkthroughs[].groupName`: stable group name describing a related change set.
 - `walkthroughs[].files`: repository-relative file paths covered by the group.
 - `walkthroughs[].summary`: concise description of what changed across the group.
-
 Constraints:
 - Respect `additionalProperties: false` at every object level.
 - Use exact field names and types required by the schema.

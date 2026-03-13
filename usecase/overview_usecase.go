@@ -13,30 +13,33 @@ import (
 
 // overviewUseCase is the concrete OverviewUseCase implementation.
 type overviewUseCase struct {
-	llmOverview LLMOverviewGenerator
-	overviewPub OverviewPublisher
-	envFactory  uccontracts.CodeEnvironmentFactory
-	logger      Logger
+	llmOverview             LLMOverviewGenerator
+	issueAlignmentGenerator IssueAlignmentGenerator
+	overviewPub             OverviewPublisher
+	envFactory              uccontracts.CodeEnvironmentFactory
+	logger                  Logger
 }
 
 // NewOverviewUseCase constructs an overview-only usecase.
 func NewOverviewUseCase(
 	llmOverview LLMOverviewGenerator,
+	issueAlignmentGenerator IssueAlignmentGenerator,
 	overviewPub OverviewPublisher,
 	envFactory uccontracts.CodeEnvironmentFactory,
 	logger Logger,
 ) (OverviewUseCase, error) {
-	if llmOverview == nil || overviewPub == nil || envFactory == nil {
+	if llmOverview == nil || issueAlignmentGenerator == nil || overviewPub == nil || envFactory == nil {
 		return nil, errors.New("overview usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &overviewUseCase{
-		llmOverview: llmOverview,
-		overviewPub: overviewPub,
-		envFactory:  envFactory,
-		logger:      logger,
+		llmOverview:             llmOverview,
+		issueAlignmentGenerator: issueAlignmentGenerator,
+		overviewPub:             overviewPub,
+		envFactory:              envFactory,
+		logger:                  logger,
 	}, nil
 }
 
@@ -73,10 +76,32 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 	}
 	logStage(u.logger, "overview", "generate_overview", target, "success", overviewStartedAt, "")
 
+	var issueAlignmentResult *domain.IssueAlignmentResult
+	issueAlignmentEnabled := len(request.IssueAlignment.Candidates) > 0
+	if request.Recipe.OverviewIssueAlignmentEnabled != nil && !*request.Recipe.OverviewIssueAlignmentEnabled {
+		issueAlignmentEnabled = false
+	}
+	if issueAlignmentEnabled {
+		alignmentStartedAt := time.Now()
+		result, err := u.issueAlignmentGenerator.GenerateIssueAlignment(ctx, LLMIssueAlignmentPayload{
+			Input:          request.Input,
+			IssueAlignment: request.IssueAlignment,
+			Environment:    environment,
+			ExtraGuidance:  strings.TrimSpace(request.Recipe.OverviewGuidance),
+		})
+		if err != nil {
+			logStage(u.logger, "overview", "issue_alignment", target, "failure", alignmentStartedAt, "%v", err)
+			return OverviewExecutionResult{}, err
+		}
+		logStage(u.logger, "overview", "issue_alignment", target, "success", alignmentStartedAt, "")
+		issueAlignmentResult = &result
+	}
+
 	publishStartedAt := time.Now()
 	if err := u.overviewPub.PublishOverview(ctx, OverviewPublishRequest{
 		Target:         request.Input.Target,
 		Overview:       overviewResult,
+		IssueAlignment: issueAlignmentResult,
 		Metadata:       request.Input.Metadata,
 		RecipeWarnings: request.Recipe.MissingPaths,
 	}); err != nil {
@@ -94,5 +119,5 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 		time.Since(startedAt).Milliseconds(),
 	)
 
-	return OverviewExecutionResult{Overview: overviewResult}, nil
+	return OverviewExecutionResult{Overview: overviewResult, IssueAlignment: issueAlignmentResult}, nil
 }

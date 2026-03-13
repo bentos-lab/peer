@@ -72,7 +72,6 @@ Metadata:
 - Head: {{ .Head }}
 - Title: {{ .Title }}
 - Description: {{ .Description }}
-
 {{- if .ExtraGuidance }}
 Custom recipe guidance:
 {{ .ExtraGuidance }}

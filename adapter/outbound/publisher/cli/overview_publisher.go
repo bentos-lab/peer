@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"bentos-backend/domain"
 	"bentos-backend/usecase"
 )
 
@@ -64,6 +65,47 @@ func (p *OverviewPublisher) PublishOverview(_ context.Context, req usecase.Overv
 			}
 		}
 		if _, err := fmt.Fprintf(p.writer, "  %s\n", walkthrough.Summary); err != nil {
+			return err
+		}
+	}
+	if err := printIssueAlignment(p.writer, req.IssueAlignment); err != nil {
+		return err
+	}
+	return nil
+}
+
+func printIssueAlignment(writer io.Writer, alignment *domain.IssueAlignmentResult) error {
+	if alignment == nil || len(alignment.Requirements) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintln(writer, ""); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(writer, "Issue Alignment"); err != nil {
+		return err
+	}
+	if strings.TrimSpace(alignment.Issue.Title) == "" {
+		if _, err := fmt.Fprintf(writer, "Linked issue: #%d\n", alignment.Issue.Number); err != nil {
+			return err
+		}
+	} else {
+		if _, err := fmt.Fprintf(writer, "Linked issue: #%d - %s\n", alignment.Issue.Number, alignment.Issue.Title); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(alignment.Issue.Repository) != "" {
+		if _, err := fmt.Fprintf(writer, "Repository: %s\n", alignment.Issue.Repository); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(writer, "Requirement | Coverage"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(writer, "--- | ---"); err != nil {
+		return err
+	}
+	for _, row := range alignment.Requirements {
+		if _, err := fmt.Fprintf(writer, "%s | %s\n", row.Requirement, row.Coverage); err != nil {
 			return err
 		}
 	}

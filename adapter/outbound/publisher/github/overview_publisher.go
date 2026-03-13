@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 )
@@ -40,7 +41,7 @@ func (p *OverviewPublisher) PublishOverview(ctx context.Context, req usecase.Ove
 		return nil
 	}
 
-	body := formatOverviewMarkdown(req.Overview)
+	body := formatOverviewMarkdown(req.Overview, req.IssueAlignment)
 	if warning := usecase.FormatRecipeWarning(req.RecipeWarnings); warning != "" {
 		body = fmt.Sprintf("%s\n\n%s", warning, body)
 	}
@@ -66,7 +67,7 @@ func shouldPublishOverviewForAction(action string) bool {
 	return normalized == "opened"
 }
 
-func formatOverviewMarkdown(result usecase.LLMOverviewResult) string {
+func formatOverviewMarkdown(result usecase.LLMOverviewResult, alignment *domain.IssueAlignmentResult) string {
 	var builder strings.Builder
 	builder.WriteString("## Summary\n\n")
 	if len(result.Categories) == 0 {
@@ -97,6 +98,34 @@ func formatOverviewMarkdown(result usecase.LLMOverviewResult) string {
 		builder.WriteString(fmt.Sprintf("| %s | %s |\n", left, escapeTableCell(group.Summary)))
 	}
 
+	if issueSection := formatIssueAlignmentMarkdown(alignment); issueSection != "" {
+		builder.WriteString("\n")
+		builder.WriteString(issueSection)
+	}
+
+	return builder.String()
+}
+
+func formatIssueAlignmentMarkdown(alignment *domain.IssueAlignmentResult) string {
+	if alignment == nil || len(alignment.Requirements) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("## Issue Alignment\n\n")
+	if strings.TrimSpace(alignment.Issue.Title) == "" {
+		builder.WriteString(fmt.Sprintf("Linked issue: #%d\n\n", alignment.Issue.Number))
+	} else {
+		builder.WriteString(fmt.Sprintf("Linked issue: #%d - %s\n\n", alignment.Issue.Number, escapeMarkdownText(alignment.Issue.Title)))
+	}
+	if strings.TrimSpace(alignment.Issue.Repository) != "" {
+		builder.WriteString(fmt.Sprintf("Repository: %s\n\n", escapeMarkdownText(alignment.Issue.Repository)))
+	}
+	builder.WriteString("| Requirement | Coverage |\n")
+	builder.WriteString("| --- | --- |\n")
+	for _, row := range alignment.Requirements {
+		builder.WriteString(fmt.Sprintf("| %s | %s |\n", escapeTableCell(row.Requirement), escapeTableCell(row.Coverage)))
+	}
 	return builder.String()
 }
 

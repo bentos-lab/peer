@@ -1,12 +1,15 @@
 package cli
 
+import "bentos-backend/domain"
+
 type ChangeRequestParams struct {
-	VCSProvider   string
-	Repo          string
-	ChangeRequest string
-	Base          string
-	Head          string
-	Publish       bool
+	VCSProvider    string
+	Repo           string
+	ChangeRequest  string
+	Base           string
+	Head           string
+	Publish        bool
+	IssueAlignment bool
 }
 
 type ChangeRequestResolution struct {
@@ -17,4 +20,5 @@ type ChangeRequestResolution struct {
 	Description         string
 	Base                string
 	Head                string
+	IssueCandidates     []domain.IssueContext
 }

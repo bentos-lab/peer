@@ -29,7 +29,27 @@ func (c *mainTestGitHubClient) ResolveRepository(_ context.Context, _ string) (s
 }
 
 func (c *mainTestGitHubClient) GetPullRequestInfo(_ context.Context, _ string, _ int) (githubvcs.PullRequestInfo, error) {
-	return githubvcs.PullRequestInfo{}, nil
+	return githubvcs.PullRequestInfo{
+		Repository:  "org/repo",
+		Number:      7,
+		Title:       "Title",
+		Description: "Fixes #12",
+		BaseRef:     "main",
+		HeadRef:     "feature",
+	}, nil
+}
+
+func (c *mainTestGitHubClient) GetIssue(_ context.Context, repository string, issueNumber int) (githubvcs.Issue, error) {
+	return githubvcs.Issue{
+		Repository: repository,
+		Number:     issueNumber,
+		Title:      "Issue",
+		Body:       "Body",
+	}, nil
+}
+
+func (c *mainTestGitHubClient) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
+	return nil, nil
 }
 
 func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
@@ -169,6 +189,39 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 	require.True(t, changeRequestUseCase.requests[0].EnableOverview)
 	require.True(t, changeRequestUseCase.requests[0].ReviewExplicit)
 	require.True(t, changeRequestUseCase.requests[0].OverviewExplicit)
+}
+
+func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
+	changeRequestUseCase := &mainTestChangeRequestUseCase{}
+	githubClient := &mainTestGitHubClient{}
+
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{
+				LogLevel: "info",
+				CodingAgent: config.CodingAgentConfig{
+					Agent: "opencode",
+				},
+			}, nil
+		},
+		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
+				return changeRequestUseCase, nil
+			}
+			return cliinbound.NewOverviewCommand(builder, githubClient, nil), nil
+		},
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
+
+	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7"}, deps)
+	require.NoError(t, err)
+	require.Len(t, changeRequestUseCase.requests, 1)
+	require.NotEmpty(t, changeRequestUseCase.requests[0].OverviewIssueAlignment.Candidates)
 }
 
 func TestWebhookRequiresProvider(t *testing.T) {

@@ -15,6 +15,8 @@ import (
 type GitHubClient interface {
 	ResolveRepository(ctx context.Context, repository string) (string, error)
 	GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (githubvcs.PullRequestInfo, error)
+	GetIssue(ctx context.Context, repository string, issueNumber int) (githubvcs.Issue, error)
+	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.IssueComment, error)
 }
 
 // ChangeRequestUseCaseBuilder builds a change request usecase for a specific repo.
@@ -66,12 +68,13 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 	}
 
 	resolution, err := resolveChangeRequestParams(ctx, c.githubClient, ChangeRequestParams{
-		VCSProvider:   params.VCSProvider,
-		Repo:          params.Repo,
-		ChangeRequest: params.ChangeRequest,
-		Base:          params.Base,
-		Head:          params.Head,
-		Publish:       params.Publish,
+		VCSProvider:    params.VCSProvider,
+		Repo:           params.Repo,
+		ChangeRequest:  params.ChangeRequest,
+		Base:           params.Base,
+		Head:           params.Head,
+		Publish:        params.Publish,
+		IssueAlignment: false,
 	})
 	if err != nil {
 		return err

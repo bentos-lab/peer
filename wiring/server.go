@@ -7,6 +7,8 @@ import (
 	"time"
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
+	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
+	customrecipe "bentos-backend/adapter/outbound/customrecipe"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
@@ -40,10 +42,16 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	replyBuilder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
 		return BuildReplyCommentUseCase(cfgWithOverrides, CLILLMOptions{}, "", repoURL)
 	}
+	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{Logger: logger})
+	configLoader, err := customrecipe.NewConfigLoader(codeEnvironmentFactory, logger)
+	if err != nil {
+		return nil, err
+	}
 	return githubinbound.NewHandler(
 		changeRequestBuilder,
 		replyBuilder,
 		ghClient,
+		configLoader,
 		logger,
 		cfg.Server.GitHub.WebhookSecret,
 		cfg.Server.GitHub.ReplyCommentTriggerName,

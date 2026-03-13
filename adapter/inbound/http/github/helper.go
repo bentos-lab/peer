@@ -63,6 +63,32 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 		head = strings.TrimSpace(event.PullRequest.Head.Ref)
 	}
 
+	recipeConfig := h.loadRecipeConfig(r.Context(), repoURL, head)
+	if recipeConfig.ReviewEnabled != nil && !*recipeConfig.ReviewEnabled {
+		h.logWebhookSkipped("review", event.Repository.FullName, event.PullRequest.Number, event.Action)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
+	enableOverview := h.enableOverview && isInitialPROpenedAction(event.Action)
+	if recipeConfig.OverviewEnabled != nil && !*recipeConfig.OverviewEnabled {
+		enableOverview = false
+	}
+	issueAlignmentEnabled := true
+	if recipeConfig.OverviewIssueAlignmentEnabled != nil {
+		issueAlignmentEnabled = *recipeConfig.OverviewIssueAlignmentEnabled
+	}
+
+	var issueCandidates []domain.IssueContext
+	if issueAlignmentEnabled {
+		issueCandidates = resolveWebhookIssueCandidates(
+			githubvcs.WithInstallationID(r.Context(), installationID),
+			h.tokenProvider,
+			event.Repository.FullName,
+			event.PullRequest.Body,
+		)
+	}
+
 	request := usecase.ChangeRequestRequest{
 		Repository:          event.Repository.FullName,
 		RepoURL:             repoURL,
@@ -72,11 +98,14 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 		Base:                base,
 		Head:                head,
 		EnableReview:        true,
-		EnableOverview:      h.enableOverview && isInitialPROpenedAction(event.Action),
+		EnableOverview:      enableOverview,
 		EnableSuggestions:   h.enableSuggestions,
 		ReviewExplicit:      false,
 		OverviewExplicit:    false,
 		SuggestionsExplicit: false,
+		OverviewIssueAlignment: usecase.OverviewIssueAlignmentInput{
+			Candidates: issueCandidates,
+		},
 		Metadata: map[string]string{
 			"action": event.Action,
 		},
@@ -106,6 +135,42 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 
 	h.logWebhookAccepted("review", request.Repository, request.ChangeRequestNumber, event.Action)
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func resolveWebhookIssueCandidates(
+	ctx context.Context,
+	client CommentClient,
+	repository string,
+	description string,
+) []domain.IssueContext {
+	references := text.ExtractIssueReferences(description, repository)
+	if len(references) == 0 {
+		return nil
+	}
+
+	candidates := make([]domain.IssueContext, 0, len(references))
+	for _, ref := range references {
+		issue, err := client.GetIssue(ctx, ref.Repository, ref.Number)
+		if err != nil {
+			continue
+		}
+		comments, err := client.ListIssueComments(ctx, ref.Repository, ref.Number)
+		if err != nil {
+			continue
+		}
+		issueComments := make([]domain.Comment, 0, len(comments))
+		for _, comment := range comments {
+			issueComments = append(issueComments, comment.ToDomain())
+		}
+		candidates = append(candidates, domain.IssueContext{
+			Issue:    issue.ToDomain(),
+			Comments: issueComments,
+		})
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	return candidates
 }
 
 func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request, body []byte) {
@@ -157,6 +222,12 @@ func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request
 	prInfo, err := h.tokenProvider.GetPullRequestInfo(ctx, event.Repository.FullName, event.Issue.Number)
 	if err != nil {
 		http.Error(w, "failed to resolve pull request info", http.StatusBadGateway)
+		return
+	}
+	recipeConfig := h.loadRecipeConfig(ctx, repoURL, prInfo.HeadRef)
+	if recipeConfig.AutoreplyEnabled != nil && !*recipeConfig.AutoreplyEnabled {
+		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.Issue.Number, event.Action)
+		w.WriteHeader(http.StatusAccepted)
 		return
 	}
 	thread, err := buildIssueThreadForWebhook(ctx, h.tokenProvider, event.Repository.FullName, event.Issue.Number, event.Comment.ID, prInfo)
@@ -260,6 +331,12 @@ func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "failed to resolve pull request info", http.StatusBadGateway)
 		return
 	}
+	recipeConfig := h.loadRecipeConfig(ctx, repoURL, prInfo.HeadRef)
+	if recipeConfig.AutoreplyEnabled != nil && !*recipeConfig.AutoreplyEnabled {
+		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.PullRequest.Number, event.Action)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	thread, err := buildReviewThreadForWebhook(ctx, h.tokenProvider, event.Repository.FullName, event.PullRequest.Number, event.Comment.ID)
 	if err != nil {
 		http.Error(w, "failed to load comment thread", http.StatusBadGateway)
@@ -324,6 +401,24 @@ func (h *Handler) logWebhookRepoURLError(repository string, prNumber int, err er
 
 func (h *Handler) logWebhookAccepted(kind string, repository string, prNumber int, action string) {
 	h.logger.Infof("GitHub webhook %s request was accepted.", kind)
+	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
+	h.logger.Debugf("Webhook action is %q.", action)
+}
+
+func (h *Handler) loadRecipeConfig(ctx context.Context, repoURL string, headRef string) domain.CustomRecipe {
+	if h.recipeConfigLoader == nil {
+		return domain.CustomRecipe{}
+	}
+	recipe, err := h.recipeConfigLoader.Load(ctx, repoURL, headRef)
+	if err != nil {
+		h.logger.Warnf("Failed to load webhook recipe config: %v", err)
+		return domain.CustomRecipe{}
+	}
+	return recipe
+}
+
+func (h *Handler) logWebhookSkipped(kind string, repository string, prNumber int, action string) {
+	h.logger.Infof("GitHub webhook %s request was skipped.", kind)
 	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
 	h.logger.Debugf("Webhook action is %q.", action)
 }

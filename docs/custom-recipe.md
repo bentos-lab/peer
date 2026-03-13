@@ -14,10 +14,15 @@ suggestions = true
 enabled = true
 extra_guidance = "overview.md"
 
+[overview.issue_alignment]
+enabled = true
+
 [autoreply]
+enabled = true
 extra_guidance = "reply.md"
 
 [autogen]
+enabled = true
 extra_guidance = "autogen.md"
 ```
 

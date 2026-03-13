@@ -77,8 +77,9 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 	if effectiveOverview {
 		overviewStartedAt := time.Now()
 		overviewExecResult, err := u.overviewUC.Execute(ctx, OverviewRequest{
-			Input:  input,
-			Recipe: recipe,
+			Input:          input,
+			IssueAlignment: request.OverviewIssueAlignment,
+			Recipe:         recipe,
 		})
 		if err != nil {
 			logStage(u.logger, "change request", "generate_overview", target, "failure", overviewStartedAt, "%v", err)
@@ -125,6 +126,12 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 				return LLMOverviewResult{}
 			}
 			return overviewResult.Overview
+		}(),
+		IssueAlignment: func() *domain.IssueAlignmentResult {
+			if overviewResult == nil {
+				return nil
+			}
+			return overviewResult.IssueAlignment
 		}(),
 	}, nil
 }

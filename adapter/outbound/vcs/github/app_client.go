@@ -523,6 +523,39 @@ func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, p
 	}, nil
 }
 
+// GetIssue loads issue metadata for a repository issue.
+func (c *AppClient) GetIssue(ctx context.Context, repository string, issueNumber int) (Issue, error) {
+	if issueNumber <= 0 {
+		return Issue{}, fmt.Errorf("issue number must be positive")
+	}
+	repository = strings.TrimSpace(repository)
+	if repository == "" {
+		return Issue{}, fmt.Errorf("repository is required")
+	}
+	token, err := c.installationAccessToken(ctx)
+	if err != nil {
+		return Issue{}, err
+	}
+
+	var payload struct {
+		Number  int    `json:"number"`
+		Title   string `json:"title"`
+		Body    string `json:"body"`
+		HTMLURL string `json:"html_url"`
+	}
+	endpoint := fmt.Sprintf("%s/repos/%s/issues/%d", c.apiBaseURL, repository, issueNumber)
+	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
+		return Issue{}, fmt.Errorf("failed to load issue: %w", err)
+	}
+	return Issue{
+		Repository: repository,
+		Number:     payload.Number,
+		Title:      strings.TrimSpace(payload.Title),
+		Body:       strings.TrimSpace(payload.Body),
+		URL:        strings.TrimSpace(payload.HTMLURL),
+	}, nil
+}
+
 func (c *AppClient) getPullRequestHeadSHA(ctx context.Context, token string, repository string, pullRequestNumber int) (string, error) {
 	var payload struct {
 		Head struct {
