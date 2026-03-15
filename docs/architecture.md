@@ -17,6 +17,7 @@ Define the architecture and dependency rules for this repository so implementati
 - `adapter/inbound`
   - Parses input from HTTP/CLI and maps to `usecase.ReviewRequest`.
   - No business logic.
+  - `helper.go` under `adapter/inbound/http` must only contain utility helpers; handler methods and main logic belong in handler-focused files.
 - `adapter/outbound`
   - Concrete implementations for ports:
     - loading changed content

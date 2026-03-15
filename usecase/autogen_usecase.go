@@ -11,38 +11,31 @@ import (
 	"bentos-backend/domain"
 	diffutil "bentos-backend/shared/diff"
 	"bentos-backend/shared/logger/stdlogger"
-	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // autogenUseCase is the concrete AutogenUseCase implementation.
 type autogenUseCase struct {
-	generator    AutogenGenerator
-	publisher    AutogenPublisher
-	envFactory   uccontracts.CodeEnvironmentFactory
-	recipeLoader CustomRecipeLoader
-	logger       Logger
+	generator AutogenGenerator
+	publisher AutogenPublisher
+	logger    Logger
 }
 
 // NewAutogenUseCase constructs an autogen usecase.
 func NewAutogenUseCase(
 	generator AutogenGenerator,
 	publisher AutogenPublisher,
-	envFactory uccontracts.CodeEnvironmentFactory,
-	recipeLoader CustomRecipeLoader,
 	logger Logger,
 ) (AutogenUseCase, error) {
-	if generator == nil || publisher == nil || envFactory == nil || recipeLoader == nil {
+	if generator == nil || publisher == nil {
 		return nil, errors.New("autogen usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &autogenUseCase{
-		generator:    generator,
-		publisher:    publisher,
-		envFactory:   envFactory,
-		recipeLoader: recipeLoader,
-		logger:       logger,
+		generator: generator,
+		publisher: publisher,
+		logger:    logger,
 	}, nil
 }
 
@@ -52,9 +45,10 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 	target := request.Input.Target
 	logExecution(u.logger, "autogen", target, "start", startedAt, "")
 
-	if !request.Docs && !request.Tests {
-		return AutogenExecutionResult{}, fmt.Errorf("autogen requires --docs and/or --tests")
+	if request.Environment == nil {
+		return AutogenExecutionResult{}, errors.New("code environment is required")
 	}
+
 	if request.Publish {
 		if target.ChangeRequestNumber <= 0 {
 			return AutogenExecutionResult{}, fmt.Errorf("autogen publish requires change request number")
@@ -63,30 +57,8 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 			return AutogenExecutionResult{}, fmt.Errorf("autogen publish requires head branch")
 		}
 	}
-
-	initializeEnvironmentStartedAt := time.Now()
-	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
-		RepoURL: request.Input.RepoURL,
-	})
-	if err != nil {
-		logStage(u.logger, "autogen", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", err)
-		return AutogenExecutionResult{}, err
-	}
-	defer func() {
-		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
-			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
-		}
-	}()
-	logStage(u.logger, "autogen", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
-
-	headRef := strings.TrimSpace(request.Input.Head)
-	if headRef == "" {
-		headRef = "HEAD"
-	}
-	recipe, err := u.recipeLoader.Load(ctx, environment, headRef)
-	if err != nil {
-		logStage(u.logger, "autogen", "load_recipe", target, "failure", initializeEnvironmentStartedAt, "%v", err)
-		return AutogenExecutionResult{}, err
+	if !request.Docs && !request.Tests {
+		return AutogenExecutionResult{}, fmt.Errorf("autogen requires --docs and/or --tests")
 	}
 
 	generateStartedAt := time.Now()
@@ -95,8 +67,8 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 		Docs:          request.Docs,
 		Tests:         request.Tests,
 		HeadBranch:    request.HeadBranch,
-		Environment:   environment,
-		ExtraGuidance: strings.TrimSpace(recipe.AutogenGuidance),
+		Environment:   request.Environment,
+		ExtraGuidance: strings.TrimSpace(request.Recipe.AutogenGuidance),
 	})
 	if err != nil {
 		logStage(u.logger, "autogen", "generate_autogen", target, "failure", generateStartedAt, "%v", err)
@@ -108,7 +80,7 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 	logStage(u.logger, "autogen", "generate_autogen", target, "success", generateStartedAt, "")
 
 	collectStartedAt := time.Now()
-	changedFiles, err := environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
+	changedFiles, err := request.Environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
 		Head: "@all",
 	})
 	if err != nil {
@@ -133,13 +105,13 @@ func (u *autogenUseCase) Execute(ctx context.Context, request AutogenRequest) (A
 		HeadBranch:  request.HeadBranch,
 		Metadata:    request.Input.Metadata,
 		AgentOutput: agentOutput,
-		Environment: environment,
+		Environment: request.Environment,
 		PushOptions: domain.CodeEnvironmentPushOptions{
 			TargetBranch:  request.HeadBranch,
 			CommitMessage: "autogen: add tests/docs/comments",
 			RemoteName:    "origin",
 		},
-		RecipeWarnings: recipe.MissingPaths,
+		RecipeWarnings: request.Recipe.MissingPaths,
 	}); err != nil {
 		logStage(u.logger, "autogen", "publish_autogen_result", target, "failure", publishStartedAt, "%v", err)
 		return AutogenExecutionResult{}, err

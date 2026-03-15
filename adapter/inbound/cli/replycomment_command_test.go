@@ -65,7 +65,7 @@ func TestReplyCommentCommandRejectsQuestionWithPublishFlag(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, "autogitbot")
+	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -94,7 +94,7 @@ func TestReplyCommentCommandQuestionBuildsInlineThread(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, "autogitbot")
+	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -132,7 +132,7 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, "autogitbot")
+	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -179,7 +179,7 @@ func TestReplyCommentCommandParsesDiscussionAnchor(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, "autogitbot")
+	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -212,7 +212,7 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, "autogitbot")
+	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), ReplyCommentRunParams{
 		VCSProvider:   "github",

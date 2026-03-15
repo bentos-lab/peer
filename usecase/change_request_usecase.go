@@ -3,20 +3,16 @@ package usecase
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
-	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // changeRequestUseCase is the concrete ChangeRequestUseCase implementation.
 type changeRequestUseCase struct {
 	reviewUseCase ReviewUseCase
 	overviewUC    OverviewUseCase
-	envFactory    uccontracts.CodeEnvironmentFactory
-	recipeLoader  CustomRecipeLoader
 	logger        Logger
 }
 
@@ -24,11 +20,9 @@ type changeRequestUseCase struct {
 func NewChangeRequestUseCase(
 	reviewUseCase ReviewUseCase,
 	overviewUC OverviewUseCase,
-	envFactory uccontracts.CodeEnvironmentFactory,
-	recipeLoader CustomRecipeLoader,
 	logger Logger,
 ) (ChangeRequestUseCase, error) {
-	if reviewUseCase == nil || overviewUC == nil || envFactory == nil || recipeLoader == nil {
+	if reviewUseCase == nil || overviewUC == nil {
 		return nil, errors.New("change request usecase dependencies must not be nil")
 	}
 	if logger == nil {
@@ -37,8 +31,6 @@ func NewChangeRequestUseCase(
 	return &changeRequestUseCase{
 		reviewUseCase: reviewUseCase,
 		overviewUC:    overviewUC,
-		envFactory:    envFactory,
-		recipeLoader:  recipeLoader,
 		logger:        logger,
 	}, nil
 }
@@ -53,22 +45,14 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 	logExecution(u.logger, "change request", target, "start", startedAt, "")
 
 	input := mapChangeRequestToInput(request)
-	recipe, err := u.loadRecipe(ctx, request)
-	if err != nil {
-		return ChangeRequestExecutionResult{}, err
-	}
+	recipe := request.Recipe
 
 	effectiveReview := request.EnableReview
-	if !request.ReviewExplicit && recipe.ReviewEnabled != nil {
-		effectiveReview = *recipe.ReviewEnabled
-	}
 	effectiveOverview := request.EnableOverview
-	if !request.OverviewExplicit && recipe.OverviewEnabled != nil {
-		effectiveOverview = *recipe.OverviewEnabled
-	}
 	effectiveSuggestions := request.EnableSuggestions
-	if !request.SuggestionsExplicit && recipe.ReviewSuggestions != nil {
-		effectiveSuggestions = *recipe.ReviewSuggestions
+
+	if (effectiveReview || effectiveOverview) && request.Environment == nil {
+		return ChangeRequestExecutionResult{}, errors.New("code environment is required")
 	}
 
 	var reviewResult ReviewExecutionResult
@@ -80,6 +64,7 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 			Input:          input,
 			IssueAlignment: request.OverviewIssueAlignment,
 			Recipe:         recipe,
+			Environment:    request.Environment,
 		})
 		if err != nil {
 			logStage(u.logger, "change request", "generate_overview", target, "failure", overviewStartedAt, "%v", err)
@@ -91,14 +76,16 @@ func (u *changeRequestUseCase) Execute(ctx context.Context, request ChangeReques
 
 	if effectiveReview {
 		reviewStartedAt := time.Now()
-		reviewResult, err = u.reviewUseCase.Execute(ctx, ReviewRequest{
+		var reviewErr error
+		reviewResult, reviewErr = u.reviewUseCase.Execute(ctx, ReviewRequest{
 			Input:       input,
 			Suggestions: effectiveSuggestions,
 			Recipe:      recipe,
+			Environment: request.Environment,
 		})
-		if err != nil {
-			logStage(u.logger, "change request", "review_diff", target, "failure", reviewStartedAt, "%v", err)
-			return ChangeRequestExecutionResult{}, err
+		if reviewErr != nil {
+			logStage(u.logger, "change request", "review_diff", target, "failure", reviewStartedAt, "%v", reviewErr)
+			return ChangeRequestExecutionResult{}, reviewErr
 		}
 		logStage(u.logger, "change request", "review_diff", target, "success", reviewStartedAt, "")
 	} else {
@@ -147,36 +134,4 @@ func mapChangeRequestToInput(request ChangeRequestRequest) domain.ChangeRequestI
 		Language:    "English",
 		Metadata:    request.Metadata,
 	}
-}
-
-func (u *changeRequestUseCase) loadRecipe(ctx context.Context, request ChangeRequestRequest) (domain.CustomRecipe, error) {
-	loadStartedAt := time.Now()
-	target := domain.ChangeRequestTarget{
-		Repository:          request.Repository,
-		ChangeRequestNumber: request.ChangeRequestNumber,
-	}
-	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
-		RepoURL: request.RepoURL,
-	})
-	if err != nil {
-		logStage(u.logger, "change request", "load_recipe_environment", target, "failure", loadStartedAt, "%v", err)
-		return domain.CustomRecipe{}, err
-	}
-	defer func() {
-		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
-			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
-		}
-	}()
-
-	headRef := strings.TrimSpace(request.Head)
-	if headRef == "" {
-		headRef = "HEAD"
-	}
-	recipe, err := u.recipeLoader.Load(ctx, environment, headRef)
-	if err != nil {
-		logStage(u.logger, "change request", "load_recipe", target, "failure", loadStartedAt, "%v", err)
-		return domain.CustomRecipe{}, err
-	}
-	logStage(u.logger, "change request", "load_recipe", target, "success", loadStartedAt, "")
-	return recipe, nil
 }

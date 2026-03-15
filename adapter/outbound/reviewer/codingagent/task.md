@@ -77,7 +77,6 @@ Metadata:
 
 Rule pack (hard constraints):
 {{- if .CustomRuleset }}
-- Use the custom recipe ruleset below; it replaces the default rules.
 {{ .CustomRuleset }}
 {{- else }}
 {{ .RulePackText }}

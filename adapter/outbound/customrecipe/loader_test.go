@@ -66,26 +66,35 @@ func TestLoaderReadsAndSanitizesRecipeFiles(t *testing.T) {
 enabled = false
 ruleset = "rules.md"
 suggestions = true
+events = ["opened", "synchronize"]
 
 [overview]
 enabled = false
 extra_guidance = "overview.md"
+events = ["opened"]
 
 [overview.issue_alignment]
 enabled = false
+extra_guidance = "issue_alignment.md"
 
 [autoreply]
 enabled = true
 extra_guidance = "reply.md"
+events = ["issue_comment", "pull_request_review_comment"]
+actions = ["created", "edited"]
 
 [autogen]
 enabled = true
 extra_guidance = "autogen.md"
+events = ["opened"]
+docs = true
+tests = false
 `,
-		".autogit/rules.md":    "rules",
-		".autogit/overview.md": "overview",
-		".autogit/reply.md":    "reply",
-		".autogit/autogen.md":  "autogen",
+		".autogit/rules.md":           "rules",
+		".autogit/overview.md":        "overview",
+		".autogit/issue_alignment.md": "alignment",
+		".autogit/reply.md":           "reply",
+		".autogit/autogen.md":         "autogen",
 	}}
 
 	recipe, err := loader.Load(context.Background(), env, "HEAD")
@@ -106,6 +115,16 @@ extra_guidance = "autogen.md"
 	require.True(t, *recipe.AutoreplyEnabled)
 	require.NotNil(t, recipe.AutogenEnabled)
 	require.True(t, *recipe.AutogenEnabled)
+	require.Equal(t, []string{"opened", "synchronize"}, recipe.ReviewEvents)
+	require.Equal(t, []string{"opened"}, recipe.OverviewEvents)
+	require.Equal(t, []string{"issue_comment", "pull_request_review_comment"}, recipe.AutoreplyEvents)
+	require.Equal(t, []string{"created", "edited"}, recipe.AutoreplyActions)
+	require.Equal(t, []string{"opened"}, recipe.AutogenEvents)
+	require.NotNil(t, recipe.AutogenDocs)
+	require.True(t, *recipe.AutogenDocs)
+	require.NotNil(t, recipe.AutogenTests)
+	require.False(t, *recipe.AutogenTests)
+	require.Equal(t, "alignment", recipe.OverviewIssueAlignmentGuidance)
 }
 
 func TestLoaderIgnoresInvalidRecipePath(t *testing.T) {
@@ -142,4 +161,41 @@ extra_guidance = "overview.md"
 	recipe, err := loader.Load(context.Background(), env, "HEAD")
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{".autogit/rules.md", ".autogit/overview.md"}, recipe.MissingPaths)
+}
+
+func TestLoaderUsesEnvDefaultsWhenConfigMissing(t *testing.T) {
+	t.Setenv(envReviewEnabled, "true")
+	t.Setenv(envOverviewEvents, "opened, synchronize")
+	t.Setenv(envAutoreplyActions, "")
+
+	loader, err := NewLoader(&recipeTestSanitizer{status: domain.PromptSafetyStatusOK}, &recipeTestSanitizer{status: domain.PromptSafetyStatusOK}, nil)
+	require.NoError(t, err)
+
+	recipe, err := loader.Load(context.Background(), &recipeTestEnvironment{files: map[string]string{}}, "HEAD")
+	require.NoError(t, err)
+	require.NotNil(t, recipe.ReviewEnabled)
+	require.True(t, *recipe.ReviewEnabled)
+	require.Equal(t, []string{"opened", "synchronize"}, recipe.OverviewEvents)
+	require.NotNil(t, recipe.AutoreplyActions)
+	require.Len(t, recipe.AutoreplyActions, 0)
+}
+
+func TestLoaderConfigOverridesEnvWithExplicitEmpty(t *testing.T) {
+	t.Setenv(envOverviewEvents, "opened")
+
+	loader, err := NewLoader(&recipeTestSanitizer{status: domain.PromptSafetyStatusOK}, &recipeTestSanitizer{status: domain.PromptSafetyStatusOK}, nil)
+	require.NoError(t, err)
+
+	env := &recipeTestEnvironment{files: map[string]string{
+		".autogit/config.toml": `
+[overview]
+events = []
+extra_guidance = ""
+`,
+	}}
+
+	recipe, err := loader.Load(context.Background(), env, "HEAD")
+	require.NoError(t, err)
+	require.NotNil(t, recipe.OverviewEvents)
+	require.Len(t, recipe.OverviewEvents, 0)
 }

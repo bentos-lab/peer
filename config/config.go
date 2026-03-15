@@ -21,6 +21,15 @@ type Config struct {
 	Server           ServerConfig
 }
 
+const (
+	defaultSuggestedChangesMinSeverity       = "MAJOR"
+	defaultSuggestedChangesMaxCandidates     = 50
+	defaultSuggestedChangesMaxGroupSize      = 5
+	defaultSuggestedChangesMaxWorkers        = 3
+	defaultSuggestedChangesGroupTimeoutMS    = 20000
+	defaultSuggestedChangesGenerateTimeoutMS = 30000
+)
+
 // SuggestedChangesConfig contains suggested changes pipeline settings.
 type SuggestedChangesConfig struct {
 	Enabled           bool
@@ -76,13 +85,13 @@ func Load() (Config, error) {
 		LogLevel:        envOrDefault("LOG_LEVEL", "info"),
 		OverviewEnabled: overviewEnabled,
 		SuggestedChanges: SuggestedChangesConfig{
-			Enabled:           boolEnvOrDefault("REVIEW_SUGGESTED_CHANGES_ENABLED", false),
-			MinSeverity:       envOrDefault("REVIEW_SUGGESTED_CHANGES_MIN_SEVERITY", "MAJOR"),
-			MaxCandidates:     intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_MAX_CANDIDATES", 50),
-			MaxGroupSize:      intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_MAX_GROUP_SIZE", 5),
-			MaxWorkers:        intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_MAX_WORKERS", 3),
-			GroupTimeoutMS:    intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_GROUP_TIMEOUT_MS", 20000),
-			GenerateTimeoutMS: intEnvOrDefault("REVIEW_SUGGESTED_CHANGES_GENERATE_TIMEOUT_MS", 30000),
+			Enabled:           boolEnvOrDefault("REVIEW_SUGGESTED_CHANGES", false),
+			MinSeverity:       defaultSuggestedChangesMinSeverity,
+			MaxCandidates:     defaultSuggestedChangesMaxCandidates,
+			MaxGroupSize:      defaultSuggestedChangesMaxGroupSize,
+			MaxWorkers:        defaultSuggestedChangesMaxWorkers,
+			GroupTimeoutMS:    defaultSuggestedChangesGroupTimeoutMS,
+			GenerateTimeoutMS: defaultSuggestedChangesGenerateTimeoutMS,
 		},
 		OpenAI: OpenAIConfig{
 			BaseURL: envOrDefault("LLM_OPENAI_BASE_URL", ""),
@@ -143,22 +152,6 @@ func boolEnvOrDefault(key string, fallback bool) bool {
 
 	parsedValue, err := strconv.ParseBool(strings.TrimSpace(rawValue))
 	if err != nil {
-		return fallback
-	}
-	return parsedValue
-}
-
-func intEnvOrDefault(key string, fallback int) int {
-	rawValue, exists := os.LookupEnv(key)
-	if !exists {
-		return fallback
-	}
-
-	parsedValue, err := strconv.Atoi(strings.TrimSpace(rawValue))
-	if err != nil {
-		return fallback
-	}
-	if parsedValue <= 0 {
 		return fallback
 	}
 	return parsedValue

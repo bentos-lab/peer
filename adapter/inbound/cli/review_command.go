@@ -5,10 +5,12 @@ import (
 	"errors"
 	"time"
 
+	codeenv "bentos-backend/adapter/outbound/codeenv"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // GitHubClient resolves repository and pull-request metadata.
@@ -26,31 +28,34 @@ type ChangeRequestUseCaseBuilder func(repoURL string) (usecase.ChangeRequestUseC
 type ReviewCommand struct {
 	changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder
 	githubClient                GitHubClient
+	envFactory                  uccontracts.CodeEnvironmentFactory
+	recipeLoader                usecase.CustomRecipeLoader
 	logger                      usecase.Logger
 }
 
 // ReviewParams contains already-parsed CLI autogit parameters.
 type ReviewParams struct {
-	VCSProvider     string
-	Repo            string
-	ChangeRequest   string
-	Base            string
-	Head            string
-	Publish         bool
-	Suggest         bool
-	SuggestExplicit bool
+	VCSProvider   string
+	Repo          string
+	ChangeRequest string
+	Base          string
+	Head          string
+	Publish       bool
+	Suggest       *bool
 }
 
 type repoURLBuilder func(repository string) string
 
 // NewReviewCommand creates a new CLI command for autogit reviews.
-func NewReviewCommand(changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder, githubClient GitHubClient, logger usecase.Logger) *ReviewCommand {
+func NewReviewCommand(changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *ReviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &ReviewCommand{
 		changeRequestUseCaseBuilder: changeRequestUseCaseBuilder,
 		githubClient:                githubClient,
+		envFactory:                  envFactory,
+		recipeLoader:                recipeLoader,
 		logger:                      logger,
 	}
 }
@@ -62,6 +67,12 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 	}
 	if c.githubClient == nil {
 		return errors.New("github client is not configured")
+	}
+	if c.envFactory == nil {
+		return errors.New("code environment factory is not configured")
+	}
+	if c.recipeLoader == nil {
+		return errors.New("recipe loader is not configured")
 	}
 	if c.logger == nil {
 		c.logger = stdlogger.Nop()
@@ -76,6 +87,22 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 		Publish:        params.Publish,
 		IssueAlignment: false,
 	})
+	if err != nil {
+		return err
+	}
+
+	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, resolution.RepoURL)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+		}
+	}()
+
+	headRef := resolution.Head
+	recipe, err := c.recipeLoader.Load(ctx, environment, headRef)
 	if err != nil {
 		return err
 	}
@@ -95,10 +122,9 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 		Head:                resolution.Head,
 		EnableReview:        true,
 		EnableOverview:      false,
-		EnableSuggestions:   params.Suggest,
-		ReviewExplicit:      true,
-		OverviewExplicit:    false,
-		SuggestionsExplicit: params.SuggestExplicit,
+		EnableSuggestions:   ResolveBool(params.Suggest, recipe.ReviewSuggestions, false),
+		Environment:         environment,
+		Recipe:              recipe,
 	}
 	if !params.Publish {
 		request.ChangeRequestNumber = 0

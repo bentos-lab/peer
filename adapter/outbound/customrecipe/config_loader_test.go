@@ -31,18 +31,25 @@ func TestConfigLoaderReadsEnabledFlags(t *testing.T) {
 		".autogit/config.toml": `
 [review]
 enabled = false
+events = ["opened", "reopened"]
 
 [overview]
 enabled = true
+events = ["opened"]
 
 [overview.issue_alignment]
 enabled = false
 
 [autoreply]
 enabled = true
+events = ["issue_comment"]
+actions = ["created"]
 
 [autogen]
 enabled = false
+events = ["opened"]
+docs = true
+tests = false
 `,
 	}}}, nil)
 	require.NoError(t, err)
@@ -59,4 +66,13 @@ enabled = false
 	require.True(t, *recipe.AutoreplyEnabled)
 	require.NotNil(t, recipe.AutogenEnabled)
 	require.False(t, *recipe.AutogenEnabled)
+	require.Equal(t, []string{"opened", "reopened"}, recipe.ReviewEvents)
+	require.Equal(t, []string{"opened"}, recipe.OverviewEvents)
+	require.Equal(t, []string{"issue_comment"}, recipe.AutoreplyEvents)
+	require.Equal(t, []string{"created"}, recipe.AutoreplyActions)
+	require.Equal(t, []string{"opened"}, recipe.AutogenEvents)
+	require.NotNil(t, recipe.AutogenDocs)
+	require.True(t, *recipe.AutogenDocs)
+	require.NotNil(t, recipe.AutogenTests)
+	require.False(t, *recipe.AutogenTests)
 }

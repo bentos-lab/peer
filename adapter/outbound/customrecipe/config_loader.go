@@ -9,8 +9,6 @@ import (
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/usecase"
 	uccontracts "bentos-backend/usecase/contracts"
-
-	"github.com/pelletier/go-toml/v2"
 )
 
 // ConfigLoader reads enabled toggles from the repo-scoped recipe config.
@@ -43,6 +41,8 @@ func (l *ConfigLoader) Load(ctx context.Context, repoURL string, headRef string)
 		headRef = "HEAD"
 	}
 
+	recipe := loadEnvRecipeConfigDefaults(l.logger)
+
 	env, err := l.factory.New(ctx, domain.CodeEnvironmentInitOptions{RepoURL: repoURL})
 	if err != nil {
 		return domain.CustomRecipe{}, err
@@ -58,21 +58,18 @@ func (l *ConfigLoader) Load(ctx context.Context, repoURL string, headRef string)
 		return domain.CustomRecipe{}, err
 	}
 	if !found || strings.TrimSpace(rawConfig) == "" {
-		return domain.CustomRecipe{}, nil
+		return recipe, nil
 	}
 
-	var parsed recipeConfig
-	if err := toml.Unmarshal([]byte(rawConfig), &parsed); err != nil {
-		l.logger.Warnf("Custom recipe config is invalid: %v", err)
-		return domain.CustomRecipe{}, nil
+	parsed, ok := parseRecipeConfig(rawConfig, l.logger)
+	if !ok {
+		return recipe, nil
 	}
+	recipe = applyRecipeOverrides(recipe, parsed)
 
-	return domain.CustomRecipe{
-		ReviewEnabled:                 parsed.Review.Enabled,
-		ReviewSuggestions:             parsed.Review.Suggestions,
-		OverviewEnabled:               parsed.Overview.Enabled,
-		OverviewIssueAlignmentEnabled: parsed.Overview.IssueAlignment.Enabled,
-		AutoreplyEnabled:              parsed.Autoreply.Enabled,
-		AutogenEnabled:                parsed.Autogen.Enabled,
-	}, nil
+	return recipe, nil
+}
+
+func loadEnvRecipeConfigDefaults(logger usecase.Logger) domain.CustomRecipe {
+	return LoadDefaultsFromEnv(logger)
 }

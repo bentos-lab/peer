@@ -1,7 +1,6 @@
 package wiring
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,47 +21,46 @@ import (
 	safetysanitizer "bentos-backend/adapter/outbound/safetysanitizer"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
-	"bentos-backend/domain"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 	"bentos-backend/usecase/rulepack"
 )
 
-// BuildChangeRequestUseCase builds a change request usecase after initializing the repo in codeenv.
-func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string, repoURL string) (usecase.ChangeRequestUseCase, error) {
-	deps, err := buildCommonDependencies(cfg, opts, logLevelOverride, repoURL)
+// BuildChangeRequestUseCase builds a change request usecase.
+func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.ChangeRequestUseCase, error) {
+	deps, err := BuildCommonDependencies(cfg, opts, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	reviewPublisher, overviewPublisher, err := buildReviewPublishers(cfg, opts, deps.logger)
+	reviewPublisher, overviewPublisher, err := buildReviewPublishers(cfg, opts, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
 
-	reviewer, err := reviewercodingagent.NewReviewer(deps.tracedGenerator, reviewercodingagent.Config{
-		Agent:    deps.codingAgentConfig.Agent,
-		Provider: deps.codingAgentConfig.Provider,
-		Model:    deps.codingAgentConfig.Model,
-	}, deps.logger)
+	reviewer, err := reviewercodingagent.NewReviewer(deps.TracedGenerator, reviewercodingagent.Config{
+		Agent:    deps.CodingAgentConfig.Agent,
+		Provider: deps.CodingAgentConfig.Provider,
+		Model:    deps.CodingAgentConfig.Model,
+	}, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
 
-	overviewGenerator, err := overviewcodingagent.NewOverviewGenerator(deps.tracedGenerator, overviewcodingagent.Config{
-		Agent:    deps.codingAgentConfig.Agent,
-		Provider: deps.codingAgentConfig.Provider,
-		Model:    deps.codingAgentConfig.Model,
-	}, deps.logger)
+	overviewGenerator, err := overviewcodingagent.NewOverviewGenerator(deps.TracedGenerator, overviewcodingagent.Config{
+		Agent:    deps.CodingAgentConfig.Agent,
+		Provider: deps.CodingAgentConfig.Provider,
+		Model:    deps.CodingAgentConfig.Model,
+	}, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
 
-	issueAlignmentGenerator, err := issuealignment.NewIssueAlignmentGenerator(deps.tracedGenerator, issuealignment.Config{
-		Agent:    deps.codingAgentConfig.Agent,
-		Provider: deps.codingAgentConfig.Provider,
-		Model:    deps.codingAgentConfig.Model,
-	}, deps.logger)
+	issueAlignmentGenerator, err := issuealignment.NewIssueAlignmentGenerator(deps.TracedGenerator, issuealignment.Config{
+		Agent:    deps.CodingAgentConfig.Agent,
+		Provider: deps.CodingAgentConfig.Provider,
+		Model:    deps.CodingAgentConfig.Model,
+	}, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +69,7 @@ func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOv
 		rulepack.NewCoreRulePackProvider(),
 		reviewer,
 		reviewPublisher,
-		deps.codeEnvironmentFactory,
-		deps.logger,
+		deps.Logger,
 	)
 	if err != nil {
 		return nil, err
@@ -82,8 +79,7 @@ func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOv
 		overviewGenerator,
 		issueAlignmentGenerator,
 		overviewPublisher,
-		deps.codeEnvironmentFactory,
-		deps.logger,
+		deps.Logger,
 	)
 	if err != nil {
 		return nil, err
@@ -92,29 +88,27 @@ func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOv
 	return usecase.NewChangeRequestUseCase(
 		reviewUseCase,
 		overviewUseCase,
-		deps.codeEnvironmentFactory,
-		deps.recipeLoader,
-		deps.logger,
+		deps.Logger,
 	)
 }
 
-// BuildAutogenUseCase builds an autogen usecase after initializing the repo in codeenv.
-func BuildAutogenUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string, repoURL string) (usecase.AutogenUseCase, error) {
-	deps, err := buildCommonDependencies(cfg, opts, logLevelOverride, repoURL)
+// BuildAutogenUseCase builds an autogen usecase.
+func BuildAutogenUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.AutogenUseCase, error) {
+	deps, err := BuildCommonDependencies(cfg, opts, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	publisher, err := buildAutogenPublisher(cfg, opts, deps.logger)
+	publisher, err := buildAutogenPublisher(cfg, opts, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
 
 	generator, err := autogencodingagent.NewGenerator(autogencodingagent.Config{
-		Agent:    deps.codingAgentConfig.Agent,
-		Provider: deps.codingAgentConfig.Provider,
-		Model:    deps.codingAgentConfig.Model,
-	}, deps.logger)
+		Agent:    deps.CodingAgentConfig.Agent,
+		Provider: deps.CodingAgentConfig.Provider,
+		Model:    deps.CodingAgentConfig.Model,
+	}, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -122,67 +116,62 @@ func BuildAutogenUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride
 	return usecase.NewAutogenUseCase(
 		generator,
 		publisher,
-		deps.codeEnvironmentFactory,
-		deps.recipeLoader,
-		deps.logger,
+		deps.Logger,
 	)
 }
 
-// BuildReplyCommentUseCase builds a reply comment usecase after initializing the repo in codeenv.
-func BuildReplyCommentUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string, repoURL string) (usecase.ReplyCommentUseCase, error) {
-	deps, err := buildCommonDependencies(cfg, opts, logLevelOverride, repoURL)
+// BuildReplyCommentUseCase builds a reply comment usecase.
+func BuildReplyCommentUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.ReplyCommentUseCase, error) {
+	deps, err := BuildCommonDependencies(cfg, opts, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	publisher, err := buildReplyCommentPublisher(cfg, opts, deps.logger)
+	publisher, err := buildReplyCommentPublisher(cfg, opts, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
 
 	answerer, err := replycommentcodingagent.NewAnswerer(replycommentcodingagent.Config{
-		Agent:    deps.codingAgentConfig.Agent,
-		Provider: deps.codingAgentConfig.Provider,
-		Model:    deps.codingAgentConfig.Model,
-	}, deps.logger)
+		Agent:    deps.CodingAgentConfig.Agent,
+		Provider: deps.CodingAgentConfig.Provider,
+		Model:    deps.CodingAgentConfig.Model,
+	}, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
 
 	return usecase.NewReplyCommentUseCase(
-		deps.readOnlySanitizer,
+		deps.ReadOnlySanitizer,
 		answerer,
 		publisher,
-		deps.codeEnvironmentFactory,
-		deps.recipeLoader,
-		deps.logger,
+		deps.Logger,
 	)
 }
 
-type commonDependencies struct {
-	logger                 usecase.Logger
-	tracedGenerator        contracts.LLMGenerator
-	readOnlySanitizer      usecase.SafetySanitizer
-	readWriteSanitizer     usecase.SafetySanitizer
-	recipeLoader           usecase.CustomRecipeLoader
-	codeEnvironmentFactory contracts.CodeEnvironmentFactory
-	codingAgentConfig      config.CodingAgentConfig
+// CommonDependencies captures shared build-time dependencies.
+type CommonDependencies struct {
+	Logger                 usecase.Logger
+	TracedGenerator        contracts.LLMGenerator
+	ReadOnlySanitizer      usecase.SafetySanitizer
+	ReadWriteSanitizer     usecase.SafetySanitizer
+	RecipeLoader           usecase.CustomRecipeLoader
+	CodeEnvironmentFactory contracts.CodeEnvironmentFactory
+	CodingAgentConfig      config.CodingAgentConfig
 }
 
-func buildCommonDependencies(cfg config.Config, opts CLILLMOptions, logLevelOverride string, repoURL string) (commonDependencies, error) {
+// BuildCommonDependencies builds shared dependencies used by multiple usecases.
+func BuildCommonDependencies(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (CommonDependencies, error) {
 	logger, err := BuildLogger(cfg, logLevelOverride)
 	if err != nil {
-		return commonDependencies{}, err
+		return CommonDependencies{}, err
 	}
 
 	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{Logger: logger})
-	if err := preInitRepo(codeEnvironmentFactory, repoURL); err != nil {
-		return commonDependencies{}, err
-	}
 
 	llmSelection, err := ResolveLLMSelection(cfg, opts)
 	if err != nil {
-		return commonDependencies{}, err
+		return CommonDependencies{}, err
 	}
 
 	codingAgentConfig := ResolveCLICodingAgentConfig(cfg, opts)
@@ -195,7 +184,7 @@ func buildCommonDependencies(cfg config.Config, opts CLILLMOptions, logLevelOver
 	} else {
 		formatter, err = buildCodingAgentGenerator(cfgWithOverrides, logger)
 		if err != nil {
-			return commonDependencies{}, err
+			return CommonDependencies{}, err
 		}
 	}
 
@@ -204,39 +193,28 @@ func buildCommonDependencies(cfg config.Config, opts CLILLMOptions, logLevelOver
 		EnforceReadOnly: true,
 	})
 	if err != nil {
-		return commonDependencies{}, err
+		return CommonDependencies{}, err
 	}
 	readWriteSanitizer, err := safetysanitizer.NewSanitizer(tracedGenerator, safetysanitizer.Options{
 		EnforceReadOnly: false,
 	})
 	if err != nil {
-		return commonDependencies{}, err
+		return CommonDependencies{}, err
 	}
 	recipeLoader, err := customrecipe.NewLoader(readOnlySanitizer, readWriteSanitizer, logger)
 	if err != nil {
-		return commonDependencies{}, err
+		return CommonDependencies{}, err
 	}
 
-	return commonDependencies{
-		logger:                 logger,
-		tracedGenerator:        tracedGenerator,
-		readOnlySanitizer:      readOnlySanitizer,
-		readWriteSanitizer:     readWriteSanitizer,
-		recipeLoader:           recipeLoader,
-		codeEnvironmentFactory: codeEnvironmentFactory,
-		codingAgentConfig:      codingAgentConfig,
+	return CommonDependencies{
+		Logger:                 logger,
+		TracedGenerator:        tracedGenerator,
+		ReadOnlySanitizer:      readOnlySanitizer,
+		ReadWriteSanitizer:     readWriteSanitizer,
+		RecipeLoader:           recipeLoader,
+		CodeEnvironmentFactory: codeEnvironmentFactory,
+		CodingAgentConfig:      codingAgentConfig,
 	}, nil
-}
-
-func preInitRepo(factory contracts.CodeEnvironmentFactory, repoURL string) error {
-	environment, err := factory.New(context.Background(), domain.CodeEnvironmentInitOptions{RepoURL: repoURL})
-	if err != nil {
-		return err
-	}
-	if err := environment.Cleanup(context.Background()); err != nil {
-		return err
-	}
-	return nil
 }
 
 func buildReviewPublishers(cfg config.Config, opts CLILLMOptions, logger usecase.Logger) (usecase.ReviewResultPublisher, usecase.OverviewPublisher, error) {

@@ -7,10 +7,13 @@ import (
 	"strconv"
 	"strings"
 
+	codeenv "bentos-backend/adapter/outbound/codeenv"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
+	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/shared/text"
 	"bentos-backend/usecase"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // ReplyCommentGitHubClient resolves repository and pull-request metadata for replycomment.
@@ -28,7 +31,10 @@ type ReplyCommentGitHubClient interface {
 type ReplyCommentCommand struct {
 	replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder
 	githubClient               ReplyCommentGitHubClient
+	envFactory                 uccontracts.CodeEnvironmentFactory
+	recipeLoader               usecase.CustomRecipeLoader
 	triggerName                string
+	logger                     usecase.Logger
 }
 
 // ReplyCommentUseCaseBuilder builds a reply comment usecase for a specific repo.
@@ -45,11 +51,17 @@ type ReplyCommentRunParams struct {
 }
 
 // NewReplyCommentCommand creates a new CLI command for replycomment.
-func NewReplyCommentCommand(replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder, githubClient ReplyCommentGitHubClient, triggerName string) *ReplyCommentCommand {
+func NewReplyCommentCommand(replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder, githubClient ReplyCommentGitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, triggerName string, logger usecase.Logger) *ReplyCommentCommand {
+	if logger == nil {
+		logger = stdlogger.Nop()
+	}
 	return &ReplyCommentCommand{
 		replyCommentUseCaseBuilder: replyCommentUseCaseBuilder,
 		githubClient:               githubClient,
+		envFactory:                 envFactory,
+		recipeLoader:               recipeLoader,
 		triggerName:                strings.TrimSpace(triggerName),
+		logger:                     logger,
 	}
 }
 
@@ -60,6 +72,15 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 	}
 	if c.githubClient == nil {
 		return errors.New("github client is not configured")
+	}
+	if c.envFactory == nil {
+		return errors.New("code environment factory is not configured")
+	}
+	if c.recipeLoader == nil {
+		return errors.New("recipe loader is not configured")
+	}
+	if c.logger == nil {
+		c.logger = stdlogger.Nop()
 	}
 
 	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
@@ -93,6 +114,16 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		return err
 	}
 
+	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, repoURL)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+		}
+	}()
+
 	replyCommentUseCase, err := c.replyCommentUseCaseBuilder(repoURL)
 	if err != nil {
 		return err
@@ -107,6 +138,11 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		return err
 	}
 
+	recipe, err := c.recipeLoader.Load(ctx, environment, prInfo.HeadRef)
+	if err != nil {
+		return err
+	}
+
 	request := usecase.ReplyCommentRequest{
 		Repository:          prInfo.Repository,
 		RepoURL:             repoURL,
@@ -116,6 +152,8 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 		Base:                prInfo.BaseRef,
 		Head:                prInfo.HeadRef,
 		Publish:             params.Publish,
+		Environment:         environment,
+		Recipe:              recipe,
 	}
 
 	if strings.TrimSpace(params.Question) != "" {

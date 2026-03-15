@@ -56,8 +56,6 @@ func (g *overviewUseCaseTestIssueAlignmentGenerator) GenerateIssueAlignment(_ co
 }
 
 type overviewUseCaseTestEnvironment struct {
-	cleanupCalls int
-	cleanupErr   error
 }
 
 func (e *overviewUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (uccontracts.CodingAgent, error) {
@@ -77,29 +75,11 @@ func (e *overviewUseCaseTestEnvironment) PushChanges(_ context.Context, _ domain
 }
 
 func (e *overviewUseCaseTestEnvironment) Cleanup(_ context.Context) error {
-	e.cleanupCalls++
-	return e.cleanupErr
+	return nil
 }
 
-type overviewUseCaseTestEnvironmentFactory struct {
-	environment uccontracts.CodeEnvironment
-	lastOpts    domain.CodeEnvironmentInitOptions
-	callCount   int
-	err         error
-}
-
-func (f *overviewUseCaseTestEnvironmentFactory) New(_ context.Context, opts domain.CodeEnvironmentInitOptions) (uccontracts.CodeEnvironment, error) {
-	f.callCount++
-	f.lastOpts = opts
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.environment, nil
-}
-
-func TestOverviewUseCaseExecuteInitializesEnvironmentAndPassesItToGenerator(t *testing.T) {
+func TestOverviewUseCaseExecutePassesEnvironmentToGenerator(t *testing.T) {
 	environment := &overviewUseCaseTestEnvironment{}
-	factory := &overviewUseCaseTestEnvironmentFactory{environment: environment}
 	generator := &overviewUseCaseTestGenerator{
 		result: LLMOverviewResult{
 			Categories: []domain.OverviewCategoryItem{{
@@ -109,7 +89,7 @@ func TestOverviewUseCaseExecuteInitializesEnvironmentAndPassesItToGenerator(t *t
 		},
 	}
 	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
-	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
+	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
@@ -119,21 +99,17 @@ func TestOverviewUseCaseExecuteInitializesEnvironmentAndPassesItToGenerator(t *t
 			Base:    "main",
 			Head:    "feature",
 		},
+		Environment: environment,
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, factory.callCount)
-	require.Equal(t, domain.CodeEnvironmentInitOptions{
-		RepoURL: "https://github.com/org/repo.git",
-	}, factory.lastOpts)
 	require.Equal(t, 1, generator.callCount)
 	require.Same(t, environment, generator.lastPayload.Environment)
 }
 
-func TestOverviewUseCaseExecuteReturnsFactoryError(t *testing.T) {
-	factory := &overviewUseCaseTestEnvironmentFactory{err: errors.New("factory failed")}
+func TestOverviewUseCaseRequiresEnvironment(t *testing.T) {
 	generator := &overviewUseCaseTestGenerator{}
 	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
-	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
+	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), OverviewRequest{
@@ -145,55 +121,6 @@ func TestOverviewUseCaseExecuteReturnsFactoryError(t *testing.T) {
 		},
 	})
 	require.Error(t, err)
-	require.ErrorContains(t, err, "factory failed")
-	require.Equal(t, 1, factory.callCount)
+	require.ErrorContains(t, err, "code environment")
 	require.Equal(t, 0, generator.callCount)
-}
-
-func TestOverviewUseCaseExecuteCleansUpEnvironmentOnSuccess(t *testing.T) {
-	environment := &overviewUseCaseTestEnvironment{}
-	factory := &overviewUseCaseTestEnvironmentFactory{environment: environment}
-	generator := &overviewUseCaseTestGenerator{
-		result: LLMOverviewResult{
-			Categories: []domain.OverviewCategoryItem{{
-				Category: domain.OverviewCategoryLogicUpdates,
-				Summary:  "logic updates",
-			}},
-		},
-	}
-	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
-	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
-	require.NoError(t, err)
-
-	_, err = useCase.Execute(context.Background(), OverviewRequest{
-		Input: domain.ChangeRequestInput{
-			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
-			RepoURL: "https://github.com/org/repo.git",
-			Base:    "main",
-			Head:    "feature",
-		},
-	})
-	require.NoError(t, err)
-	require.Equal(t, 1, environment.cleanupCalls)
-}
-
-func TestOverviewUseCaseExecuteCleansUpEnvironmentOnGeneratorError(t *testing.T) {
-	environment := &overviewUseCaseTestEnvironment{}
-	factory := &overviewUseCaseTestEnvironmentFactory{environment: environment}
-	generator := &overviewUseCaseTestGenerator{err: errors.New("generator failed")}
-	issueAlignment := &overviewUseCaseTestIssueAlignmentGenerator{}
-	useCase, err := NewOverviewUseCase(generator, issueAlignment, &overviewUseCaseTestPublisher{}, factory, nil)
-	require.NoError(t, err)
-
-	_, err = useCase.Execute(context.Background(), OverviewRequest{
-		Input: domain.ChangeRequestInput{
-			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
-			RepoURL: "https://github.com/org/repo.git",
-			Base:    "main",
-			Head:    "feature",
-		},
-	})
-	require.Error(t, err)
-	require.ErrorContains(t, err, "generator failed")
-	require.Equal(t, 1, environment.cleanupCalls)
 }

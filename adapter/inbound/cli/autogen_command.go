@@ -8,15 +8,19 @@ import (
 	"strings"
 	"time"
 
+	codeenv "bentos-backend/adapter/outbound/codeenv"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // AutogenCommand runs autogen flow with the shared autogen usecase.
 type AutogenCommand struct {
 	autogenUseCaseBuilder AutogenUseCaseBuilder
 	githubClient          GitHubClient
+	envFactory            uccontracts.CodeEnvironmentFactory
+	recipeLoader          usecase.CustomRecipeLoader
 	logger                usecase.Logger
 }
 
@@ -31,18 +35,20 @@ type AutogenRunParams struct {
 	Base          string
 	Head          string
 	Publish       bool
-	Docs          bool
-	Tests         bool
+	Docs          *bool
+	Tests         *bool
 }
 
 // NewAutogenCommand creates a new CLI command for autogen.
-func NewAutogenCommand(autogenUseCaseBuilder AutogenUseCaseBuilder, githubClient GitHubClient, logger usecase.Logger) *AutogenCommand {
+func NewAutogenCommand(autogenUseCaseBuilder AutogenUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *AutogenCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &AutogenCommand{
 		autogenUseCaseBuilder: autogenUseCaseBuilder,
 		githubClient:          githubClient,
+		envFactory:            envFactory,
+		recipeLoader:          recipeLoader,
 		logger:                logger,
 	}
 }
@@ -54,6 +60,12 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 	}
 	if c.githubClient == nil {
 		return errors.New("github client is not configured")
+	}
+	if c.envFactory == nil {
+		return errors.New("code environment factory is not configured")
+	}
+	if c.recipeLoader == nil {
+		return errors.New("recipe loader is not configured")
 	}
 	if c.logger == nil {
 		c.logger = stdlogger.Nop()
@@ -125,17 +137,41 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		return fmt.Errorf("--head %s requires local workspace mode; omit --repo", head)
 	}
 
+	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, repoURL)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+		}
+	}()
+
+	headRef := strings.TrimSpace(head)
+	if headRef == "" {
+		headRef = "HEAD"
+	}
+	recipe, err := c.recipeLoader.Load(ctx, environment, headRef)
+	if err != nil {
+		return err
+	}
+
 	autogenUseCase, err := c.autogenUseCaseBuilder(repoURL)
 	if err != nil {
 		return err
 	}
 
+	effectiveDocs := ResolveBool(params.Docs, recipe.AutogenDocs, false)
+	effectiveTests := ResolveBool(params.Tests, recipe.AutogenTests, false)
+
 	request := usecase.AutogenRequest{
-		Input:      domainChangeRequestInputForAutogen(repository, prNumber, repoURL, base, head, title, description),
-		Docs:       params.Docs,
-		Tests:      params.Tests,
-		Publish:    params.Publish,
-		HeadBranch: headBranch,
+		Input:       domainChangeRequestInputForAutogen(repository, prNumber, repoURL, base, head, title, description),
+		Docs:        effectiveDocs,
+		Tests:       effectiveTests,
+		Publish:     params.Publish,
+		HeadBranch:  headBranch,
+		Environment: environment,
+		Recipe:      recipe,
 	}
 	if !params.Publish {
 		request.Input.Target.ChangeRequestNumber = 0
@@ -157,9 +193,6 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		EnableReview:        false,
 		EnableOverview:      false,
 		EnableSuggestions:   false,
-		ReviewExplicit:      true,
-		OverviewExplicit:    false,
-		SuggestionsExplicit: false,
 		Metadata:            request.Input.Metadata,
 	})
 

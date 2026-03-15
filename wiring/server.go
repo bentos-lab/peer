@@ -7,7 +7,6 @@ import (
 	"time"
 
 	githubinbound "bentos-backend/adapter/inbound/http/github"
-	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
 	customrecipe "bentos-backend/adapter/outbound/customrecipe"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
@@ -18,10 +17,6 @@ import (
 func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	cfgWithOverrides := cfg
 	cfgWithOverrides.CodingAgent = resolveCodingAgentConfig(cfg)
-	logger, err := BuildLogger(cfgWithOverrides, "")
-	if err != nil {
-		return nil, err
-	}
 
 	if strings.TrimSpace(cfg.Server.GitHub.WebhookSecret) == "" {
 		return nil, fmt.Errorf("github webhook secret is required")
@@ -36,14 +31,19 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 		return nil, err
 	}
 
+	deps, err := BuildCommonDependencies(cfgWithOverrides, CLILLMOptions{}, "")
+	if err != nil {
+		return nil, err
+	}
+	logger := deps.Logger
+
 	changeRequestBuilder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
-		return BuildChangeRequestUseCase(cfgWithOverrides, CLILLMOptions{}, "", repoURL)
+		return BuildChangeRequestUseCase(cfgWithOverrides, CLILLMOptions{}, "")
 	}
 	replyBuilder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
-		return BuildReplyCommentUseCase(cfgWithOverrides, CLILLMOptions{}, "", repoURL)
+		return BuildReplyCommentUseCase(cfgWithOverrides, CLILLMOptions{}, "")
 	}
-	codeEnvironmentFactory := codeenvhost.NewFactory(codeenvhost.FactoryConfig{Logger: logger})
-	configLoader, err := customrecipe.NewConfigLoader(codeEnvironmentFactory, logger)
+	configLoader, err := customrecipe.NewConfigLoader(deps.CodeEnvironmentFactory, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +52,8 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 		replyBuilder,
 		ghClient,
 		configLoader,
+		deps.CodeEnvironmentFactory,
+		deps.RecipeLoader,
 		logger,
 		cfg.Server.GitHub.WebhookSecret,
 		cfg.Server.GitHub.ReplyCommentTriggerName,

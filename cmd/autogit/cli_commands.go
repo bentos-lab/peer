@@ -49,40 +49,44 @@ func defaultAutogitDeps() autogitDeps {
 	return autogitDeps{
 		loadConfig: config.Load,
 		buildReviewCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReviewCommand, error) {
-			logger, err := wiring.BuildLogger(cfg, logLevelOverride)
+			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
 			if err != nil {
 				return nil, err
 			}
 			builder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
-				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride, repoURL)
+				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewReviewCommand(builder, githubvcs.NewCLIClient(), logger), nil
+			return cliinbound.NewReviewCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
 		buildOverviewCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.OverviewCommand, error) {
-			logger, err := wiring.BuildLogger(cfg, logLevelOverride)
+			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
 			if err != nil {
 				return nil, err
 			}
 			builder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
-				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride, repoURL)
+				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewOverviewCommand(builder, githubvcs.NewCLIClient(), logger), nil
+			return cliinbound.NewOverviewCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
 		buildAutogenCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.AutogenCommand, error) {
-			logger, err := wiring.BuildLogger(cfg, logLevelOverride)
+			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
 			if err != nil {
 				return nil, err
 			}
 			builder := func(repoURL string) (usecase.AutogenUseCase, error) {
-				return wiring.BuildAutogenUseCase(cfg, opts, logLevelOverride, repoURL)
+				return wiring.BuildAutogenUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewAutogenCommand(builder, githubvcs.NewCLIClient(), logger), nil
+			return cliinbound.NewAutogenCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
 		buildReplyCommentCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReplyCommentCommand, error) {
 			builder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
-				return wiring.BuildReplyCommentUseCase(cfg, opts, logLevelOverride, repoURL)
+				return wiring.BuildReplyCommentUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewReplyCommentCommand(builder, githubvcs.NewCLIClient(), cfg.Server.GitHub.ReplyCommentTriggerName), nil
+			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
+			if err != nil {
+				return nil, err
+			}
+			return cliinbound.NewReplyCommentCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, cfg.Server.GitHub.ReplyCommentTriggerName, deps.Logger), nil
 		},
 		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
 			return wiring.BuildGitHubHandler(cfg)
@@ -160,14 +164,11 @@ func newReviewSubcommand(
 			if err != nil {
 				return cliConfigLoadError{cause: err}
 			}
-
-			suggestExplicit := cmd.Flags().Changed("suggest")
-			effectiveSuggest := false
-			if suggestExplicit {
-				effectiveSuggest = suggest
-			} else {
-				effectiveSuggest = cfg.SuggestedChanges.Enabled
+			configOverrides, err := resolveConfigOverrides(cmd, *llmOpenAIBaseURL, *llmOpenAIModel, *llmOpenAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel)
+			if err != nil {
+				return err
 			}
+			cfg = sharedcli.ApplyConfigOverrides(cfg, configOverrides)
 
 			startupLogger, err := wiring.BuildLogger(cfg, logOverride)
 			if err != nil {
@@ -183,14 +184,13 @@ func newReviewSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cliinbound.ReviewParams{
-				VCSProvider:     vcsProvider,
-				Repo:            repo,
-				ChangeRequest:   changeRequest,
-				Base:            base,
-				Head:            head,
-				Publish:         publish,
-				Suggest:         effectiveSuggest,
-				SuggestExplicit: suggestExplicit,
+				VCSProvider:   vcsProvider,
+				Repo:          repo,
+				ChangeRequest: changeRequest,
+				Base:          base,
+				Head:          head,
+				Publish:       publish,
+				Suggest:       boolPointerIfChanged(cmd, "suggest", suggest),
 			})
 		},
 	}
@@ -238,6 +238,11 @@ func newOverviewSubcommand(
 			if err != nil {
 				return cliConfigLoadError{cause: err}
 			}
+			configOverrides, err := resolveConfigOverrides(cmd, *llmOpenAIBaseURL, *llmOpenAIModel, *llmOpenAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel)
+			if err != nil {
+				return err
+			}
+			cfg = sharedcli.ApplyConfigOverrides(cfg, configOverrides)
 
 			startupLogger, err := wiring.BuildLogger(cfg, logOverride)
 			if err != nil {
@@ -308,6 +313,11 @@ func newAutogenSubcommand(
 			if err != nil {
 				return cliConfigLoadError{cause: err}
 			}
+			configOverrides, err := resolveConfigOverrides(cmd, *llmOpenAIBaseURL, *llmOpenAIModel, *llmOpenAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel)
+			if err != nil {
+				return err
+			}
+			cfg = sharedcli.ApplyConfigOverrides(cfg, configOverrides)
 
 			startupLogger, err := wiring.BuildLogger(cfg, logOverride)
 			if err != nil {
@@ -329,8 +339,8 @@ func newAutogenSubcommand(
 				Base:          base,
 				Head:          head,
 				Publish:       publish,
-				Docs:          docs,
-				Tests:         tests,
+				Docs:          boolPointerIfChanged(cmd, "docs", docs),
+				Tests:         boolPointerIfChanged(cmd, "tests", tests),
 			})
 		},
 	}
@@ -378,6 +388,11 @@ func newReplyCommentSubcommand(
 			if err != nil {
 				return cliConfigLoadError{cause: err}
 			}
+			configOverrides, err := resolveConfigOverrides(cmd, *llmOpenAIBaseURL, *llmOpenAIModel, *llmOpenAIAPIKey, *codeAgent, *codeAgentProvider, *codeAgentModel)
+			if err != nil {
+				return err
+			}
+			cfg = sharedcli.ApplyConfigOverrides(cfg, configOverrides)
 
 			startupLogger, err := wiring.BuildLogger(cfg, logOverride)
 			if err != nil {
@@ -510,6 +525,53 @@ func resolveLLMOptions(cmd *cobra.Command, llmOpenAIBaseURL string, llmOpenAIMod
 	return opts, logOverride, nil
 }
 
+func resolveConfigOverrides(cmd *cobra.Command, llmOpenAIBaseURL string, llmOpenAIModel string, llmOpenAIAPIKey string, codeAgent string, codeAgentProvider string, codeAgentModel string) (sharedcli.ConfigOverrides, error) {
+	overrides := sharedcli.ConfigOverrides{}
+	if flagChanged(cmd, "llm-openai-base-url") {
+		value := strings.TrimSpace(llmOpenAIBaseURL)
+		if value != "" && strings.HasPrefix(value, "-") {
+			return overrides, fmt.Errorf("flag --llm-openai-base-url requires a non-empty value or empty override")
+		}
+		overrides.OpenAIBaseURL = &value
+	}
+	if flagChanged(cmd, "llm-openai-model") {
+		value := validateOpenAIStringFlagValue(llmOpenAIModel)
+		if value == "" {
+			return overrides, fmt.Errorf("flag --llm-openai-model requires a non-empty value")
+		}
+		overrides.OpenAIModel = &value
+	}
+	if flagChanged(cmd, "llm-openai-api-key") {
+		value := validateOpenAIStringFlagValue(llmOpenAIAPIKey)
+		if value == "" {
+			return overrides, fmt.Errorf("flag --llm-openai-api-key requires a non-empty value")
+		}
+		overrides.OpenAIAPIKey = &value
+	}
+	if flagChanged(cmd, "code-agent") {
+		value := validateNonEmptyOverrideFlag(codeAgent)
+		if value == "" {
+			return overrides, fmt.Errorf("flag --code-agent requires a non-empty value")
+		}
+		overrides.CodingAgentName = &value
+	}
+	if flagChanged(cmd, "code-agent-provider") {
+		value := validateNonEmptyOverrideFlag(codeAgentProvider)
+		if value == "" {
+			return overrides, fmt.Errorf("flag --code-agent-provider requires a non-empty value")
+		}
+		overrides.CodingAgentProvider = &value
+	}
+	if flagChanged(cmd, "code-agent-model") {
+		value := validateNonEmptyOverrideFlag(codeAgentModel)
+		if value == "" {
+			return overrides, fmt.Errorf("flag --code-agent-model requires a non-empty value")
+		}
+		overrides.CodingAgentModel = &value
+	}
+	return overrides, nil
+}
+
 func flagChanged(cmd *cobra.Command, name string) bool {
 	if cmd.Flags().Changed(name) {
 		return true
@@ -518,6 +580,13 @@ func flagChanged(cmd *cobra.Command, name string) bool {
 		return true
 	}
 	return false
+}
+
+func boolPointerIfChanged(cmd *cobra.Command, name string, value bool) *bool {
+	if !cmd.Flags().Changed(name) {
+		return nil
+	}
+	return &value
 }
 
 func validateOpenAIStringFlagValue(value string) string {

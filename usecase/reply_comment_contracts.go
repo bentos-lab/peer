@@ -22,6 +22,8 @@ type ReplyCommentRequest struct {
 	Thread              domain.CommentThread
 	Publish             bool
 	Metadata            map[string]string
+	Environment         uccontracts.CodeEnvironment
+	Recipe              domain.CustomRecipe
 }
 
 // ReplyCommentResult is the usecase output.

@@ -2,20 +2,13 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"bentos-backend/domain"
 	uccontracts "bentos-backend/usecase/contracts"
 	"github.com/stretchr/testify/require"
 )
-
-type changeRequestTestEnvFactory struct {
-	env uccontracts.CodeEnvironment
-}
-
-func (f *changeRequestTestEnvFactory) New(_ context.Context, _ domain.CodeEnvironmentInitOptions) (uccontracts.CodeEnvironment, error) {
-	return f.env, nil
-}
 
 type changeRequestTestEnv struct{}
 
@@ -39,56 +32,83 @@ func (e *changeRequestTestEnv) Cleanup(_ context.Context) error {
 	return nil
 }
 
-type changeRequestTestRecipeLoader struct {
-	recipe domain.CustomRecipe
-}
-
-func (l *changeRequestTestRecipeLoader) Load(_ context.Context, _ uccontracts.CodeEnvironment, _ string) (domain.CustomRecipe, error) {
-	return l.recipe, nil
-}
-
 type changeRequestTestReviewUseCase struct {
-	calls int
+	calls     int
+	lastReq   ReviewRequest
+	resultErr error
 }
 
-func (u *changeRequestTestReviewUseCase) Execute(_ context.Context, _ ReviewRequest) (ReviewExecutionResult, error) {
+func (u *changeRequestTestReviewUseCase) Execute(_ context.Context, req ReviewRequest) (ReviewExecutionResult, error) {
 	u.calls++
-	return ReviewExecutionResult{}, nil
+	u.lastReq = req
+	return ReviewExecutionResult{}, u.resultErr
 }
 
 type changeRequestTestOverviewUseCase struct {
-	calls int
+	calls     int
+	lastReq   OverviewRequest
+	resultErr error
 }
 
-func (u *changeRequestTestOverviewUseCase) Execute(_ context.Context, _ OverviewRequest) (OverviewExecutionResult, error) {
+func (u *changeRequestTestOverviewUseCase) Execute(_ context.Context, req OverviewRequest) (OverviewExecutionResult, error) {
 	u.calls++
-	return OverviewExecutionResult{}, nil
+	u.lastReq = req
+	return OverviewExecutionResult{}, u.resultErr
 }
 
-func TestChangeRequestUseCaseSkipsReviewWhenRecipeDisablesIt(t *testing.T) {
+func TestChangeRequestUseCaseRequiresEnvironmentWhenEnabled(t *testing.T) {
 	reviewUseCase := &changeRequestTestReviewUseCase{}
 	overviewUseCase := &changeRequestTestOverviewUseCase{}
-	envFactory := &changeRequestTestEnvFactory{env: &changeRequestTestEnv{}}
-	recipeLoader := &changeRequestTestRecipeLoader{
-		recipe: domain.CustomRecipe{
-			ReviewEnabled: boolPointer(false),
-		},
-	}
-	useCase, err := NewChangeRequestUseCase(reviewUseCase, overviewUseCase, envFactory, recipeLoader, nil)
+	useCase, err := NewChangeRequestUseCase(reviewUseCase, overviewUseCase, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), ChangeRequestRequest{
 		Repository:        "org/repo",
 		EnableReview:      true,
-		ReviewExplicit:    false,
 		EnableOverview:    false,
-		OverviewExplicit:  false,
 		EnableSuggestions: false,
 	})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "code environment")
 	require.Equal(t, 0, reviewUseCase.calls)
 }
 
-func boolPointer(value bool) *bool {
-	return &value
+func TestChangeRequestUseCasePassesEnvironmentToSubUseCases(t *testing.T) {
+	environment := &changeRequestTestEnv{}
+	reviewUseCase := &changeRequestTestReviewUseCase{}
+	overviewUseCase := &changeRequestTestOverviewUseCase{}
+	useCase, err := NewChangeRequestUseCase(reviewUseCase, overviewUseCase, nil)
+	require.NoError(t, err)
+
+	_, err = useCase.Execute(context.Background(), ChangeRequestRequest{
+		Repository:        "org/repo",
+		EnableReview:      true,
+		EnableOverview:    true,
+		EnableSuggestions: true,
+		Environment:       environment,
+		Recipe:            domain.CustomRecipe{},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, reviewUseCase.calls)
+	require.Equal(t, 1, overviewUseCase.calls)
+	require.Same(t, environment, reviewUseCase.lastReq.Environment)
+	require.Same(t, environment, overviewUseCase.lastReq.Environment)
+}
+
+func TestChangeRequestUseCasePropagatesReviewError(t *testing.T) {
+	environment := &changeRequestTestEnv{}
+	reviewUseCase := &changeRequestTestReviewUseCase{resultErr: errors.New("review failed")}
+	overviewUseCase := &changeRequestTestOverviewUseCase{}
+	useCase, err := NewChangeRequestUseCase(reviewUseCase, overviewUseCase, nil)
+	require.NoError(t, err)
+
+	_, err = useCase.Execute(context.Background(), ChangeRequestRequest{
+		Repository:        "org/repo",
+		EnableReview:      true,
+		EnableOverview:    false,
+		EnableSuggestions: false,
+		Environment:       environment,
+		Recipe:            domain.CustomRecipe{},
+	})
+	require.ErrorContains(t, err, "review failed")
 }

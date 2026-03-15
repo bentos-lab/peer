@@ -382,6 +382,17 @@ func resolveReviewRootID(byID map[int64]githubvcs.ReviewComment, commentID int64
 	}
 }
 
+// ResolveBool returns the first non-nil bool pointer value or the default value if none are set.
+func ResolveBool(primary *bool, fallback *bool, defaultValue bool) bool {
+	if primary != nil {
+		return *primary
+	}
+	if fallback != nil {
+		return *fallback
+	}
+	return defaultValue
+}
+
 func buildIssueThreadContext(prInfo githubvcs.PullRequestInfo) []string {
 	title := strings.TrimSpace(prInfo.Title)
 	description := strings.TrimSpace(prInfo.Description)

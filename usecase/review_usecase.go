@@ -6,9 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
-	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // reviewUseCase is the concrete ReviewUseCase implementation.
@@ -16,7 +14,6 @@ type reviewUseCase struct {
 	ruleProvider RulePackProvider
 	llmReviewer  LLMReviewer
 	publisher    ReviewResultPublisher
-	envFactory   uccontracts.CodeEnvironmentFactory
 	logger       Logger
 }
 
@@ -25,10 +22,9 @@ func NewReviewUseCase(
 	ruleProvider RulePackProvider,
 	llmReviewer LLMReviewer,
 	publisher ReviewResultPublisher,
-	envFactory uccontracts.CodeEnvironmentFactory,
 	logger Logger,
 ) (ReviewUseCase, error) {
-	if ruleProvider == nil || llmReviewer == nil || publisher == nil || envFactory == nil {
+	if ruleProvider == nil || llmReviewer == nil || publisher == nil {
 		return nil, errors.New("review usecase dependencies must not be nil")
 	}
 	if logger == nil {
@@ -38,7 +34,6 @@ func NewReviewUseCase(
 		ruleProvider: ruleProvider,
 		llmReviewer:  llmReviewer,
 		publisher:    publisher,
-		envFactory:   envFactory,
 		logger:       logger,
 	}
 	return u, nil
@@ -49,6 +44,10 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	startedAt := time.Now()
 	target := request.Input.Target
 	logExecution(u.logger, "review", target, "start", startedAt, "")
+
+	if request.Environment == nil {
+		return ReviewExecutionResult{}, errors.New("code environment is required")
+	}
 
 	loadRulePackStartedAt := time.Now()
 	pack, err := u.ruleProvider.CorePack(ctx)
@@ -62,26 +61,11 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	}
 	u.logger.Debugf("Review rule pack loaded with %d instructions.", len(pack.Instructions))
 
-	initializeEnvironmentStartedAt := time.Now()
-	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
-		RepoURL: request.Input.RepoURL,
-	})
-	if err != nil {
-		logStage(u.logger, "review", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", err)
-		return ReviewExecutionResult{}, err
-	}
-	defer func() {
-		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
-			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
-		}
-	}()
-	logStage(u.logger, "review", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
-
 	reviewDiffStartedAt := time.Now()
 	llmResult, err := u.llmReviewer.Review(ctx, LLMReviewPayload{
 		Input:         request.Input,
 		RulePack:      pack,
-		Environment:   environment,
+		Environment:   request.Environment,
 		Suggestions:   request.Suggestions,
 		CustomRuleset: strings.TrimSpace(request.Recipe.ReviewRuleset),
 	})

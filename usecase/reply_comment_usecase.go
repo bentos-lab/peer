@@ -9,17 +9,14 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
-	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // replyCommentUseCase is the concrete ReplyCommentUseCase implementation.
 type replyCommentUseCase struct {
-	sanitizer    SafetySanitizer
-	answerer     ReplyCommentAnswerer
-	publisher    ReplyCommentPublisher
-	envFactory   uccontracts.CodeEnvironmentFactory
-	recipeLoader CustomRecipeLoader
-	logger       Logger
+	sanitizer SafetySanitizer
+	answerer  ReplyCommentAnswerer
+	publisher ReplyCommentPublisher
+	logger    Logger
 }
 
 // NewReplyCommentUseCase constructs a reply comment usecase.
@@ -27,23 +24,19 @@ func NewReplyCommentUseCase(
 	sanitizer SafetySanitizer,
 	answerer ReplyCommentAnswerer,
 	publisher ReplyCommentPublisher,
-	envFactory uccontracts.CodeEnvironmentFactory,
-	recipeLoader CustomRecipeLoader,
 	logger Logger,
 ) (ReplyCommentUseCase, error) {
-	if sanitizer == nil || answerer == nil || publisher == nil || envFactory == nil || recipeLoader == nil {
+	if sanitizer == nil || answerer == nil || publisher == nil {
 		return nil, errors.New("reply comment usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &replyCommentUseCase{
-		sanitizer:    sanitizer,
-		answerer:     answerer,
-		publisher:    publisher,
-		envFactory:   envFactory,
-		recipeLoader: recipeLoader,
-		logger:       logger,
+		sanitizer: sanitizer,
+		answerer:  answerer,
+		publisher: publisher,
+		logger:    logger,
 	}, nil
 }
 
@@ -69,34 +62,10 @@ func (u *replyCommentUseCase) Execute(ctx context.Context, request ReplyCommentR
 	logStage(u.logger, "replycomment", "sanitize_question", target, "success", sanitizeStartedAt, "")
 
 	answerText := ""
-	recipe := domain.CustomRecipe{}
 	if sanitized.Status == domain.PromptSafetyStatusOK {
-		initializeEnvironmentStartedAt := time.Now()
-		environment, envErr := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
-			RepoURL: request.RepoURL,
-		})
-		if envErr != nil {
-			logStage(u.logger, "replycomment", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", envErr)
-			return ReplyCommentResult{}, envErr
+		if request.Environment == nil {
+			return ReplyCommentResult{}, errors.New("code environment is required")
 		}
-		defer func() {
-			if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
-				u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
-			}
-		}()
-		logStage(u.logger, "replycomment", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
-
-		headRef := strings.TrimSpace(request.Head)
-		if headRef == "" {
-			headRef = "HEAD"
-		}
-		loadRecipeStartedAt := time.Now()
-		loadedRecipe, err := u.recipeLoader.Load(ctx, environment, headRef)
-		if err != nil {
-			logStage(u.logger, "replycomment", "load_recipe", target, "failure", loadRecipeStartedAt, "%v", err)
-			return ReplyCommentResult{}, err
-		}
-		recipe = loadedRecipe
 
 		answerStartedAt := time.Now()
 		answerText, err = u.answerer.Answer(ctx, ReplyCommentAnswerPayload{
@@ -112,8 +81,8 @@ func (u *replyCommentUseCase) Execute(ctx context.Context, request ReplyCommentR
 			},
 			Thread:        request.Thread,
 			Question:      sanitized.SanitizedPrompt,
-			Environment:   environment,
-			ExtraGuidance: strings.TrimSpace(recipe.AutoreplyGuidance),
+			Environment:   request.Environment,
+			ExtraGuidance: strings.TrimSpace(request.Recipe.AutoreplyGuidance),
 		})
 		if err != nil {
 			logStage(u.logger, "replycomment", "answer_question", target, "failure", answerStartedAt, "%v", err)
@@ -135,7 +104,7 @@ func (u *replyCommentUseCase) Execute(ctx context.Context, request ReplyCommentR
 		Kind:           request.CommentKind,
 		Body:           replyBody,
 		ShouldPost:     request.Publish,
-		RecipeWarnings: recipe.MissingPaths,
+		RecipeWarnings: request.Recipe.MissingPaths,
 	}); err != nil {
 		logStage(u.logger, "replycomment", "publish_reply", target, "failure", publishStartedAt, "%v", err)
 		return ReplyCommentResult{}, err

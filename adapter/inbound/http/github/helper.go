@@ -1,141 +1,16 @@
 package github
 
 import (
-	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 
-	"bentos-backend/adapter/inbound/http/background"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
 	"bentos-backend/shared/text"
-	"bentos-backend/usecase"
 )
-
-func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request, body []byte) {
-	var event pullRequestEvent
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&event); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	if !isValidPullRequestEvent(event) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	if !isReviewTriggerAction(event.Action) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if err := h.ensureInstallation(event.Installation.ID, event.Repository.FullName, event.PullRequest.Number); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	installationID := strconv.FormatInt(event.Installation.ID, 10)
-	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
-	if err != nil {
-		h.logWebhookTokenError(event.Repository.FullName, event.PullRequest.Number, err)
-		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
-		return
-	}
-	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
-	if err != nil {
-		h.logWebhookRepoURLError(event.Repository.FullName, event.PullRequest.Number, err)
-		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
-		return
-	}
-
-	base := strings.TrimSpace(event.PullRequest.Base.SHA)
-	if base == "" {
-		base = strings.TrimSpace(event.PullRequest.Base.Ref)
-	}
-	head := strings.TrimSpace(event.PullRequest.Head.SHA)
-	if head == "" {
-		head = strings.TrimSpace(event.PullRequest.Head.Ref)
-	}
-
-	recipeConfig := h.loadRecipeConfig(r.Context(), repoURL, head)
-	if recipeConfig.ReviewEnabled != nil && !*recipeConfig.ReviewEnabled {
-		h.logWebhookSkipped("review", event.Repository.FullName, event.PullRequest.Number, event.Action)
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-
-	enableOverview := h.enableOverview && isInitialPROpenedAction(event.Action)
-	if recipeConfig.OverviewEnabled != nil && !*recipeConfig.OverviewEnabled {
-		enableOverview = false
-	}
-	issueAlignmentEnabled := true
-	if recipeConfig.OverviewIssueAlignmentEnabled != nil {
-		issueAlignmentEnabled = *recipeConfig.OverviewIssueAlignmentEnabled
-	}
-
-	var issueCandidates []domain.IssueContext
-	if issueAlignmentEnabled {
-		issueCandidates = resolveWebhookIssueCandidates(
-			githubvcs.WithInstallationID(r.Context(), installationID),
-			h.tokenProvider,
-			event.Repository.FullName,
-			event.PullRequest.Body,
-		)
-	}
-
-	request := usecase.ChangeRequestRequest{
-		Repository:          event.Repository.FullName,
-		RepoURL:             repoURL,
-		ChangeRequestNumber: event.PullRequest.Number,
-		Title:               event.PullRequest.Title,
-		Description:         event.PullRequest.Body,
-		Base:                base,
-		Head:                head,
-		EnableReview:        true,
-		EnableOverview:      enableOverview,
-		EnableSuggestions:   h.enableSuggestions,
-		ReviewExplicit:      false,
-		OverviewExplicit:    false,
-		SuggestionsExplicit: false,
-		OverviewIssueAlignment: usecase.OverviewIssueAlignmentInput{
-			Candidates: issueCandidates,
-		},
-		Metadata: map[string]string{
-			"action": event.Action,
-		},
-	}
-
-	background.RunReviewAsync(
-		h.logger,
-		"GitHub",
-		event.Action,
-		request,
-		backgroundReviewTimeout,
-		func(ctx context.Context) context.Context {
-			return githubvcs.WithInstallationID(ctx, installationID)
-		},
-		func(ctx context.Context, req usecase.ChangeRequestRequest) error {
-			if h.changeRequestBuilder == nil {
-				return errors.New("change request usecase builder is not configured")
-			}
-			useCase, err := h.changeRequestBuilder(req.RepoURL)
-			if err != nil {
-				return err
-			}
-			_, err = useCase.Execute(ctx, req)
-			return err
-		},
-	)
-
-	h.logWebhookAccepted("review", request.Repository, request.ChangeRequestNumber, event.Action)
-	w.WriteHeader(http.StatusAccepted)
-}
 
 func resolveWebhookIssueCandidates(
 	ctx context.Context,
@@ -173,269 +48,6 @@ func resolveWebhookIssueCandidates(
 	return candidates
 }
 
-func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request, body []byte) {
-	if h.replyCommentBuilder == nil {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	var event issueCommentEvent
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&event); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	if !isValidIssueCommentEvent(event) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	if !strings.EqualFold(strings.TrimSpace(event.Action), "created") {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if !text.ContainsTrigger(event.Comment.Body, h.replyTriggerName) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if isBotAuthor(event.Comment.User.Type) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if err := h.ensureInstallation(event.Installation.ID, event.Repository.FullName, event.Issue.Number); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	installationID := strconv.FormatInt(event.Installation.ID, 10)
-	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
-	if err != nil {
-		h.logWebhookTokenError(event.Repository.FullName, event.Issue.Number, err)
-		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
-		return
-	}
-	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
-	if err != nil {
-		h.logWebhookRepoURLError(event.Repository.FullName, event.Issue.Number, err)
-		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
-		return
-	}
-
-	ctx := githubvcs.WithInstallationID(r.Context(), installationID)
-	prInfo, err := h.tokenProvider.GetPullRequestInfo(ctx, event.Repository.FullName, event.Issue.Number)
-	if err != nil {
-		http.Error(w, "failed to resolve pull request info", http.StatusBadGateway)
-		return
-	}
-	recipeConfig := h.loadRecipeConfig(ctx, repoURL, prInfo.HeadRef)
-	if recipeConfig.AutoreplyEnabled != nil && !*recipeConfig.AutoreplyEnabled {
-		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.Issue.Number, event.Action)
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	thread, err := buildIssueThreadForWebhook(ctx, h.tokenProvider, event.Repository.FullName, event.Issue.Number, event.Comment.ID, prInfo)
-	if err != nil {
-		http.Error(w, "failed to load comment thread", http.StatusBadGateway)
-		return
-	}
-
-	request := usecase.ReplyCommentRequest{
-		Repository:          event.Repository.FullName,
-		RepoURL:             repoURL,
-		ChangeRequestNumber: event.Issue.Number,
-		Title:               prInfo.Title,
-		Description:         prInfo.Description,
-		Base:                prInfo.BaseRef,
-		Head:                prInfo.HeadRef,
-		CommentID:           event.Comment.ID,
-		CommentKind:         domain.CommentKindIssue,
-		Question:            text.StripTrigger(event.Comment.Body, h.replyTriggerName),
-		Thread:              thread,
-		Publish:             true,
-		Metadata: map[string]string{
-			"action": event.Action,
-		},
-	}
-
-	background.RunReplyCommentAsync(
-		h.logger,
-		"GitHub",
-		event.Action,
-		request,
-		backgroundReplyCommentTimeout,
-		func(ctx context.Context) context.Context {
-			return githubvcs.WithInstallationID(ctx, installationID)
-		},
-		func(ctx context.Context, req usecase.ReplyCommentRequest) error {
-			if h.replyCommentBuilder == nil {
-				return errors.New("reply comment usecase builder is not configured")
-			}
-			useCase, err := h.replyCommentBuilder(req.RepoURL)
-			if err != nil {
-				return err
-			}
-			_, err = useCase.Execute(ctx, req)
-			return err
-		},
-	)
-
-	h.logWebhookAccepted("replycomment", request.Repository, request.ChangeRequestNumber, event.Action)
-	w.WriteHeader(http.StatusAccepted)
-}
-
-func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Request, body []byte) {
-	if h.replyCommentBuilder == nil {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	var event reviewCommentEvent
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&event); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	if !isValidReviewCommentEvent(event) {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
-		return
-	}
-	if !strings.EqualFold(strings.TrimSpace(event.Action), "created") {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if !text.ContainsTrigger(event.Comment.Body, h.replyTriggerName) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if isBotAuthor(event.Comment.User.Type) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	if err := h.ensureInstallation(event.Installation.ID, event.Repository.FullName, event.PullRequest.Number); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	installationID := strconv.FormatInt(event.Installation.ID, 10)
-	installationToken, err := h.tokenProvider.GetInstallationAccessToken(r.Context(), installationID)
-	if err != nil {
-		h.logWebhookTokenError(event.Repository.FullName, event.PullRequest.Number, err)
-		http.Error(w, "failed to resolve installation token", http.StatusBadGateway)
-		return
-	}
-	repoURL, err := buildAuthenticatedCloneURL(event.Repository.CloneURL, installationToken)
-	if err != nil {
-		h.logWebhookRepoURLError(event.Repository.FullName, event.PullRequest.Number, err)
-		http.Error(w, "invalid repository clone URL", http.StatusBadRequest)
-		return
-	}
-
-	ctx := githubvcs.WithInstallationID(r.Context(), installationID)
-	prInfo, err := h.tokenProvider.GetPullRequestInfo(ctx, event.Repository.FullName, event.PullRequest.Number)
-	if err != nil {
-		http.Error(w, "failed to resolve pull request info", http.StatusBadGateway)
-		return
-	}
-	recipeConfig := h.loadRecipeConfig(ctx, repoURL, prInfo.HeadRef)
-	if recipeConfig.AutoreplyEnabled != nil && !*recipeConfig.AutoreplyEnabled {
-		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.PullRequest.Number, event.Action)
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
-	thread, err := buildReviewThreadForWebhook(ctx, h.tokenProvider, event.Repository.FullName, event.PullRequest.Number, event.Comment.ID)
-	if err != nil {
-		http.Error(w, "failed to load comment thread", http.StatusBadGateway)
-		return
-	}
-
-	request := usecase.ReplyCommentRequest{
-		Repository:          event.Repository.FullName,
-		RepoURL:             repoURL,
-		ChangeRequestNumber: event.PullRequest.Number,
-		Title:               prInfo.Title,
-		Description:         prInfo.Description,
-		Base:                prInfo.BaseRef,
-		Head:                prInfo.HeadRef,
-		CommentID:           event.Comment.ID,
-		CommentKind:         domain.CommentKindReview,
-		Question:            text.StripTrigger(event.Comment.Body, h.replyTriggerName),
-		Thread:              thread,
-		Publish:             true,
-		Metadata: map[string]string{
-			"action": event.Action,
-		},
-	}
-
-	background.RunReplyCommentAsync(
-		h.logger,
-		"GitHub",
-		event.Action,
-		request,
-		backgroundReplyCommentTimeout,
-		func(ctx context.Context) context.Context {
-			return githubvcs.WithInstallationID(ctx, installationID)
-		},
-		func(ctx context.Context, req usecase.ReplyCommentRequest) error {
-			if h.replyCommentBuilder == nil {
-				return errors.New("reply comment usecase builder is not configured")
-			}
-			useCase, err := h.replyCommentBuilder(req.RepoURL)
-			if err != nil {
-				return err
-			}
-			_, err = useCase.Execute(ctx, req)
-			return err
-		},
-	)
-
-	h.logWebhookAccepted("replycomment", request.Repository, request.ChangeRequestNumber, event.Action)
-	w.WriteHeader(http.StatusAccepted)
-}
-
-func (h *Handler) logWebhookTokenError(repository string, prNumber int, err error) {
-	h.logger.Errorf("GitHub webhook failed to resolve installation token.")
-	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
-	h.logger.Debugf("Failure details: %v.", err)
-}
-
-func (h *Handler) logWebhookRepoURLError(repository string, prNumber int, err error) {
-	h.logger.Errorf("GitHub webhook failed to build repository clone URL.")
-	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
-	h.logger.Debugf("Failure details: %v.", err)
-}
-
-func (h *Handler) logWebhookAccepted(kind string, repository string, prNumber int, action string) {
-	h.logger.Infof("GitHub webhook %s request was accepted.", kind)
-	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
-	h.logger.Debugf("Webhook action is %q.", action)
-}
-
-func (h *Handler) loadRecipeConfig(ctx context.Context, repoURL string, headRef string) domain.CustomRecipe {
-	if h.recipeConfigLoader == nil {
-		return domain.CustomRecipe{}
-	}
-	recipe, err := h.recipeConfigLoader.Load(ctx, repoURL, headRef)
-	if err != nil {
-		h.logger.Warnf("Failed to load webhook recipe config: %v", err)
-		return domain.CustomRecipe{}
-	}
-	return recipe
-}
-
-func (h *Handler) logWebhookSkipped(kind string, repository string, prNumber int, action string) {
-	h.logger.Infof("GitHub webhook %s request was skipped.", kind)
-	h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
-	h.logger.Debugf("Webhook action is %q.", action)
-}
-
-func (h *Handler) ensureInstallation(installationID int64, repository string, prNumber int) error {
-	if installationID <= 0 {
-		h.logger.Errorf("GitHub webhook payload is missing installation id.")
-		h.logger.Debugf("Repository is %q and change request number is %d.", repository, prNumber)
-		return errors.New("missing installation id")
-	}
-	if h.tokenProvider == nil {
-		h.logger.Errorf("GitHub webhook token provider is not configured.")
-		return errors.New("token provider is not configured")
-	}
-	return nil
-}
-
 func isValidPullRequestEvent(event pullRequestEvent) bool {
 	return strings.TrimSpace(event.Repository.FullName) != "" &&
 		strings.TrimSpace(event.Repository.CloneURL) != "" &&
@@ -444,14 +56,10 @@ func isValidPullRequestEvent(event pullRequestEvent) bool {
 		strings.TrimSpace(event.PullRequest.Head.Ref) != ""
 }
 
-func isReviewTriggerAction(action string) bool {
-	switch strings.TrimSpace(strings.ToLower(action)) {
-	case "opened", "synchronize", "reopened":
-		return true
-	default:
-		return false
-	}
-}
+var defaultReviewActions = []string{"opened", "synchronize", "reopened"}
+var defaultOverviewActions = []string{"opened"}
+var defaultAutoreplyEvents = []string{"issue_comment", "pull_request_review_comment"}
+var defaultAutoreplyActions = []string{"created"}
 
 func isValidIssueCommentEvent(event issueCommentEvent) bool {
 	return strings.TrimSpace(event.Repository.FullName) != "" &&
@@ -607,30 +215,24 @@ func formatReviewSummary(summary githubvcs.PullRequestReviewSummary) string {
 	return body
 }
 
-func isInitialPROpenedAction(action string) bool {
-	return strings.EqualFold(strings.TrimSpace(action), "opened")
+func isActionAllowed(value string, allowlist []string, defaultAllowlist []string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return false
+	}
+	if allowlist == nil {
+		return containsNormalized(defaultAllowlist, normalized)
+	}
+	return containsNormalized(allowlist, normalized)
 }
 
-func (h *Handler) verifySignature(signatureHeader string, body []byte) bool {
-	secret := strings.TrimSpace(h.webhookSecret)
-	if secret == "" {
-		return false
+func containsNormalized(values []string, target string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), target) {
+			return true
+		}
 	}
-	const prefix = "sha256="
-	if !strings.HasPrefix(strings.ToLower(signatureHeader), prefix) {
-		return false
-	}
-	signatureHex := strings.TrimSpace(signatureHeader[len(prefix):])
-	signature, err := hex.DecodeString(signatureHex)
-	if err != nil {
-		return false
-	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	if _, err := mac.Write(body); err != nil {
-		return false
-	}
-	expected := mac.Sum(nil)
-	return hmac.Equal(signature, expected)
+	return false
 }
 
 func buildAuthenticatedCloneURL(rawCloneURL string, installationToken string) (string, error) {

@@ -27,13 +27,13 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 	builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 		return changeRequestUC, nil
 	}
-	command := NewReviewCommand(builder, githubClient, logger)
+	command := NewReviewCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, logger)
 
 	err := command.Run(context.Background(), ReviewParams{
 		Repo:          "https://github.com/owner/repo.git",
 		ChangeRequest: "9",
 		Publish:       true,
-		Suggest:       true,
+		Suggest:       boolPointer(true),
 	})
 
 	require.NoError(t, err)

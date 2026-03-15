@@ -4,6 +4,7 @@ The replycomment feature answers PR questions by running the coding agent agains
 
 ## Webhook behavior
 - Listens to `issue_comment` and `pull_request_review_comment` events with `action=created`.
+- Webhook events/actions can be restricted via custom recipe `autoreply.events` and `autoreply.actions` (defaults are `issue_comment`, `pull_request_review_comment`, and `created`).
 - Requires a `@NAME` or `/NAME` trigger in the comment body, where `NAME` is set by `REPLYCOMMENT_TRIGGER_NAME` (default `autogitbot`).
 - Ignores bot-authored comments to avoid loops.
 - Fetches full thread history (PR conversation comments or review thread replies) for context.

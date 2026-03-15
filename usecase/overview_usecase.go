@@ -8,7 +8,6 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
-	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // overviewUseCase is the concrete OverviewUseCase implementation.
@@ -16,7 +15,6 @@ type overviewUseCase struct {
 	llmOverview             LLMOverviewGenerator
 	issueAlignmentGenerator IssueAlignmentGenerator
 	overviewPub             OverviewPublisher
-	envFactory              uccontracts.CodeEnvironmentFactory
 	logger                  Logger
 }
 
@@ -25,10 +23,9 @@ func NewOverviewUseCase(
 	llmOverview LLMOverviewGenerator,
 	issueAlignmentGenerator IssueAlignmentGenerator,
 	overviewPub OverviewPublisher,
-	envFactory uccontracts.CodeEnvironmentFactory,
 	logger Logger,
 ) (OverviewUseCase, error) {
-	if llmOverview == nil || issueAlignmentGenerator == nil || overviewPub == nil || envFactory == nil {
+	if llmOverview == nil || issueAlignmentGenerator == nil || overviewPub == nil {
 		return nil, errors.New("overview usecase dependencies must not be nil")
 	}
 	if logger == nil {
@@ -38,7 +35,6 @@ func NewOverviewUseCase(
 		llmOverview:             llmOverview,
 		issueAlignmentGenerator: issueAlignmentGenerator,
 		overviewPub:             overviewPub,
-		envFactory:              envFactory,
 		logger:                  logger,
 	}, nil
 }
@@ -49,25 +45,14 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 	target := request.Input.Target
 	logExecution(u.logger, "overview", target, "start", startedAt, "")
 
-	initializeEnvironmentStartedAt := time.Now()
-	environment, err := u.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
-		RepoURL: request.Input.RepoURL,
-	})
-	if err != nil {
-		logStage(u.logger, "overview", "initialize_code_environment", target, "failure", initializeEnvironmentStartedAt, "%v", err)
-		return OverviewExecutionResult{}, err
+	if request.Environment == nil {
+		return OverviewExecutionResult{}, errors.New("code environment is required")
 	}
-	defer func() {
-		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
-			u.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
-		}
-	}()
-	logStage(u.logger, "overview", "initialize_code_environment", target, "success", initializeEnvironmentStartedAt, "")
 
 	overviewStartedAt := time.Now()
 	overviewResult, err := u.llmOverview.GenerateOverview(ctx, LLMOverviewPayload{
 		Input:         request.Input,
-		Environment:   environment,
+		Environment:   request.Environment,
 		ExtraGuidance: strings.TrimSpace(request.Recipe.OverviewGuidance),
 	})
 	if err != nil {
@@ -82,12 +67,16 @@ func (u *overviewUseCase) Execute(ctx context.Context, request OverviewRequest) 
 		issueAlignmentEnabled = false
 	}
 	if issueAlignmentEnabled {
+		issueAlignmentGuidance := strings.TrimSpace(request.Recipe.OverviewIssueAlignmentGuidance)
+		if issueAlignmentGuidance == "" {
+			issueAlignmentGuidance = strings.TrimSpace(request.Recipe.OverviewGuidance)
+		}
 		alignmentStartedAt := time.Now()
 		result, err := u.issueAlignmentGenerator.GenerateIssueAlignment(ctx, LLMIssueAlignmentPayload{
 			Input:          request.Input,
 			IssueAlignment: request.IssueAlignment,
-			Environment:    environment,
-			ExtraGuidance:  strings.TrimSpace(request.Recipe.OverviewGuidance),
+			Environment:    request.Environment,
+			ExtraGuidance:  issueAlignmentGuidance,
 		})
 		if err != nil {
 			logStage(u.logger, "overview", "issue_alignment", target, "failure", alignmentStartedAt, "%v", err)

@@ -1,12 +1,30 @@
 package cli
 
-import "strings"
+import (
+	"testing"
 
-func containsLogEvent(events []string, target string) bool {
-	for _, event := range events {
-		if strings.Contains(event, target) {
-			return true
-		}
-	}
-	return false
+	"github.com/stretchr/testify/require"
+)
+
+func TestResolveBoolPrimary(t *testing.T) {
+	primary := true
+	fallback := false
+
+	result := ResolveBool(&primary, &fallback, false)
+
+	require.True(t, result)
+}
+
+func TestResolveBoolFallback(t *testing.T) {
+	fallback := true
+
+	result := ResolveBool(nil, &fallback, false)
+
+	require.True(t, result)
+}
+
+func TestResolveBoolDefault(t *testing.T) {
+	result := ResolveBool(nil, nil, true)
+
+	require.True(t, result)
 }

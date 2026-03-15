@@ -38,15 +38,6 @@ func (p *autogenUseCaseTestPublisher) PublishAutogen(_ context.Context, req Auto
 	return p.err
 }
 
-type autogenUseCaseTestRecipeLoader struct {
-	recipe domain.CustomRecipe
-	err    error
-}
-
-func (l *autogenUseCaseTestRecipeLoader) Load(_ context.Context, _ uccontracts.CodeEnvironment, _ string) (domain.CustomRecipe, error) {
-	return l.recipe, l.err
-}
-
 type autogenUseCaseTestEnvironment struct {
 	files     []domain.ChangedFile
 	loadCalls int
@@ -79,31 +70,18 @@ func (e *autogenUseCaseTestEnvironment) Cleanup(_ context.Context) error {
 	return nil
 }
 
-type autogenUseCaseTestEnvironmentFactory struct {
-	environment *autogenUseCaseTestEnvironment
-	err         error
-	lastOpts    domain.CodeEnvironmentInitOptions
-}
-
-func (f *autogenUseCaseTestEnvironmentFactory) New(_ context.Context, opts domain.CodeEnvironmentInitOptions) (uccontracts.CodeEnvironment, error) {
-	f.lastOpts = opts
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.environment, nil
-}
-
 func TestAutogenUseCaseRequiresFlags(t *testing.T) {
 	generator := &autogenUseCaseTestGenerator{output: "report"}
 	publisher := &autogenUseCaseTestPublisher{}
-	factory := &autogenUseCaseTestEnvironmentFactory{environment: &autogenUseCaseTestEnvironment{}}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
+	environment := &autogenUseCaseTestEnvironment{}
+	useCase, err := NewAutogenUseCase(generator, publisher, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
 		Input: domain.ChangeRequestInput{
 			Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 1},
 		},
+		Environment: environment,
 	})
 	require.ErrorContains(t, err, "--docs")
 }
@@ -111,16 +89,17 @@ func TestAutogenUseCaseRequiresFlags(t *testing.T) {
 func TestAutogenUseCaseRequiresHeadBranchWhenPublishing(t *testing.T) {
 	generator := &autogenUseCaseTestGenerator{output: "report"}
 	publisher := &autogenUseCaseTestPublisher{}
-	factory := &autogenUseCaseTestEnvironmentFactory{environment: &autogenUseCaseTestEnvironment{}}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
+	environment := &autogenUseCaseTestEnvironment{}
+	useCase, err := NewAutogenUseCase(generator, publisher, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
 		Input: domain.ChangeRequestInput{
 			Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 1},
 		},
-		Docs:    true,
-		Publish: true,
+		Docs:        true,
+		Publish:     true,
+		Environment: environment,
 	})
 	require.ErrorContains(t, err, "head branch")
 }
@@ -128,17 +107,18 @@ func TestAutogenUseCaseRequiresHeadBranchWhenPublishing(t *testing.T) {
 func TestAutogenUseCaseRequiresAgentOutputWhenPublishing(t *testing.T) {
 	generator := &autogenUseCaseTestGenerator{output: ""}
 	publisher := &autogenUseCaseTestPublisher{}
-	factory := &autogenUseCaseTestEnvironmentFactory{environment: &autogenUseCaseTestEnvironment{}}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
+	environment := &autogenUseCaseTestEnvironment{}
+	useCase, err := NewAutogenUseCase(generator, publisher, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
 		Input: domain.ChangeRequestInput{
 			Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 1},
 		},
-		Docs:       true,
-		Publish:    true,
-		HeadBranch: "feature",
+		Docs:        true,
+		Publish:     true,
+		HeadBranch:  "feature",
+		Environment: environment,
 	})
 	require.ErrorContains(t, err, "agent output")
 }
@@ -150,10 +130,9 @@ func TestAutogenUseCaseBuildsSummaryAndPublishes(t *testing.T) {
 		{Path: "docs/readme.md", DiffSnippet: "@@ -1,1 +1,2 @@\n line1\n+line2\n", Content: "line1\nline2"},
 		{Path: "newfile.go", DiffSnippet: "", Content: "package main\n// comment"},
 	}}
-	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
 	generator := &autogenUseCaseTestGenerator{output: "agent report"}
 	publisher := &autogenUseCaseTestPublisher{}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
@@ -163,8 +142,9 @@ func TestAutogenUseCaseBuildsSummaryAndPublishes(t *testing.T) {
 			Base:    "main",
 			Head:    "feature",
 		},
-		Docs:  true,
-		Tests: true,
+		Docs:        true,
+		Tests:       true,
+		Environment: env,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, generator.callCount)
@@ -180,36 +160,36 @@ func TestAutogenUseCaseBuildsSummaryAndPublishes(t *testing.T) {
 
 func TestAutogenUseCasePropagatesGeneratorError(t *testing.T) {
 	env := &autogenUseCaseTestEnvironment{}
-	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
 	generator := &autogenUseCaseTestGenerator{err: errors.New("generator failed")}
 	publisher := &autogenUseCaseTestPublisher{}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, nil)
 	require.NoError(t, err)
 
 	_, err = useCase.Execute(context.Background(), AutogenRequest{
 		Input: domain.ChangeRequestInput{
 			Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 0},
 		},
-		Docs: true,
+		Docs:        true,
+		Environment: env,
 	})
 	require.ErrorContains(t, err, "generator failed")
 }
 
 func TestAutogenUseCaseSkipsErrorWhenNoChangesDetected(t *testing.T) {
 	env := &autogenUseCaseTestEnvironment{loadErr: domain.ErrNoCodeChanges}
-	factory := &autogenUseCaseTestEnvironmentFactory{environment: env}
 	generator := &autogenUseCaseTestGenerator{output: "agent report"}
 	publisher := &autogenUseCaseTestPublisher{}
-	useCase, err := NewAutogenUseCase(generator, publisher, factory, &autogenUseCaseTestRecipeLoader{}, nil)
+	useCase, err := NewAutogenUseCase(generator, publisher, nil)
 	require.NoError(t, err)
 
 	result, err := useCase.Execute(context.Background(), AutogenRequest{
 		Input: domain.ChangeRequestInput{
 			Target: domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 1},
 		},
-		Docs:       true,
-		Publish:    true,
-		HeadBranch: "feature",
+		Docs:        true,
+		Publish:     true,
+		HeadBranch:  "feature",
+		Environment: env,
 	})
 	require.NoError(t, err)
 	require.Empty(t, result.Changes)

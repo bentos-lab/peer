@@ -8,7 +8,9 @@ import (
 	cliinbound "bentos-backend/adapter/inbound/cli"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
+	"bentos-backend/domain"
 	"bentos-backend/usecase"
+	uccontracts "bentos-backend/usecase/contracts"
 	"bentos-backend/wiring"
 	"github.com/stretchr/testify/require"
 )
@@ -50,6 +52,51 @@ func (c *mainTestGitHubClient) GetIssue(_ context.Context, repository string, is
 
 func (c *mainTestGitHubClient) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
 	return nil, nil
+}
+
+func boolPointer(value bool) *bool {
+	return &value
+}
+
+type mainTestCodeEnvironment struct{}
+
+func (e *mainTestCodeEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (uccontracts.CodingAgent, error) {
+	return nil, nil
+}
+
+func (e *mainTestCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
+	return nil, nil
+}
+
+func (e *mainTestCodeEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
+	return "", false, nil
+}
+
+func (e *mainTestCodeEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
+	return domain.CodeEnvironmentPushResult{}, nil
+}
+
+func (e *mainTestCodeEnvironment) Cleanup(_ context.Context) error {
+	return nil
+}
+
+type mainTestCodeEnvironmentFactory struct {
+	environment uccontracts.CodeEnvironment
+}
+
+func (f *mainTestCodeEnvironmentFactory) New(_ context.Context, _ domain.CodeEnvironmentInitOptions) (uccontracts.CodeEnvironment, error) {
+	if f.environment == nil {
+		f.environment = &mainTestCodeEnvironment{}
+	}
+	return f.environment, nil
+}
+
+type mainTestRecipeLoader struct {
+	recipe domain.CustomRecipe
+}
+
+func (l *mainTestRecipeLoader) Load(_ context.Context, _ uccontracts.CodeEnvironment, _ string) (domain.CustomRecipe, error) {
+	return l.recipe, nil
 }
 
 func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
@@ -94,6 +141,12 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			changeRequestUseCase := &mainTestChangeRequestUseCase{}
 			githubClient := &mainTestGitHubClient{}
+			envFactory := &mainTestCodeEnvironmentFactory{}
+			recipeLoader := &mainTestRecipeLoader{
+				recipe: domain.CustomRecipe{
+					ReviewSuggestions: boolPointer(testCase.envDefault),
+				},
+			}
 
 			args := append([]string{"review"}, testCase.args...)
 
@@ -113,7 +166,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 					builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 						return changeRequestUseCase, nil
 					}
-					return cliinbound.NewReviewCommand(builder, githubClient, nil), nil
+					return cliinbound.NewReviewCommand(builder, githubClient, envFactory, recipeLoader, nil), nil
 				},
 				buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
 					return nil, nil
@@ -137,8 +190,6 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 			require.Len(t, changeRequestUseCase.requests, 1)
 			require.True(t, changeRequestUseCase.requests[0].EnableReview)
 			require.Equal(t, testCase.expectedSuggest, changeRequestUseCase.requests[0].EnableSuggestions)
-			require.True(t, changeRequestUseCase.requests[0].ReviewExplicit)
-			require.Equal(t, testCase.explicit, changeRequestUseCase.requests[0].SuggestionsExplicit)
 		})
 	}
 }
@@ -160,13 +211,13 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 				return changeRequestUseCase, nil
 			}
-			return cliinbound.NewReviewCommand(builder, githubClient, nil), nil
+			return cliinbound.NewReviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
 			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 				return changeRequestUseCase, nil
 			}
-			return cliinbound.NewOverviewCommand(builder, githubClient, nil), nil
+			return cliinbound.NewOverviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 			return nil, nil
@@ -187,8 +238,6 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 	require.Len(t, changeRequestUseCase.requests, 1)
 	require.False(t, changeRequestUseCase.requests[0].EnableReview)
 	require.True(t, changeRequestUseCase.requests[0].EnableOverview)
-	require.True(t, changeRequestUseCase.requests[0].ReviewExplicit)
-	require.True(t, changeRequestUseCase.requests[0].OverviewExplicit)
 }
 
 func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
@@ -208,7 +257,7 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
 				return changeRequestUseCase, nil
 			}
-			return cliinbound.NewOverviewCommand(builder, githubClient, nil), nil
+			return cliinbound.NewOverviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildGitHubHandler: func(config.Config) (http.Handler, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil

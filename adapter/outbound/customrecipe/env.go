@@ -1,0 +1,120 @@
+package customrecipe
+
+import (
+	"os"
+	"strconv"
+	"strings"
+
+	"bentos-backend/usecase"
+)
+
+const (
+	envReviewEnabled                 = "REVIEW_ENABLED"
+	envReviewSuggestions             = "REVIEW_SUGGESTED_CHANGES"
+	envReviewEvents                  = "REVIEW_EVENTS"
+	envOverviewEnabled               = "OVERVIEW_ENABLED"
+	envOverviewEvents                = "OVERVIEW_EVENTS"
+	envOverviewIssueAlignmentEnabled = "OVERVIEW_ISSUE_ALIGNMENT_ENABLED"
+	envAutoreplyEnabled              = "AUTOREPLY_ENABLED"
+	envAutoreplyEvents               = "AUTOREPLY_EVENTS"
+	envAutoreplyActions              = "AUTOREPLY_ACTIONS"
+	envAutogenEnabled                = "AUTOGEN_ENABLED"
+	envAutogenEvents                 = "AUTOGEN_EVENTS"
+	envAutogenDocs                   = "AUTOGEN_DOCS"
+	envAutogenTests                  = "AUTOGEN_TESTS"
+)
+
+type optionalStringList struct {
+	Values []string
+	Set    bool
+}
+
+type recipeEnvDefaults struct {
+	ReviewEnabled                 *bool
+	ReviewSuggestions             *bool
+	ReviewEvents                  optionalStringList
+	OverviewEnabled               *bool
+	OverviewEvents                optionalStringList
+	OverviewIssueAlignmentEnabled *bool
+	AutoreplyEnabled              *bool
+	AutoreplyEvents               optionalStringList
+	AutoreplyActions              optionalStringList
+	AutogenEnabled                *bool
+	AutogenEvents                 optionalStringList
+	AutogenDocs                   *bool
+	AutogenTests                  *bool
+}
+
+func loadRecipeEnvDefaults(logger usecase.Logger) recipeEnvDefaults {
+	return recipeEnvDefaults{
+		ReviewEnabled:                 envOptionalBool(logger, envReviewEnabled),
+		ReviewSuggestions:             envOptionalBool(logger, envReviewSuggestions),
+		ReviewEvents:                  envOptionalStringList(envReviewEvents),
+		OverviewEnabled:               envOptionalBool(logger, envOverviewEnabled),
+		OverviewEvents:                envOptionalStringList(envOverviewEvents),
+		OverviewIssueAlignmentEnabled: envOptionalBool(logger, envOverviewIssueAlignmentEnabled),
+		AutoreplyEnabled:              envOptionalBool(logger, envAutoreplyEnabled),
+		AutoreplyEvents:               envOptionalStringList(envAutoreplyEvents),
+		AutoreplyActions:              envOptionalStringList(envAutoreplyActions),
+		AutogenEnabled:                envOptionalBool(logger, envAutogenEnabled),
+		AutogenEvents:                 envOptionalStringList(envAutogenEvents),
+		AutogenDocs:                   envOptionalBool(logger, envAutogenDocs),
+		AutogenTests:                  envOptionalBool(logger, envAutogenTests),
+	}
+}
+
+func envOptionalBool(logger usecase.Logger, key string) *bool {
+	rawValue, exists := os.LookupEnv(key)
+	if !exists {
+		return nil
+	}
+	parsedValue, err := strconv.ParseBool(strings.TrimSpace(rawValue))
+	if err != nil {
+		if logger != nil {
+			logger.Warnf("Custom recipe env %q is invalid: %v", key, err)
+		}
+		return nil
+	}
+	return &parsedValue
+}
+
+func envOptionalStringList(key string) optionalStringList {
+	rawValue, exists := os.LookupEnv(key)
+	if !exists {
+		return optionalStringList{}
+	}
+	trimmed := strings.TrimSpace(rawValue)
+	if trimmed == "" {
+		return optionalStringList{Values: []string{}, Set: true}
+	}
+	parts := strings.Split(trimmed, ",")
+	normalized := normalizeStringList(parts)
+	if normalized == nil {
+		normalized = []string{}
+	}
+	return optionalStringList{Values: normalized, Set: true}
+}
+
+func normalizeStringList(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		lowered := strings.ToLower(trimmed)
+		if _, exists := seen[lowered]; exists {
+			continue
+		}
+		seen[lowered] = struct{}{}
+		normalized = append(normalized, lowered)
+	}
+	if normalized == nil {
+		return []string{}
+	}
+	return normalized
+}

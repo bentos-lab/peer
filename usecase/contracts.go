@@ -27,11 +27,10 @@ type ChangeRequestRequest struct {
 	EnableReview           bool
 	EnableOverview         bool
 	EnableSuggestions      bool
-	ReviewExplicit         bool
-	OverviewExplicit       bool
-	SuggestionsExplicit    bool
 	Metadata               map[string]string
 	OverviewIssueAlignment OverviewIssueAlignmentInput
+	Environment            uccontracts.CodeEnvironment
+	Recipe                 domain.CustomRecipe
 }
 
 // OverviewIssueAlignmentInput supplies issue alignment data for overview flows.
@@ -162,6 +161,7 @@ type ReviewRequest struct {
 	Input       domain.ChangeRequestInput
 	Suggestions bool
 	Recipe      domain.CustomRecipe
+	Environment uccontracts.CodeEnvironment
 }
 
 // ReviewExecutionResult is the review-usecase output.
@@ -181,6 +181,7 @@ type OverviewRequest struct {
 	Input          domain.ChangeRequestInput
 	IssueAlignment OverviewIssueAlignmentInput
 	Recipe         domain.CustomRecipe
+	Environment    uccontracts.CodeEnvironment
 }
 
 // OverviewExecutionResult is the overview-usecase output.
@@ -196,11 +197,13 @@ type OverviewUseCase interface {
 
 // AutogenRequest is the autogen-usecase input.
 type AutogenRequest struct {
-	Input      domain.ChangeRequestInput
-	Docs       bool
-	Tests      bool
-	Publish    bool
-	HeadBranch string
+	Input       domain.ChangeRequestInput
+	Docs        bool
+	Tests       bool
+	Publish     bool
+	HeadBranch  string
+	Environment uccontracts.CodeEnvironment
+	Recipe      domain.CustomRecipe
 }
 
 // AutogenExecutionResult is the autogen-usecase output.

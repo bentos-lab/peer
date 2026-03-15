@@ -5,15 +5,19 @@ import (
 	"errors"
 	"time"
 
+	codeenv "bentos-backend/adapter/outbound/codeenv"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
+	uccontracts "bentos-backend/usecase/contracts"
 )
 
 // OverviewCommand runs autogit overview flow with the shared change request usecase.
 type OverviewCommand struct {
 	changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder
 	githubClient                GitHubClient
+	envFactory                  uccontracts.CodeEnvironmentFactory
+	recipeLoader                usecase.CustomRecipeLoader
 	logger                      usecase.Logger
 }
 
@@ -29,13 +33,15 @@ type OverviewParams struct {
 }
 
 // NewOverviewCommand creates a new CLI command for autogit overviews.
-func NewOverviewCommand(changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder, githubClient GitHubClient, logger usecase.Logger) *OverviewCommand {
+func NewOverviewCommand(changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *OverviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &OverviewCommand{
 		changeRequestUseCaseBuilder: changeRequestUseCaseBuilder,
 		githubClient:                githubClient,
+		envFactory:                  envFactory,
+		recipeLoader:                recipeLoader,
 		logger:                      logger,
 	}
 }
@@ -47,6 +53,12 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 	}
 	if c.githubClient == nil {
 		return errors.New("github client is not configured")
+	}
+	if c.envFactory == nil {
+		return errors.New("code environment factory is not configured")
+	}
+	if c.recipeLoader == nil {
+		return errors.New("recipe loader is not configured")
 	}
 	if c.logger == nil {
 		c.logger = stdlogger.Nop()
@@ -61,6 +73,22 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		Publish:        params.Publish,
 		IssueAlignment: params.IssueAlignment,
 	})
+	if err != nil {
+		return err
+	}
+
+	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, resolution.RepoURL)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+		}
+	}()
+
+	headRef := resolution.Head
+	recipe, err := c.recipeLoader.Load(ctx, environment, headRef)
 	if err != nil {
 		return err
 	}
@@ -81,12 +109,11 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		EnableReview:        false,
 		EnableOverview:      true,
 		EnableSuggestions:   false,
-		ReviewExplicit:      true,
-		OverviewExplicit:    true,
-		SuggestionsExplicit: false,
 		OverviewIssueAlignment: usecase.OverviewIssueAlignmentInput{
 			Candidates: resolution.IssueCandidates,
 		},
+		Environment: environment,
+		Recipe:      recipe,
 	}
 	if !params.Publish {
 		request.ChangeRequestNumber = 0

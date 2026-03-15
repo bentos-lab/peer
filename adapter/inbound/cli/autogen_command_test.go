@@ -24,7 +24,7 @@ func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, nil)
+	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider:   "github",
@@ -32,7 +32,7 @@ func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 		ChangeRequest: "123",
 		Base:          "main",
 		Head:          "feature",
-		Docs:          true,
+		Docs:          boolPointer(true),
 	})
 	require.ErrorContains(t, err, "--change-request")
 }
@@ -43,12 +43,12 @@ func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, nil)
+	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider: "github",
 		Publish:     true,
-		Docs:        true,
+		Docs:        boolPointer(true),
 	})
 	require.ErrorContains(t, err, "--publish")
 }
@@ -59,11 +59,11 @@ func TestAutogenCommandDefaultsLocalWorkspace(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, nil)
+	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider: "github",
-		Docs:        true,
+		Docs:        boolPointer(true),
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
@@ -88,14 +88,14 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, nil)
+	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), AutogenRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		Publish:       true,
-		Docs:          true,
-		Tests:         true,
+		Docs:          boolPointer(true),
+		Tests:         boolPointer(true),
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
