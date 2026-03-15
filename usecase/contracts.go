@@ -15,24 +15,6 @@ type RulePack struct {
 	Instructions []string
 }
 
-// ChangeRequestRequest is the shared orchestrator input and is platform-neutral.
-type ChangeRequestRequest struct {
-	Repository             string
-	RepoURL                string
-	ChangeRequestNumber    int
-	Title                  string
-	Description            string
-	Base                   string
-	Head                   string
-	EnableReview           bool
-	EnableOverview         bool
-	EnableSuggestions      bool
-	Metadata               map[string]string
-	OverviewIssueAlignment OverviewIssueAlignmentInput
-	Environment            uccontracts.CodeEnvironment
-	Recipe                 domain.CustomRecipe
-}
-
 // OverviewIssueAlignmentInput supplies issue alignment data for overview flows.
 type OverviewIssueAlignmentInput struct {
 	Candidates []domain.IssueContext
@@ -216,18 +198,4 @@ type AutogenExecutionResult struct {
 // AutogenUseCase defines autogen execution behavior.
 type AutogenUseCase interface {
 	Execute(ctx context.Context, request AutogenRequest) (AutogenExecutionResult, error)
-}
-
-// ChangeRequestExecutionResult is the orchestrator output.
-type ChangeRequestExecutionResult struct {
-	Messages       []domain.ReviewMessage
-	Findings       []domain.Finding
-	Summary        string
-	Overview       LLMOverviewResult
-	IssueAlignment *domain.IssueAlignmentResult
-}
-
-// ChangeRequestUseCase defines shared orchestration behavior.
-type ChangeRequestUseCase interface {
-	Execute(ctx context.Context, request ChangeRequestRequest) (ChangeRequestExecutionResult, error)
 }

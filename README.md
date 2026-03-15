@@ -110,9 +110,13 @@ GitHub PR actions that trigger review:
 For each trigger, the service:
 
 1. Loads changed files from GitHub.
-2. Runs LLM review.
-3. Posts inline review comments.
-4. Posts one overview comment only for `opened`, and only when `OVERVIEW_ENABLED=true` (or unset, because server default is enabled).
+2. Runs overview when enabled (default action `opened`) and posts one overview comment.
+3. Runs LLM review and posts inline review comments.
+4. When both overview and review are enabled for the same event, the overview job always runs before review.
+
+Autogen webhook:
+
+- Runs on `pull_request` events when `autogen.enabled=true`, the action is in `autogen.events` (defaults to `opened`, `reopened`, `synchronize`), and at least one of `autogen.docs` or `autogen.tests` is true.
 
 CLI review (GitHub PR by number):
 

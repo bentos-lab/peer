@@ -57,8 +57,9 @@ type CodingAgentConfig struct {
 
 // ServerConfig contains HTTP server-specific settings.
 type ServerConfig struct {
-	Port   string
-	GitHub GitHubConfig
+	Port          string
+	MaxJobWorkers int
+	GitHub        GitHubConfig
 }
 
 // GitHubConfig contains GitHub webhook/app integration settings.
@@ -111,6 +112,7 @@ func Load() (Config, error) {
 				}
 				return "8080"
 			}(),
+			MaxJobWorkers: intEnvOrDefault("MAX_JOB_WORKERS", 3, 1),
 			GitHub: GitHubConfig{
 				WebhookSecret:           os.Getenv("GITHUB_WEBHOOK_SECRET"),
 				AppID:                   os.Getenv("GITHUB_APP_ID"),
@@ -152,6 +154,19 @@ func boolEnvOrDefault(key string, fallback bool) bool {
 
 	parsedValue, err := strconv.ParseBool(strings.TrimSpace(rawValue))
 	if err != nil {
+		return fallback
+	}
+	return parsedValue
+}
+
+func intEnvOrDefault(key string, fallback int, min int) int {
+	rawValue, exists := os.LookupEnv(key)
+	if !exists {
+		return fallback
+	}
+
+	parsedValue, err := strconv.Atoi(strings.TrimSpace(rawValue))
+	if err != nil || parsedValue < min {
 		return fallback
 	}
 	return parsedValue

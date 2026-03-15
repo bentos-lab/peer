@@ -7,8 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildChangeRequestUseCaseRejectsMissingCodingAgent(t *testing.T) {
-	_, err := BuildChangeRequestUseCase(config.Config{}, CLILLMOptions{ForceCLIPublishers: true}, "")
+func TestBuildReviewUseCaseRejectsMissingCodingAgent(t *testing.T) {
+	_, err := BuildReviewUseCase(config.Config{}, CLILLMOptions{ForceCLIPublishers: true}, "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "coding agent")
+}
+
+func TestBuildOverviewUseCaseRejectsMissingCodingAgent(t *testing.T) {
+	_, err := BuildOverviewUseCase(config.Config{}, CLILLMOptions{ForceCLIPublishers: true}, "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "coding agent")
 }

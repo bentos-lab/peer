@@ -22,6 +22,7 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "MAX_JOB_WORKERS")
 	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES")
 
@@ -44,6 +45,7 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	require.Equal(t, "", cfg.CodingAgent.Provider)
 	require.Equal(t, "", cfg.CodingAgent.Model)
 	require.Equal(t, "8080", cfg.Server.Port)
+	require.Equal(t, 3, cfg.Server.MaxJobWorkers)
 	require.Equal(t, "", cfg.Server.GitHub.WebhookSecret)
 	require.Equal(t, "", cfg.Server.GitHub.AppID)
 	require.Equal(t, "", cfg.Server.GitHub.AppPrivateKey)
@@ -72,6 +74,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "MAX_JOB_WORKERS")
 	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES")
 
@@ -84,7 +87,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=gpt-4.1\nLLM_OPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=gpt-4.1\nLLM_OPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nMAX_JOB_WORKERS=9\nREPLYCOMMENT_TRIGGER_NAME=autogit\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -97,6 +100,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	require.Equal(t, "warning", cfg.LogLevel)
 	require.Nil(t, cfg.OverviewEnabled)
 	require.Equal(t, "9090", cfg.Server.Port)
+	require.Equal(t, 9, cfg.Server.MaxJobWorkers)
 	require.Equal(t, "whsec", cfg.Server.GitHub.WebhookSecret)
 	require.Equal(t, "12345", cfg.Server.GitHub.AppID)
 	require.Equal(t, "-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----", cfg.Server.GitHub.AppPrivateKey)
@@ -118,6 +122,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	t.Setenv("GITHUB_APP_ID", "set-app-id")
 	t.Setenv("GITHUB_APP_PRIVATE_KEY", "set-private-key")
 	t.Setenv("GITHUB_API_BASE_URL", "https://set.example.com")
+	t.Setenv("MAX_JOB_WORKERS", "5")
 	t.Setenv("REPLYCOMMENT_TRIGGER_NAME", "set-trigger")
 	t.Setenv("REVIEW_SUGGESTED_CHANGES", "true")
 
@@ -130,7 +135,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=from-dotenv\nLLM_OPENAI_API_KEY=dotenv-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=dotenv-provider\nCODING_AGENT_MODEL=dotenv-model\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=from-dotenv\nLLM_OPENAI_API_KEY=dotenv-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=dotenv-provider\nCODING_AGENT_MODEL=dotenv-model\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=dotenv-secret\nGITHUB_APP_ID=dotenv-app-id\nGITHUB_APP_PRIVATE_KEY=dotenv-private-key\nGITHUB_API_BASE_URL=https://dotenv.example.com\nMAX_JOB_WORKERS=11\nREPLYCOMMENT_TRIGGER_NAME=dotenv-trigger\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -144,6 +149,7 @@ func TestLoadDoesNotOverrideExistingEnvWithDotEnv(t *testing.T) {
 	require.NotNil(t, cfg.OverviewEnabled)
 	require.True(t, *cfg.OverviewEnabled)
 	require.Equal(t, "7777", cfg.Server.Port)
+	require.Equal(t, 5, cfg.Server.MaxJobWorkers)
 	require.Equal(t, "set-secret", cfg.Server.GitHub.WebhookSecret)
 	require.Equal(t, "set-app-id", cfg.Server.GitHub.AppID)
 	require.Equal(t, "set-private-key", cfg.Server.GitHub.AppPrivateKey)
@@ -172,6 +178,7 @@ func TestLoadReturnsErrorForInvalidDotEnv(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "MAX_JOB_WORKERS")
 	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES")
 
@@ -203,6 +210,7 @@ func TestLoadParsesOverviewEnabledFalse(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "MAX_JOB_WORKERS")
 	unsetEnv(t, "REPLYCOMMENT_TRIGGER_NAME")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES")
 	t.Setenv("OVERVIEW_ENABLED", "false")
@@ -234,6 +242,7 @@ func TestLoadReturnsErrorForInvalidOverviewEnabled(t *testing.T) {
 	unsetEnv(t, "GITHUB_APP_ID")
 	unsetEnv(t, "GITHUB_APP_PRIVATE_KEY")
 	unsetEnv(t, "GITHUB_API_BASE_URL")
+	unsetEnv(t, "MAX_JOB_WORKERS")
 	unsetEnv(t, "REVIEW_SUGGESTED_CHANGES")
 	t.Setenv("OVERVIEW_ENABLED", "not-a-bool")
 

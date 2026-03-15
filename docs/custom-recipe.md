@@ -2,7 +2,7 @@
 
 Custom recipes let a repository provide extra guidance for review, overview, reply, and autogen flows.
 
-Precedence (highest to lowest): CLI flags > `.autogit/config.toml` > environment variables. When a key is present in `config.toml`, it overrides env defaults even if empty or false. For env defaults, see [Custom Recipe Env](/docs/custom-recipe-env.md).
+Precedence (highest to lowest): CLI flags > `.autogit/config.toml` > environment variables. When a key is present in `config.toml`, it overrides env defaults even if empty or false.
 
 ## Example `.autogit/config.toml`
 

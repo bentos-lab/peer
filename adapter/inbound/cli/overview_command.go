@@ -12,13 +12,13 @@ import (
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
-// OverviewCommand runs autogit overview flow with the shared change request usecase.
+// OverviewCommand runs autogit overview flow with the shared overview usecase.
 type OverviewCommand struct {
-	changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder
-	githubClient                GitHubClient
-	envFactory                  uccontracts.CodeEnvironmentFactory
-	recipeLoader                usecase.CustomRecipeLoader
-	logger                      usecase.Logger
+	overviewUseCaseBuilder OverviewUseCaseBuilder
+	githubClient           GitHubClient
+	envFactory             uccontracts.CodeEnvironmentFactory
+	recipeLoader           usecase.CustomRecipeLoader
+	logger                 usecase.Logger
 }
 
 // OverviewParams contains already-parsed CLI autogit parameters for overviews.
@@ -32,24 +32,27 @@ type OverviewParams struct {
 	IssueAlignment bool
 }
 
+// OverviewUseCaseBuilder builds an overview usecase for a specific repo.
+type OverviewUseCaseBuilder func(repoURL string) (usecase.OverviewUseCase, error)
+
 // NewOverviewCommand creates a new CLI command for autogit overviews.
-func NewOverviewCommand(changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *OverviewCommand {
+func NewOverviewCommand(overviewUseCaseBuilder OverviewUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *OverviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &OverviewCommand{
-		changeRequestUseCaseBuilder: changeRequestUseCaseBuilder,
-		githubClient:                githubClient,
-		envFactory:                  envFactory,
-		recipeLoader:                recipeLoader,
-		logger:                      logger,
+		overviewUseCaseBuilder: overviewUseCaseBuilder,
+		githubClient:           githubClient,
+		envFactory:             envFactory,
+		recipeLoader:           recipeLoader,
+		logger:                 logger,
 	}
 }
 
 // Run executes the CLI overview flow.
 func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error {
-	if c.changeRequestUseCaseBuilder == nil {
-		return errors.New("change request usecase is not configured")
+	if c.overviewUseCaseBuilder == nil {
+		return errors.New("overview usecase is not configured")
 	}
 	if c.githubClient == nil {
 		return errors.New("github client is not configured")
@@ -93,48 +96,46 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		return err
 	}
 
-	changeRequestUseCase, err := c.changeRequestUseCaseBuilder(resolution.RepoURL)
+	overviewUseCase, err := c.overviewUseCaseBuilder(resolution.RepoURL)
 	if err != nil {
 		return err
 	}
 
-	request := usecase.ChangeRequestRequest{
-		Repository:          resolution.Repository,
-		RepoURL:             resolution.RepoURL,
-		ChangeRequestNumber: resolution.ChangeRequestNumber,
-		Title:               resolution.Title,
-		Description:         resolution.Description,
-		Base:                resolution.Base,
-		Head:                resolution.Head,
-		EnableReview:        false,
-		EnableOverview:      true,
-		EnableSuggestions:   false,
-		OverviewIssueAlignment: usecase.OverviewIssueAlignmentInput{
-			Candidates: resolution.IssueCandidates,
-		},
-		Environment: environment,
-		Recipe:      recipe,
+	request := usecase.OverviewRequest{
+		Input: domainChangeRequestInput(
+			resolution.Repository,
+			resolution.ChangeRequestNumber,
+			resolution.RepoURL,
+			resolution.Base,
+			resolution.Head,
+			resolution.Title,
+			resolution.Description,
+			map[string]string{},
+		),
+		IssueAlignment: usecase.OverviewIssueAlignmentInput{Candidates: resolution.IssueCandidates},
+		Environment:    environment,
+		Recipe:         recipe,
 	}
 	if !params.Publish {
-		request.ChangeRequestNumber = 0
+		request.Input.Target.ChangeRequestNumber = 0
 	}
 
 	startedAt := time.Now()
 	c.logger.Infof("CLI overview started.")
-	c.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
+	c.logger.Debugf("Repository is %q and change request number is %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	sharedlogging.LogInputSnapshot(c.logger, "cli", "", request)
 
-	_, err = changeRequestUseCase.Execute(ctx, request)
+	_, err = overviewUseCase.Execute(ctx, request)
 	if err != nil {
 		c.logger.Errorf("CLI overview failed.")
-		c.logger.Debugf("The overview target was repository %q and change request %d.", request.Repository, request.ChangeRequestNumber)
+		c.logger.Debugf("The overview target was repository %q and change request %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 		c.logger.Debugf("The CLI overview ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
 		c.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
 
 	c.logger.Infof("CLI overview completed.")
-	c.logger.Debugf("The overview target was repository %q and change request %d.", request.Repository, request.ChangeRequestNumber)
+	c.logger.Debugf("The overview target was repository %q and change request %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	c.logger.Debugf("The CLI overview completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
 }

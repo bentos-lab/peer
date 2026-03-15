@@ -12,7 +12,7 @@ import (
 )
 
 func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T) {
-	changeRequestUC := &fakeChangeRequestUseCase{}
+	reviewUC := &fakeReviewUseCase{}
 	githubClient := &fakeGitHubClient{
 		resolvedRepository: "owner/repo",
 		pullRequestInfo: githubvcs.PullRequestInfo{
@@ -24,8 +24,8 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 		},
 	}
 	logger := &commandTestSpyLogger{}
-	builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
-		return changeRequestUC, nil
+	builder := func(_ string) (usecase.ReviewUseCase, error) {
+		return reviewUC, nil
 	}
 	command := NewReviewCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, logger)
 
@@ -38,7 +38,7 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
-		return containsLogEvent(logger.events, "info:Pre-usecase input snapshot source=\"cli\" repository=\"owner/repo\" changeRequestNumber=9 enableReview=true enableOverview=false enableSuggestions=true.")
+		return containsLogEvent(logger.events, "info:Pre-usecase input snapshot source=\"cli\" repository=\"owner/repo\" changeRequestNumber=9 suggestions=true.")
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
 		return containsLogEvent(logger.events, "debug:Pre-usecase input details source=\"cli\" action=\"\" base=\"main\" head=\"feature/ref\"")
@@ -53,13 +53,13 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 	require.False(t, containsLogEvent(logger.events, "Confidential PR description"))
 }
 
-type fakeChangeRequestUseCase struct {
-	requests []usecase.ChangeRequestRequest
+type fakeReviewUseCase struct {
+	requests []usecase.ReviewRequest
 }
 
-func (f *fakeChangeRequestUseCase) Execute(_ context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
+func (f *fakeReviewUseCase) Execute(_ context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
 	f.requests = append(f.requests, request)
-	return usecase.ChangeRequestExecutionResult{}, nil
+	return usecase.ReviewExecutionResult{}, nil
 }
 
 type commandTestSpyLogger struct {

@@ -12,6 +12,7 @@ import (
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
+	"bentos-backend/shared/jobqueue"
 	"bentos-backend/usecase"
 	uccontracts "bentos-backend/usecase/contracts"
 	"github.com/stretchr/testify/require"
@@ -19,15 +20,15 @@ import (
 
 const testWebhookSecret = "test-secret"
 
-type mockUseCase struct {
-	requestCh chan usecase.ChangeRequestRequest
+type mockReviewUseCase struct {
+	requestCh chan usecase.ReviewRequest
 	ctxCh     chan context.Context
 	proceedCh chan struct{}
 	err       error
 	panicVal  any
 }
 
-func (m *mockUseCase) Execute(ctx context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
+func (m *mockReviewUseCase) Execute(ctx context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
 	if m.panicVal != nil {
 		panic(m.panicVal)
 	}
@@ -40,7 +41,39 @@ func (m *mockUseCase) Execute(ctx context.Context, request usecase.ChangeRequest
 	if m.proceedCh != nil {
 		<-m.proceedCh
 	}
-	return usecase.ChangeRequestExecutionResult{}, m.err
+	return usecase.ReviewExecutionResult{}, m.err
+}
+
+type mockOverviewUseCase struct {
+	requestCh chan usecase.OverviewRequest
+	ctxCh     chan context.Context
+	proceedCh chan struct{}
+	err       error
+}
+
+func (m *mockOverviewUseCase) Execute(ctx context.Context, request usecase.OverviewRequest) (usecase.OverviewExecutionResult, error) {
+	if m.ctxCh != nil {
+		m.ctxCh <- ctx
+	}
+	if m.requestCh != nil {
+		m.requestCh <- request
+	}
+	if m.proceedCh != nil {
+		<-m.proceedCh
+	}
+	return usecase.OverviewExecutionResult{}, m.err
+}
+
+type mockAutogenUseCase struct {
+	requestCh chan usecase.AutogenRequest
+	err       error
+}
+
+func (m *mockAutogenUseCase) Execute(_ context.Context, request usecase.AutogenRequest) (usecase.AutogenExecutionResult, error) {
+	if m.requestCh != nil {
+		m.requestCh <- request
+	}
+	return usecase.AutogenExecutionResult{}, m.err
 }
 
 type mockReplyCommentUseCase struct {
@@ -54,8 +87,20 @@ func (m *mockReplyCommentUseCase) Execute(_ context.Context, request usecase.Rep
 	return usecase.ReplyCommentResult{}, nil
 }
 
-func newChangeRequestBuilder(uc usecase.ChangeRequestUseCase) ChangeRequestUseCaseBuilder {
-	return func(_ string) (usecase.ChangeRequestUseCase, error) {
+func newReviewBuilder(uc usecase.ReviewUseCase) ReviewUseCaseBuilder {
+	return func(_ string) (usecase.ReviewUseCase, error) {
+		return uc, nil
+	}
+}
+
+func newOverviewBuilder(uc usecase.OverviewUseCase) OverviewUseCaseBuilder {
+	return func(_ string) (usecase.OverviewUseCase, error) {
+		return uc, nil
+	}
+}
+
+func newAutogenBuilder(uc usecase.AutogenUseCase) AutogenUseCaseBuilder {
+	return func(_ string) (usecase.AutogenUseCase, error) {
 		return uc, nil
 	}
 }
@@ -223,7 +268,9 @@ func (l *mockRecipeLoader) Load(_ context.Context, _ uccontracts.CodeEnvironment
 }
 
 func newTestHandler(
-	changeRequestBuilder ChangeRequestUseCaseBuilder,
+	reviewBuilder ReviewUseCaseBuilder,
+	overviewBuilder OverviewUseCaseBuilder,
+	autogenBuilder AutogenUseCaseBuilder,
 	replyCommentBuilder ReplyCommentUseCaseBuilder,
 	tokenProvider CommentClient,
 	recipeConfigLoader RecipeConfigLoader,
@@ -234,7 +281,9 @@ func newTestHandler(
 	enableSuggestions bool,
 ) *Handler {
 	return NewHandler(
-		changeRequestBuilder,
+		reviewBuilder,
+		overviewBuilder,
+		autogenBuilder,
 		replyCommentBuilder,
 		tokenProvider,
 		recipeConfigLoader,
@@ -245,6 +294,7 @@ func newTestHandler(
 		replyTriggerName,
 		enableOverview,
 		enableSuggestions,
+		jobqueue.NewManager(1),
 	)
 }
 
@@ -273,12 +323,15 @@ func boolPointer(value bool) *bool {
 }
 
 func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.T) {
-	uc := &mockUseCase{
-		requestCh: make(chan usecase.ChangeRequestRequest, 1),
+	reviewUC := &mockReviewUseCase{
+		requestCh: make(chan usecase.ReviewRequest, 1),
 		ctxCh:     make(chan context.Context, 1),
 	}
+	overviewUC := &mockOverviewUseCase{
+		requestCh: make(chan usecase.OverviewRequest, 1),
+	}
 	logger := &spyLogger{}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(reviewUC), newOverviewBuilder(overviewUC), nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -298,28 +351,27 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 	require.Equal(t, http.StatusAccepted, resp.Code)
 
 	select {
-	case reviewRequest := <-uc.requestCh:
-		require.Equal(t, "org/repo", reviewRequest.Repository)
-		require.Equal(t, "https://x-access-token:token-1@github.com/org/repo.git", reviewRequest.RepoURL)
-		require.Equal(t, 7, reviewRequest.ChangeRequestNumber)
-		require.Equal(t, "main", reviewRequest.Base)
-		require.Equal(t, "feature", reviewRequest.Head)
-		require.Equal(t, "opened", reviewRequest.Metadata["action"])
-		require.True(t, reviewRequest.EnableOverview)
-		require.True(t, reviewRequest.EnableSuggestions)
+	case reviewRequest := <-reviewUC.requestCh:
+		require.Equal(t, "org/repo", reviewRequest.Input.Target.Repository)
+		require.Equal(t, "https://x-access-token:token-1@github.com/org/repo.git", reviewRequest.Input.RepoURL)
+		require.Equal(t, 7, reviewRequest.Input.Target.ChangeRequestNumber)
+		require.Equal(t, "main", reviewRequest.Input.Base)
+		require.Equal(t, "feature", reviewRequest.Input.Head)
+		require.Equal(t, "opened", reviewRequest.Input.Metadata["action"])
+		require.True(t, reviewRequest.Suggestions)
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
 
 	select {
-	case reviewContext := <-uc.ctxCh:
+	case reviewContext := <-reviewUC.ctxCh:
 		require.Equal(t, "123", githubvcs.InstallationIDFromContext(reviewContext))
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase context")
 	}
 
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, `info:Pre-usecase input snapshot source="webhook" action="opened" repository="org/repo" changeRequestNumber=7 enableReview=true enableOverview=true enableSuggestions=true.`)
+		return containsEvent(logger.events, `info:Pre-usecase input snapshot source="webhook" action="opened" repository="org/repo" changeRequestNumber=7 suggestions=true.`)
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
 		return containsEvent(logger.events, `debug:Pre-usecase input details source="webhook" action="opened" base="main" head="feature"`)
@@ -332,12 +384,74 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 	require.False(t, containsEvent(logger.events, "secret-body-token"))
 }
 
+func TestHandler_ServeHTTP_OverviewRunsBeforeReview(t *testing.T) {
+	reviewUC := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	overviewUC := &mockOverviewUseCase{
+		requestCh: make(chan usecase.OverviewRequest, 1),
+		proceedCh: make(chan struct{}),
+	}
+	queue := jobqueue.NewManager(2)
+	handler := NewHandler(
+		newReviewBuilder(reviewUC),
+		newOverviewBuilder(overviewUC),
+		nil,
+		nil,
+		mockInstallationTokenProvider{token: "token-1"},
+		nil,
+		&mockCodeEnvironmentFactory{},
+		&mockRecipeLoader{},
+		nil,
+		testWebhookSecret,
+		"autogitbot",
+		true,
+		true,
+		queue,
+	)
+	payload := `{
+		"action":"opened",
+		"installation":{"id":123},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := signedRequest(t, payload, "pull_request", testWebhookSecret)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	select {
+	case <-overviewUC.requestCh:
+	case <-time.After(time.Second):
+		t.Fatal("expected overview usecase execution")
+	}
+
+	select {
+	case <-reviewUC.requestCh:
+		t.Fatal("expected review to wait for overview completion")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	close(overviewUC.proceedCh)
+
+	select {
+	case <-reviewUC.requestCh:
+	case <-time.After(time.Second):
+		t.Fatal("expected review usecase execution")
+	}
+}
+
 func TestHandler_ServeHTTP_ConfigDisablesReviewSkipsUsecase(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{ReviewEnabled: boolPointer(false)},
 	}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -364,12 +478,15 @@ func TestHandler_ServeHTTP_ConfigDisablesReviewSkipsUsecase(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_ConfigDisablesIssueAlignmentSkipsCandidates(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	overviewUC := &mockOverviewUseCase{requestCh: make(chan usecase.OverviewRequest, 1)}
 	loader := &mockRecipeConfigLoader{
-		recipe: domain.CustomRecipe{OverviewIssueAlignmentEnabled: boolPointer(false)},
+		recipe: domain.CustomRecipe{
+			ReviewEnabled:                 boolPointer(false),
+			OverviewIssueAlignmentEnabled: boolPointer(false),
+		},
 	}
 	tokenProvider := &issueAlignmentTokenProvider{token: "token-1"}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, tokenProvider, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(nil, newOverviewBuilder(overviewUC), nil, nil, tokenProvider, loader, nil, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -389,18 +506,18 @@ func TestHandler_ServeHTTP_ConfigDisablesIssueAlignmentSkipsCandidates(t *testin
 
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	select {
-	case reviewRequest := <-uc.requestCh:
-		require.Empty(t, reviewRequest.OverviewIssueAlignment.Candidates)
+	case overviewRequest := <-overviewUC.requestCh:
+		require.Empty(t, overviewRequest.IssueAlignment.Candidates)
 	case <-time.After(time.Second):
-		t.Fatal("expected review usecase execution")
+		t.Fatal("expected overview usecase execution")
 	}
 	require.Equal(t, 0, tokenProvider.issueCalls)
 	require.Equal(t, 0, tokenProvider.commentCalls)
 }
 
 func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
 		"action":"synchronize",
 		"installation":{"id":321},
@@ -421,15 +538,16 @@ func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	select {
 	case reviewRequest := <-uc.requestCh:
-		require.False(t, reviewRequest.EnableOverview)
+		require.Equal(t, "synchronize", reviewRequest.Input.Metadata["action"])
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
 }
 
 func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	reviewUC := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	overviewUC := &mockOverviewUseCase{requestCh: make(chan usecase.OverviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(reviewUC), newOverviewBuilder(overviewUC), nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
@@ -449,16 +567,20 @@ func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(
 
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	select {
-	case reviewRequest := <-uc.requestCh:
-		require.False(t, reviewRequest.EnableOverview)
+	case <-reviewUC.requestCh:
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
+	}
+	select {
+	case <-overviewUC.requestCh:
+		t.Fatal("expected overview usecase to be skipped")
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 
 func TestHandler_ServeHTTP_DisablesSuggestionsWhenHandlerToggleIsFalse(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, false)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, false)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
@@ -479,15 +601,15 @@ func TestHandler_ServeHTTP_DisablesSuggestionsWhenHandlerToggleIsFalse(t *testin
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	select {
 	case reviewRequest := <-uc.requestCh:
-		require.False(t, reviewRequest.EnableSuggestions)
+		require.False(t, reviewRequest.Suggestions)
 	case <-time.After(time.Second):
 		t.Fatal("expected review usecase execution")
 	}
 }
 
 func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
 		"action":"edited",
 		"installation":{"id":321},
@@ -510,11 +632,11 @@ func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_ConfigReviewEventsSkipsAction(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{ReviewEvents: []string{"opened"}},
 	}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"synchronize",
 		"installation":{"id":321},
@@ -536,9 +658,86 @@ func TestHandler_ServeHTTP_ConfigReviewEventsSkipsAction(t *testing.T) {
 	require.Len(t, uc.requestCh, 0)
 }
 
+func TestHandler_ServeHTTP_AutogenEnabledEnqueuesAutogen(t *testing.T) {
+	autogenUC := &mockAutogenUseCase{requestCh: make(chan usecase.AutogenRequest, 1)}
+	loader := &mockRecipeConfigLoader{
+		recipe: domain.CustomRecipe{
+			ReviewEnabled:   boolPointer(false),
+			OverviewEnabled: boolPointer(false),
+			AutogenEnabled:  boolPointer(true),
+			AutogenEvents:   []string{"opened"},
+			AutogenDocs:     boolPointer(true),
+			AutogenTests:    boolPointer(false),
+		},
+	}
+	handler := newTestHandler(nil, nil, newAutogenBuilder(autogenUC), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
+	payload := `{
+		"action":"opened",
+		"installation":{"id":321},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := signedRequest(t, payload, "pull_request", testWebhookSecret)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	select {
+	case autogenRequest := <-autogenUC.requestCh:
+		require.True(t, autogenRequest.Docs)
+		require.False(t, autogenRequest.Tests)
+		require.True(t, autogenRequest.Publish)
+		require.Equal(t, "feature", autogenRequest.HeadBranch)
+		require.Equal(t, "opened", autogenRequest.Input.Metadata["action"])
+	case <-time.After(time.Second):
+		t.Fatal("expected autogen usecase execution")
+	}
+}
+
+func TestHandler_ServeHTTP_AutogenDisabledWithoutDocsOrTests(t *testing.T) {
+	autogenUC := &mockAutogenUseCase{requestCh: make(chan usecase.AutogenRequest, 1)}
+	loader := &mockRecipeConfigLoader{
+		recipe: domain.CustomRecipe{
+			ReviewEnabled:   boolPointer(false),
+			OverviewEnabled: boolPointer(false),
+			AutogenEnabled:  boolPointer(true),
+			AutogenEvents:   []string{"opened"},
+			AutogenDocs:     boolPointer(false),
+			AutogenTests:    boolPointer(false),
+		},
+	}
+	handler := newTestHandler(nil, nil, newAutogenBuilder(autogenUC), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
+	payload := `{
+		"action":"opened",
+		"installation":{"id":321},
+		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
+		"pull_request":{
+			"number": 7,
+			"title":"Improve API",
+			"body":"details",
+			"base":{"ref":"main"},
+			"head":{"ref":"feature"}
+		}
+	}`
+	req := signedRequest(t, payload, "pull_request", testWebhookSecret)
+	resp := httptest.NewRecorder()
+
+	handler.ServeHTTP(resp, req)
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	require.Len(t, autogenUC.requestCh, 0)
+}
+
 func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	resp := httptest.NewRecorder()
@@ -550,8 +749,8 @@ func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	req.Header.Set("X-Hub-Signature-256", "sha256=deadbeef")
@@ -564,8 +763,8 @@ func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	req := signedRequest(t, `{`, "pull_request", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -576,8 +775,8 @@ func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -600,9 +799,9 @@ func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) 
 }
 
 func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
 	logger := &spyLogger{}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
@@ -627,8 +826,8 @@ func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) 
 }
 
 func TestHandler_ServeHTTP_NonPullRequestEventIsIgnored(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	req := signedRequest(t, `{"action":"opened"}`, "issues", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -654,7 +853,7 @@ func TestHandler_ServeHTTP_ConfigDisablesAutoreplySkipsUsecase(t *testing.T) {
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{AutoreplyEnabled: boolPointer(false)},
 	}
-	handler := newTestHandler(nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
 		"action":"created",
 		"installation":{"id":123},
@@ -701,7 +900,7 @@ func TestHandler_ServeHTTP_ConfigAutoreplyEventsSkipsIssueComment(t *testing.T) 
 			AutoreplyActions: []string{"created"},
 		},
 	}
-	handler := newTestHandler(nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
 		"action":"created",
 		"installation":{"id":123},
@@ -730,11 +929,11 @@ func TestHandler_ServeHTTP_ConfigAutoreplyEventsSkipsIssueComment(t *testing.T) 
 }
 
 func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
-	uc := &mockUseCase{
-		requestCh: make(chan usecase.ChangeRequestRequest, 1),
+	uc := &mockReviewUseCase{
+		requestCh: make(chan usecase.ReviewRequest, 1),
 		proceedCh: make(chan struct{}),
 	}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -772,12 +971,12 @@ func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
-	uc := &mockUseCase{
-		requestCh: make(chan usecase.ChangeRequestRequest, 1),
+	uc := &mockReviewUseCase{
+		requestCh: make(chan usecase.ReviewRequest, 1),
 		err:       errors.New("review failed"),
 	}
 	logger := &spyLogger{}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -802,17 +1001,17 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 		t.Fatal("expected review usecase execution")
 	}
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, "debug:GitHub webhook background review failed for")
+		return containsEvent(logger.events, "debug:GitHub webhook review failed for")
 	}, time.Second, 10*time.Millisecond)
 }
 
 func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
-	uc := &mockUseCase{
-		requestCh: make(chan usecase.ChangeRequestRequest, 1),
+	uc := &mockReviewUseCase{
+		requestCh: make(chan usecase.ReviewRequest, 1),
 		panicVal:  "boom",
 	}
 	logger := &spyLogger{}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -832,13 +1031,13 @@ func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 
 	require.Equal(t, http.StatusAccepted, resp.Code)
 	require.Eventually(t, func() bool {
-		return containsEvent(logger.events, "error:GitHub webhook background review panicked for")
+		return containsEvent(logger.events, "error:GitHub webhook review panicked for")
 	}, time.Second, 10*time.Millisecond)
 }
 
 func TestHandler_ServeHTTP_TokenResolutionFailureReturnsBadGateway(t *testing.T) {
-	uc := &mockUseCase{requestCh: make(chan usecase.ChangeRequestRequest, 1)}
-	handler := newTestHandler(newChangeRequestBuilder(uc), nil, mockInstallationTokenProvider{err: errors.New("boom")}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{err: errors.New("boom")}, nil, nil, testWebhookSecret, "autogitbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},

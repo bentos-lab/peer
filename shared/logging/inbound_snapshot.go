@@ -14,11 +14,23 @@ func LogInputSnapshot(logger usecase.Logger, source string, action string, reque
 	logger = ensureLogger(logger)
 
 	switch typed := request.(type) {
-	case usecase.ChangeRequestRequest:
-		logChangeRequestSnapshot(logger, source, action, typed)
-	case *usecase.ChangeRequestRequest:
+	case usecase.ReviewRequest:
+		logReviewSnapshot(logger, source, action, typed)
+	case *usecase.ReviewRequest:
 		if typed != nil {
-			logChangeRequestSnapshot(logger, source, action, *typed)
+			logReviewSnapshot(logger, source, action, *typed)
+		}
+	case usecase.OverviewRequest:
+		logOverviewSnapshot(logger, source, action, typed)
+	case *usecase.OverviewRequest:
+		if typed != nil {
+			logOverviewSnapshot(logger, source, action, *typed)
+		}
+	case usecase.AutogenRequest:
+		logAutogenSnapshot(logger, source, action, typed)
+	case *usecase.AutogenRequest:
+		if typed != nil {
+			logAutogenSnapshot(logger, source, action, *typed)
 		}
 	case usecase.ReplyCommentRequest:
 		logReplyCommentSnapshot(logger, source, action, typed)
@@ -29,42 +41,122 @@ func LogInputSnapshot(logger usecase.Logger, source string, action string, reque
 	}
 }
 
-func logChangeRequestSnapshot(logger usecase.Logger, source string, action string, request usecase.ChangeRequestRequest) {
+func logReviewSnapshot(logger usecase.Logger, source string, action string, request usecase.ReviewRequest) {
 	trimmedAction := strings.TrimSpace(action)
+	repo := request.Input.Target.Repository
+	number := request.Input.Target.ChangeRequestNumber
 	if trimmedAction == "" {
 		logger.Infof(
-			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d enableReview=%t enableOverview=%t enableSuggestions=%t.",
+			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d suggestions=%t.",
 			strings.TrimSpace(source),
-			request.Repository,
-			request.ChangeRequestNumber,
-			request.EnableReview,
-			request.EnableOverview,
-			request.EnableSuggestions,
+			repo,
+			number,
+			request.Suggestions,
 		)
 	} else {
 		logger.Infof(
-			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d enableReview=%t enableOverview=%t enableSuggestions=%t.",
+			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d suggestions=%t.",
 			strings.TrimSpace(source),
 			trimmedAction,
-			request.Repository,
-			request.ChangeRequestNumber,
-			request.EnableReview,
-			request.EnableOverview,
-			request.EnableSuggestions,
+			repo,
+			number,
+			request.Suggestions,
 		)
 	}
 
-	safeRepoURL, hasRepoURL := sanitizeRepoURL(request.RepoURL)
+	safeRepoURL, hasRepoURL := sanitizeRepoURL(request.Input.RepoURL)
 	logger.Debugf(
 		"Pre-usecase input details source=%q action=%q base=%q head=%q metadataKeys=%q metadataCount=%d titleLength=%d descriptionLength=%d repoURLPresent=%t repoURLSafe=%q.",
 		strings.TrimSpace(source),
 		trimmedAction,
-		request.Base,
-		request.Head,
-		strings.Join(sortedMetadataKeys(request.Metadata), ","),
-		len(request.Metadata),
-		len(request.Title),
-		len(request.Description),
+		request.Input.Base,
+		request.Input.Head,
+		strings.Join(sortedMetadataKeys(request.Input.Metadata), ","),
+		len(request.Input.Metadata),
+		len(request.Input.Title),
+		len(request.Input.Description),
+		hasRepoURL,
+		safeRepoURL,
+	)
+}
+
+func logOverviewSnapshot(logger usecase.Logger, source string, action string, request usecase.OverviewRequest) {
+	trimmedAction := strings.TrimSpace(action)
+	repo := request.Input.Target.Repository
+	number := request.Input.Target.ChangeRequestNumber
+	if trimmedAction == "" {
+		logger.Infof(
+			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d issueCandidates=%d.",
+			strings.TrimSpace(source),
+			repo,
+			number,
+			len(request.IssueAlignment.Candidates),
+		)
+	} else {
+		logger.Infof(
+			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d issueCandidates=%d.",
+			strings.TrimSpace(source),
+			trimmedAction,
+			repo,
+			number,
+			len(request.IssueAlignment.Candidates),
+		)
+	}
+
+	safeRepoURL, hasRepoURL := sanitizeRepoURL(request.Input.RepoURL)
+	logger.Debugf(
+		"Pre-usecase input details source=%q action=%q base=%q head=%q metadataKeys=%q metadataCount=%d titleLength=%d descriptionLength=%d repoURLPresent=%t repoURLSafe=%q.",
+		strings.TrimSpace(source),
+		trimmedAction,
+		request.Input.Base,
+		request.Input.Head,
+		strings.Join(sortedMetadataKeys(request.Input.Metadata), ","),
+		len(request.Input.Metadata),
+		len(request.Input.Title),
+		len(request.Input.Description),
+		hasRepoURL,
+		safeRepoURL,
+	)
+}
+
+func logAutogenSnapshot(logger usecase.Logger, source string, action string, request usecase.AutogenRequest) {
+	trimmedAction := strings.TrimSpace(action)
+	repo := request.Input.Target.Repository
+	number := request.Input.Target.ChangeRequestNumber
+	if trimmedAction == "" {
+		logger.Infof(
+			"Pre-usecase input snapshot source=%q repository=%q changeRequestNumber=%d docs=%t tests=%t publish=%t.",
+			strings.TrimSpace(source),
+			repo,
+			number,
+			request.Docs,
+			request.Tests,
+			request.Publish,
+		)
+	} else {
+		logger.Infof(
+			"Pre-usecase input snapshot source=%q action=%q repository=%q changeRequestNumber=%d docs=%t tests=%t publish=%t.",
+			strings.TrimSpace(source),
+			trimmedAction,
+			repo,
+			number,
+			request.Docs,
+			request.Tests,
+			request.Publish,
+		)
+	}
+
+	safeRepoURL, hasRepoURL := sanitizeRepoURL(request.Input.RepoURL)
+	logger.Debugf(
+		"Pre-usecase input details source=%q action=%q base=%q head=%q metadataKeys=%q metadataCount=%d titleLength=%d descriptionLength=%d repoURLPresent=%t repoURLSafe=%q.",
+		strings.TrimSpace(source),
+		trimmedAction,
+		request.Input.Base,
+		request.Input.Head,
+		strings.Join(sortedMetadataKeys(request.Input.Metadata), ","),
+		len(request.Input.Metadata),
+		len(request.Input.Title),
+		len(request.Input.Description),
 		hasRepoURL,
 		safeRepoURL,
 	)

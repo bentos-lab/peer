@@ -19,14 +19,18 @@ import (
 	codeenv "bentos-backend/adapter/outbound/codeenv"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
+	"bentos-backend/shared/jobqueue"
 	"bentos-backend/shared/logger/stdlogger"
+	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
 const backgroundReviewTimeout = 10 * time.Minute
+const backgroundOverviewTimeout = 10 * time.Minute
 const backgroundReplyCommentTimeout = 10 * time.Minute
+const backgroundAutogenTimeout = 10 * time.Minute
 
 type pullRequestEvent struct {
 	Action       string `json:"action"`
@@ -120,28 +124,39 @@ type RecipeConfigLoader interface {
 
 // Handler receives GitHub webhook events and triggers review.
 type Handler struct {
-	changeRequestBuilder ChangeRequestUseCaseBuilder
-	replyCommentBuilder  ReplyCommentUseCaseBuilder
-	tokenProvider        CommentClient
-	recipeConfigLoader   RecipeConfigLoader
-	codeEnvFactory       uccontracts.CodeEnvironmentFactory
-	recipeLoader         usecase.CustomRecipeLoader
-	logger               usecase.Logger
-	webhookSecret        string
-	replyTriggerName     string
-	enableOverview       bool
-	enableSuggestions    bool
+	reviewBuilder       ReviewUseCaseBuilder
+	overviewBuilder     OverviewUseCaseBuilder
+	autogenBuilder      AutogenUseCaseBuilder
+	replyCommentBuilder ReplyCommentUseCaseBuilder
+	tokenProvider       CommentClient
+	recipeConfigLoader  RecipeConfigLoader
+	codeEnvFactory      uccontracts.CodeEnvironmentFactory
+	recipeLoader        usecase.CustomRecipeLoader
+	logger              usecase.Logger
+	webhookSecret       string
+	replyTriggerName    string
+	enableOverview      bool
+	enableSuggestions   bool
+	jobQueue            *jobqueue.Manager
 }
 
-// ChangeRequestUseCaseBuilder builds a change request usecase for a specific repo.
-type ChangeRequestUseCaseBuilder func(repoURL string) (usecase.ChangeRequestUseCase, error)
+// ReviewUseCaseBuilder builds a review usecase for a specific repo.
+type ReviewUseCaseBuilder func(repoURL string) (usecase.ReviewUseCase, error)
+
+// OverviewUseCaseBuilder builds an overview usecase for a specific repo.
+type OverviewUseCaseBuilder func(repoURL string) (usecase.OverviewUseCase, error)
+
+// AutogenUseCaseBuilder builds an autogen usecase for a specific repo.
+type AutogenUseCaseBuilder func(repoURL string) (usecase.AutogenUseCase, error)
 
 // ReplyCommentUseCaseBuilder builds a reply comment usecase for a specific repo.
 type ReplyCommentUseCaseBuilder func(repoURL string) (usecase.ReplyCommentUseCase, error)
 
 // NewHandler creates a GitHub webhook handler.
 func NewHandler(
-	changeRequestBuilder ChangeRequestUseCaseBuilder,
+	reviewBuilder ReviewUseCaseBuilder,
+	overviewBuilder OverviewUseCaseBuilder,
+	autogenBuilder AutogenUseCaseBuilder,
 	replyCommentBuilder ReplyCommentUseCaseBuilder,
 	tokenProvider CommentClient,
 	recipeConfigLoader RecipeConfigLoader,
@@ -152,22 +167,26 @@ func NewHandler(
 	replyTriggerName string,
 	enableOverview bool,
 	enableSuggestions bool,
+	jobQueue *jobqueue.Manager,
 ) *Handler {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &Handler{
-		changeRequestBuilder: changeRequestBuilder,
-		replyCommentBuilder:  replyCommentBuilder,
-		tokenProvider:        tokenProvider,
-		recipeConfigLoader:   recipeConfigLoader,
-		codeEnvFactory:       codeEnvFactory,
-		recipeLoader:         recipeLoader,
-		logger:               logger,
-		webhookSecret:        strings.TrimSpace(webhookSecret),
-		replyTriggerName:     strings.TrimSpace(replyTriggerName),
-		enableOverview:       enableOverview,
-		enableSuggestions:    enableSuggestions,
+		reviewBuilder:       reviewBuilder,
+		overviewBuilder:     overviewBuilder,
+		autogenBuilder:      autogenBuilder,
+		replyCommentBuilder: replyCommentBuilder,
+		tokenProvider:       tokenProvider,
+		recipeConfigLoader:  recipeConfigLoader,
+		codeEnvFactory:      codeEnvFactory,
+		recipeLoader:        recipeLoader,
+		logger:              logger,
+		webhookSecret:       strings.TrimSpace(webhookSecret),
+		replyTriggerName:    strings.TrimSpace(replyTriggerName),
+		enableOverview:      enableOverview,
+		enableSuggestions:   enableSuggestions,
+		jobQueue:            jobQueue,
 	}
 }
 
@@ -240,25 +259,46 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 	}
 
 	recipeConfig := h.loadRecipeConfig(r.Context(), repoURL, head)
-	if !isActionAllowed(event.Action, recipeConfig.ReviewEvents, defaultReviewActions) {
-		w.WriteHeader(http.StatusAccepted)
-		return
-	}
+	reviewEnabled := isActionAllowed(event.Action, recipeConfig.ReviewEvents, defaultReviewActions)
 	if recipeConfig.ReviewEnabled != nil && !*recipeConfig.ReviewEnabled {
-		h.logWebhookSkipped("review", event.Repository.FullName, event.PullRequest.Number, event.Action)
-		w.WriteHeader(http.StatusAccepted)
-		return
+		reviewEnabled = false
 	}
 
-	enableOverview := h.enableOverview && isActionAllowed(event.Action, recipeConfig.OverviewEvents, defaultOverviewActions)
+	overviewEnabled := h.enableOverview && isActionAllowed(event.Action, recipeConfig.OverviewEvents, defaultOverviewActions)
 	if recipeConfig.OverviewEnabled != nil && !*recipeConfig.OverviewEnabled {
-		enableOverview = false
+		overviewEnabled = false
 	}
+
 	enableSuggestions := cli.ResolveBool(recipeConfig.ReviewSuggestions, nil, h.enableSuggestions)
 	issueAlignmentEnabled := cli.ResolveBool(recipeConfig.OverviewIssueAlignmentEnabled, nil, true)
 
+	autogenEnabled := isActionAllowed(event.Action, recipeConfig.AutogenEvents, defaultAutogenActions)
+	if recipeConfig.AutogenEnabled == nil || !*recipeConfig.AutogenEnabled {
+		autogenEnabled = false
+	}
+	autogenDocs := cli.ResolveBool(nil, recipeConfig.AutogenDocs, false)
+	autogenTests := cli.ResolveBool(nil, recipeConfig.AutogenTests, false)
+	if !autogenDocs && !autogenTests {
+		autogenEnabled = false
+	}
+
+	if !reviewEnabled {
+		h.logWebhookSkipped("review", event.Repository.FullName, event.PullRequest.Number, event.Action)
+	}
+	if !overviewEnabled {
+		h.logWebhookSkipped("overview", event.Repository.FullName, event.PullRequest.Number, event.Action)
+	}
+	if !autogenEnabled {
+		h.logWebhookSkipped("autogen", event.Repository.FullName, event.PullRequest.Number, event.Action)
+	}
+
+	if !reviewEnabled && !overviewEnabled && !autogenEnabled {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
 	var issueCandidates []domain.IssueContext
-	if issueAlignmentEnabled {
+	if overviewEnabled && issueAlignmentEnabled {
 		issueCandidates = resolveWebhookIssueCandidates(
 			githubvcs.WithInstallationID(r.Context(), installationID),
 			h.tokenProvider,
@@ -267,69 +307,51 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 		)
 	}
 
-	request := usecase.ChangeRequestRequest{
-		Repository:          event.Repository.FullName,
-		RepoURL:             repoURL,
-		ChangeRequestNumber: event.PullRequest.Number,
-		Title:               event.PullRequest.Title,
-		Description:         event.PullRequest.Body,
-		Base:                base,
-		Head:                head,
-		EnableReview:        true,
-		EnableOverview:      enableOverview,
-		EnableSuggestions:   enableSuggestions,
-		OverviewIssueAlignment: usecase.OverviewIssueAlignmentInput{
-			Candidates: issueCandidates,
-		},
-		Metadata: map[string]string{
-			"action": event.Action,
-		},
-	}
-
-	background.RunReviewAsync(
-		h.logger,
-		"GitHub",
+	input := buildWebhookInput(
+		event.Repository.FullName,
+		event.PullRequest.Number,
+		repoURL,
+		base,
+		head,
+		event.PullRequest.Title,
+		event.PullRequest.Body,
 		event.Action,
-		request,
-		backgroundReviewTimeout,
-		func(ctx context.Context) context.Context {
-			return githubvcs.WithInstallationID(ctx, installationID)
-		},
-		func(ctx context.Context, req usecase.ChangeRequestRequest) error {
-			if h.changeRequestBuilder == nil {
-				return errors.New("change request usecase builder is not configured")
-			}
-			if h.codeEnvFactory == nil || h.recipeLoader == nil {
-				return errors.New("code environment is not configured")
-			}
-
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, req.RepoURL)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				if cleanupErr := cleanup(ctx); cleanupErr != nil {
-					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
-				}
-			}()
-
-			recipe, err := h.recipeLoader.Load(ctx, environment, req.Head)
-			if err != nil {
-				return err
-			}
-			req.Environment = environment
-			req.Recipe = recipe
-
-			useCase, err := h.changeRequestBuilder(req.RepoURL)
-			if err != nil {
-				return err
-			}
-			_, err = useCase.Execute(ctx, req)
-			return err
-		},
 	)
 
-	h.logWebhookAccepted("review", request.Repository, request.ChangeRequestNumber, event.Action)
+	var overviewJobID string
+	if overviewEnabled {
+		jobID, err := h.enqueueOverviewJob(installationID, event.Action, input, issueCandidates, head)
+		if err != nil {
+			http.Error(w, "failed to enqueue overview", http.StatusInternalServerError)
+			return
+		}
+		overviewJobID = jobID
+		h.logWebhookAccepted("overview", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
+	}
+
+	if reviewEnabled {
+		var deps []string
+		if overviewJobID != "" {
+			deps = []string{overviewJobID}
+		}
+		_, err := h.enqueueReviewJob(installationID, event.Action, input, enableSuggestions, head, deps)
+		if err != nil {
+			http.Error(w, "failed to enqueue review", http.StatusInternalServerError)
+			return
+		}
+		h.logWebhookAccepted("review", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
+	}
+
+	if autogenEnabled {
+		headBranch := strings.TrimSpace(event.PullRequest.Head.Ref)
+		_, err := h.enqueueAutogenJob(installationID, event.Action, input, autogenDocs, autogenTests, headBranch, head)
+		if err != nil {
+			http.Error(w, "failed to enqueue autogen", http.StatusInternalServerError)
+			return
+		}
+		h.logWebhookAccepted("autogen", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
+	}
+
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -670,4 +692,238 @@ func (h *Handler) verifySignature(signatureHeader string, body []byte) bool {
 	}
 	expected := mac.Sum(nil)
 	return hmac.Equal(signature, expected)
+}
+
+func (h *Handler) enqueueReviewJob(installationID string, action string, input domain.ChangeRequestInput, suggestions bool, headRef string, deps []string) (string, error) {
+	if h.jobQueue == nil {
+		return "", errors.New("job queue is not configured")
+	}
+	return h.jobQueue.Enqueue(jobqueue.Job{
+		Name:      "review",
+		DependsOn: deps,
+		Run: func() error {
+			startedAt := time.Now()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					h.logger.Errorf(
+						"GitHub webhook review panicked for %q#%d action=%q after %d ms: %v.",
+						input.Target.Repository,
+						input.Target.ChangeRequestNumber,
+						action,
+						time.Since(startedAt).Milliseconds(),
+						recovered,
+					)
+				}
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), backgroundReviewTimeout)
+			defer cancel()
+			ctx = githubvcs.WithInstallationID(ctx, installationID)
+			if h.reviewBuilder == nil {
+				return errors.New("review usecase builder is not configured")
+			}
+			if h.codeEnvFactory == nil || h.recipeLoader == nil {
+				return errors.New("code environment is not configured")
+			}
+			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if cleanupErr := cleanup(ctx); cleanupErr != nil {
+					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+				}
+			}()
+
+			recipe, err := h.recipeLoader.Load(ctx, environment, headRef)
+			if err != nil {
+				return err
+			}
+
+			request := usecase.ReviewRequest{
+				Input:       input,
+				Suggestions: suggestions,
+				Environment: environment,
+				Recipe:      recipe,
+			}
+			sharedlogging.LogInputSnapshot(h.logger, "webhook", action, request)
+
+			useCase, err := h.reviewBuilder(input.RepoURL)
+			if err != nil {
+				return err
+			}
+			_, err = useCase.Execute(ctx, request)
+			if err != nil {
+				h.logger.Debugf(
+					"GitHub webhook review failed for %q#%d action=%q after %d ms.",
+					input.Target.Repository,
+					input.Target.ChangeRequestNumber,
+					action,
+					time.Since(startedAt).Milliseconds(),
+				)
+			}
+			return err
+		},
+	})
+}
+
+func (h *Handler) enqueueOverviewJob(installationID string, action string, input domain.ChangeRequestInput, issueCandidates []domain.IssueContext, headRef string) (string, error) {
+	if h.jobQueue == nil {
+		return "", errors.New("job queue is not configured")
+	}
+	return h.jobQueue.Enqueue(jobqueue.Job{
+		Name: "overview",
+		Run: func() error {
+			startedAt := time.Now()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					h.logger.Errorf(
+						"GitHub webhook overview panicked for %q#%d action=%q after %d ms: %v.",
+						input.Target.Repository,
+						input.Target.ChangeRequestNumber,
+						action,
+						time.Since(startedAt).Milliseconds(),
+						recovered,
+					)
+				}
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), backgroundOverviewTimeout)
+			defer cancel()
+			ctx = githubvcs.WithInstallationID(ctx, installationID)
+			if h.overviewBuilder == nil {
+				return errors.New("overview usecase builder is not configured")
+			}
+			if h.codeEnvFactory == nil || h.recipeLoader == nil {
+				return errors.New("code environment is not configured")
+			}
+
+			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if cleanupErr := cleanup(ctx); cleanupErr != nil {
+					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+				}
+			}()
+
+			recipe, err := h.recipeLoader.Load(ctx, environment, headRef)
+			if err != nil {
+				return err
+			}
+
+			request := usecase.OverviewRequest{
+				Input:          input,
+				IssueAlignment: usecase.OverviewIssueAlignmentInput{Candidates: issueCandidates},
+				Environment:    environment,
+				Recipe:         recipe,
+			}
+			sharedlogging.LogInputSnapshot(h.logger, "webhook", action, request)
+
+			useCase, err := h.overviewBuilder(input.RepoURL)
+			if err != nil {
+				return err
+			}
+			_, err = useCase.Execute(ctx, request)
+			if err != nil {
+				h.logger.Debugf(
+					"GitHub webhook overview failed for %q#%d action=%q after %d ms.",
+					input.Target.Repository,
+					input.Target.ChangeRequestNumber,
+					action,
+					time.Since(startedAt).Milliseconds(),
+				)
+			}
+			return err
+		},
+	})
+}
+
+func (h *Handler) enqueueAutogenJob(installationID string, action string, input domain.ChangeRequestInput, docs bool, tests bool, headBranch string, headRef string) (string, error) {
+	if h.jobQueue == nil {
+		return "", errors.New("job queue is not configured")
+	}
+	return h.jobQueue.Enqueue(jobqueue.Job{
+		Name: "autogen",
+		Run: func() error {
+			startedAt := time.Now()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					h.logger.Errorf(
+						"GitHub webhook autogen panicked for %q#%d action=%q after %d ms: %v.",
+						input.Target.Repository,
+						input.Target.ChangeRequestNumber,
+						action,
+						time.Since(startedAt).Milliseconds(),
+						recovered,
+					)
+				}
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), backgroundAutogenTimeout)
+			defer cancel()
+			ctx = githubvcs.WithInstallationID(ctx, installationID)
+			if h.autogenBuilder == nil {
+				return errors.New("autogen usecase builder is not configured")
+			}
+			if h.codeEnvFactory == nil || h.recipeLoader == nil {
+				return errors.New("code environment is not configured")
+			}
+
+			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if cleanupErr := cleanup(ctx); cleanupErr != nil {
+					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
+				}
+			}()
+
+			recipe, err := h.recipeLoader.Load(ctx, environment, headRef)
+			if err != nil {
+				return err
+			}
+
+			request := usecase.AutogenRequest{
+				Input:       input,
+				Docs:        docs,
+				Tests:       tests,
+				Publish:     true,
+				HeadBranch:  headBranch,
+				Environment: environment,
+				Recipe:      recipe,
+			}
+			sharedlogging.LogInputSnapshot(h.logger, "webhook", action, request)
+
+			useCase, err := h.autogenBuilder(input.RepoURL)
+			if err != nil {
+				return err
+			}
+			_, err = useCase.Execute(ctx, request)
+			if err != nil {
+				h.logger.Debugf(
+					"GitHub webhook autogen failed for %q#%d action=%q after %d ms.",
+					input.Target.Repository,
+					input.Target.ChangeRequestNumber,
+					action,
+					time.Since(startedAt).Milliseconds(),
+				)
+			}
+			return err
+		},
+	})
+}
+
+func buildWebhookInput(repository string, prNumber int, repoURL string, base string, head string, title string, description string, action string) domain.ChangeRequestInput {
+	return domain.ChangeRequestInput{
+		Target:      domain.ChangeRequestTarget{Repository: repository, ChangeRequestNumber: prNumber},
+		RepoURL:     repoURL,
+		Base:        base,
+		Head:        head,
+		Title:       title,
+		Description: description,
+		Language:    "English",
+		Metadata: map[string]string{
+			"action": action,
+		},
+	}
 }

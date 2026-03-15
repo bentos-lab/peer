@@ -10,6 +10,7 @@ import (
 	customrecipe "bentos-backend/adapter/outbound/customrecipe"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
+	"bentos-backend/shared/jobqueue"
 	"bentos-backend/usecase"
 )
 
@@ -37,8 +38,14 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	}
 	logger := deps.Logger
 
-	changeRequestBuilder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
-		return BuildChangeRequestUseCase(cfgWithOverrides, CLILLMOptions{}, "")
+	reviewBuilder := func(repoURL string) (usecase.ReviewUseCase, error) {
+		return BuildReviewUseCase(cfgWithOverrides, CLILLMOptions{}, "")
+	}
+	overviewBuilder := func(repoURL string) (usecase.OverviewUseCase, error) {
+		return BuildOverviewUseCase(cfgWithOverrides, CLILLMOptions{}, "")
+	}
+	autogenBuilder := func(repoURL string) (usecase.AutogenUseCase, error) {
+		return BuildAutogenUseCase(cfgWithOverrides, CLILLMOptions{}, "")
 	}
 	replyBuilder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
 		return BuildReplyCommentUseCase(cfgWithOverrides, CLILLMOptions{}, "")
@@ -47,8 +54,11 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	queue := jobqueue.NewManager(cfg.Server.MaxJobWorkers)
 	return githubinbound.NewHandler(
-		changeRequestBuilder,
+		reviewBuilder,
+		overviewBuilder,
+		autogenBuilder,
 		replyBuilder,
 		ghClient,
 		configLoader,
@@ -59,6 +69,7 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 		cfg.Server.GitHub.ReplyCommentTriggerName,
 		resolveOverviewEnabled(cfg),
 		resolveSuggestionsEnabled(cfg),
+		queue,
 	), nil
 }
 

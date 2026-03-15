@@ -26,14 +26,14 @@ import (
 	"bentos-backend/usecase/rulepack"
 )
 
-// BuildChangeRequestUseCase builds a change request usecase.
-func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.ChangeRequestUseCase, error) {
+// BuildReviewUseCase builds a review usecase.
+func BuildReviewUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.ReviewUseCase, error) {
 	deps, err := BuildCommonDependencies(cfg, opts, logLevelOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	reviewPublisher, overviewPublisher, err := buildReviewPublishers(cfg, opts, deps.Logger)
+	reviewPublisher, _, err := buildReviewPublishers(cfg, opts, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +43,31 @@ func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOv
 		Provider: deps.CodingAgentConfig.Provider,
 		Model:    deps.CodingAgentConfig.Model,
 	}, deps.Logger)
+	if err != nil {
+		return nil, err
+	}
+
+	reviewUseCase, err := usecase.NewReviewUseCase(
+		rulepack.NewCoreRulePackProvider(),
+		reviewer,
+		reviewPublisher,
+		deps.Logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return reviewUseCase, nil
+}
+
+// BuildOverviewUseCase builds an overview usecase.
+func BuildOverviewUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.OverviewUseCase, error) {
+	deps, err := BuildCommonDependencies(cfg, opts, logLevelOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	_, overviewPublisher, err := buildReviewPublishers(cfg, opts, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -65,29 +90,10 @@ func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOv
 		return nil, err
 	}
 
-	reviewUseCase, err := usecase.NewReviewUseCase(
-		rulepack.NewCoreRulePackProvider(),
-		reviewer,
-		reviewPublisher,
-		deps.Logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	overviewUseCase, err := usecase.NewOverviewUseCase(
+	return usecase.NewOverviewUseCase(
 		overviewGenerator,
 		issueAlignmentGenerator,
 		overviewPublisher,
-		deps.Logger,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return usecase.NewChangeRequestUseCase(
-		reviewUseCase,
-		overviewUseCase,
 		deps.Logger,
 	)
 }

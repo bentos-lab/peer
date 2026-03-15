@@ -21,16 +21,16 @@ type GitHubClient interface {
 	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.IssueComment, error)
 }
 
-// ChangeRequestUseCaseBuilder builds a change request usecase for a specific repo.
-type ChangeRequestUseCaseBuilder func(repoURL string) (usecase.ChangeRequestUseCase, error)
+// ReviewUseCaseBuilder builds a review usecase for a specific repo.
+type ReviewUseCaseBuilder func(repoURL string) (usecase.ReviewUseCase, error)
 
-// ReviewCommand runs autogit review flow with the shared change request usecase.
+// ReviewCommand runs autogit review flow with the shared review usecase.
 type ReviewCommand struct {
-	changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder
-	githubClient                GitHubClient
-	envFactory                  uccontracts.CodeEnvironmentFactory
-	recipeLoader                usecase.CustomRecipeLoader
-	logger                      usecase.Logger
+	reviewUseCaseBuilder ReviewUseCaseBuilder
+	githubClient         GitHubClient
+	envFactory           uccontracts.CodeEnvironmentFactory
+	recipeLoader         usecase.CustomRecipeLoader
+	logger               usecase.Logger
 }
 
 // ReviewParams contains already-parsed CLI autogit parameters.
@@ -47,23 +47,23 @@ type ReviewParams struct {
 type repoURLBuilder func(repository string) string
 
 // NewReviewCommand creates a new CLI command for autogit reviews.
-func NewReviewCommand(changeRequestUseCaseBuilder ChangeRequestUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *ReviewCommand {
+func NewReviewCommand(reviewUseCaseBuilder ReviewUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *ReviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &ReviewCommand{
-		changeRequestUseCaseBuilder: changeRequestUseCaseBuilder,
-		githubClient:                githubClient,
-		envFactory:                  envFactory,
-		recipeLoader:                recipeLoader,
-		logger:                      logger,
+		reviewUseCaseBuilder: reviewUseCaseBuilder,
+		githubClient:         githubClient,
+		envFactory:           envFactory,
+		recipeLoader:         recipeLoader,
+		logger:               logger,
 	}
 }
 
 // Run executes the CLI review flow.
 func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
-	if c.changeRequestUseCaseBuilder == nil {
-		return errors.New("change request usecase is not configured")
+	if c.reviewUseCaseBuilder == nil {
+		return errors.New("review usecase is not configured")
 	}
 	if c.githubClient == nil {
 		return errors.New("github client is not configured")
@@ -107,45 +107,46 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 		return err
 	}
 
-	changeRequestUseCase, err := c.changeRequestUseCaseBuilder(resolution.RepoURL)
+	reviewUseCase, err := c.reviewUseCaseBuilder(resolution.RepoURL)
 	if err != nil {
 		return err
 	}
 
-	request := usecase.ChangeRequestRequest{
-		Repository:          resolution.Repository,
-		RepoURL:             resolution.RepoURL,
-		ChangeRequestNumber: resolution.ChangeRequestNumber,
-		Title:               resolution.Title,
-		Description:         resolution.Description,
-		Base:                resolution.Base,
-		Head:                resolution.Head,
-		EnableReview:        true,
-		EnableOverview:      false,
-		EnableSuggestions:   ResolveBool(params.Suggest, recipe.ReviewSuggestions, false),
-		Environment:         environment,
-		Recipe:              recipe,
+	request := usecase.ReviewRequest{
+		Input: domainChangeRequestInput(
+			resolution.Repository,
+			resolution.ChangeRequestNumber,
+			resolution.RepoURL,
+			resolution.Base,
+			resolution.Head,
+			resolution.Title,
+			resolution.Description,
+			map[string]string{},
+		),
+		Suggestions: ResolveBool(params.Suggest, recipe.ReviewSuggestions, false),
+		Environment: environment,
+		Recipe:      recipe,
 	}
 	if !params.Publish {
-		request.ChangeRequestNumber = 0
+		request.Input.Target.ChangeRequestNumber = 0
 	}
 
 	startedAt := time.Now()
 	c.logger.Infof("CLI review started.")
-	c.logger.Debugf("Repository is %q and change request number is %d.", request.Repository, request.ChangeRequestNumber)
+	c.logger.Debugf("Repository is %q and change request number is %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	sharedlogging.LogInputSnapshot(c.logger, "cli", "", request)
 
-	_, err = changeRequestUseCase.Execute(ctx, request)
+	_, err = reviewUseCase.Execute(ctx, request)
 	if err != nil {
 		c.logger.Errorf("CLI review failed.")
-		c.logger.Debugf("The review target was repository %q and change request %d.", request.Repository, request.ChangeRequestNumber)
+		c.logger.Debugf("The review target was repository %q and change request %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 		c.logger.Debugf("The CLI review ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
 		c.logger.Debugf("Failure details: %v.", err)
 		return err
 	}
 
 	c.logger.Infof("CLI review completed.")
-	c.logger.Debugf("The review target was repository %q and change request %d.", request.Repository, request.ChangeRequestNumber)
+	c.logger.Debugf("The review target was repository %q and change request %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
 	c.logger.Debugf("The CLI review completed in %d ms.", time.Since(startedAt).Milliseconds())
 	return nil
 }

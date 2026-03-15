@@ -16,7 +16,10 @@ import (
 	"bentos-backend/shared/toolinstall"
 )
 
-func domainChangeRequestInputForAutogen(repository string, prNumber int, repoURL string, base string, head string, title string, description string) domain.ChangeRequestInput {
+func domainChangeRequestInput(repository string, prNumber int, repoURL string, base string, head string, title string, description string, metadata map[string]string) domain.ChangeRequestInput {
+	if metadata == nil {
+		metadata = map[string]string{}
+	}
 	return domain.ChangeRequestInput{
 		Target:      domain.ChangeRequestTarget{Repository: repository, ChangeRequestNumber: prNumber},
 		RepoURL:     repoURL,
@@ -25,8 +28,12 @@ func domainChangeRequestInputForAutogen(repository string, prNumber int, repoURL
 		Title:       title,
 		Description: description,
 		Language:    "English",
-		Metadata:    map[string]string{},
+		Metadata:    metadata,
 	}
+}
+
+func domainChangeRequestInputForAutogen(repository string, prNumber int, repoURL string, base string, head string, title string, description string) domain.ChangeRequestInput {
+	return domainChangeRequestInput(repository, prNumber, repoURL, base, head, title, description, map[string]string{})
 }
 
 func resolveChangeRequestParams(ctx context.Context, githubClient GitHubClient, params ChangeRequestParams) (ChangeRequestResolution, error) {

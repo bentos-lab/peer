@@ -60,6 +60,7 @@ var defaultReviewActions = []string{"opened", "synchronize", "reopened"}
 var defaultOverviewActions = []string{"opened"}
 var defaultAutoreplyEvents = []string{"issue_comment", "pull_request_review_comment"}
 var defaultAutoreplyActions = []string{"created"}
+var defaultAutogenActions = []string{"opened", "reopened", "synchronize"}
 
 func isValidIssueCommentEvent(event issueCommentEvent) bool {
 	return strings.TrimSpace(event.Repository.FullName) != "" &&

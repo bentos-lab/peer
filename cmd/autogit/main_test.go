@@ -15,13 +15,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mainTestChangeRequestUseCase struct {
-	requests []usecase.ChangeRequestRequest
+type mainTestReviewUseCase struct {
+	requests []usecase.ReviewRequest
 }
 
-func (u *mainTestChangeRequestUseCase) Execute(_ context.Context, request usecase.ChangeRequestRequest) (usecase.ChangeRequestExecutionResult, error) {
+func (u *mainTestReviewUseCase) Execute(_ context.Context, request usecase.ReviewRequest) (usecase.ReviewExecutionResult, error) {
 	u.requests = append(u.requests, request)
-	return usecase.ChangeRequestExecutionResult{}, nil
+	return usecase.ReviewExecutionResult{}, nil
+}
+
+type mainTestOverviewUseCase struct {
+	requests []usecase.OverviewRequest
+}
+
+func (u *mainTestOverviewUseCase) Execute(_ context.Context, request usecase.OverviewRequest) (usecase.OverviewExecutionResult, error) {
+	u.requests = append(u.requests, request)
+	return usecase.OverviewExecutionResult{}, nil
 }
 
 type mainTestGitHubClient struct{}
@@ -139,7 +148,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			changeRequestUseCase := &mainTestChangeRequestUseCase{}
+			reviewUseCase := &mainTestReviewUseCase{}
 			githubClient := &mainTestGitHubClient{}
 			envFactory := &mainTestCodeEnvironmentFactory{}
 			recipeLoader := &mainTestRecipeLoader{
@@ -163,8 +172,8 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 					}, nil
 				},
 				buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
-					builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
-						return changeRequestUseCase, nil
+					builder := func(_ string) (usecase.ReviewUseCase, error) {
+						return reviewUseCase, nil
 					}
 					return cliinbound.NewReviewCommand(builder, githubClient, envFactory, recipeLoader, nil), nil
 				},
@@ -187,15 +196,14 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 
 			err := runAutogit(context.Background(), args, deps)
 			require.NoError(t, err)
-			require.Len(t, changeRequestUseCase.requests, 1)
-			require.True(t, changeRequestUseCase.requests[0].EnableReview)
-			require.Equal(t, testCase.expectedSuggest, changeRequestUseCase.requests[0].EnableSuggestions)
+			require.Len(t, reviewUseCase.requests, 1)
+			require.Equal(t, testCase.expectedSuggest, reviewUseCase.requests[0].Suggestions)
 		})
 	}
 }
 
 func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
-	changeRequestUseCase := &mainTestChangeRequestUseCase{}
+	overviewUseCase := &mainTestOverviewUseCase{}
 	githubClient := &mainTestGitHubClient{}
 
 	deps := autogitDeps{
@@ -208,14 +216,14 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 			}, nil
 		},
 		buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
-			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
-				return changeRequestUseCase, nil
+			builder := func(_ string) (usecase.ReviewUseCase, error) {
+				return &mainTestReviewUseCase{}, nil
 			}
 			return cliinbound.NewReviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
-			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
-				return changeRequestUseCase, nil
+			builder := func(_ string) (usecase.OverviewUseCase, error) {
+				return overviewUseCase, nil
 			}
 			return cliinbound.NewOverviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
@@ -235,13 +243,11 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 
 	err := runAutogit(context.Background(), []string{"overview"}, deps)
 	require.NoError(t, err)
-	require.Len(t, changeRequestUseCase.requests, 1)
-	require.False(t, changeRequestUseCase.requests[0].EnableReview)
-	require.True(t, changeRequestUseCase.requests[0].EnableOverview)
+	require.Len(t, overviewUseCase.requests, 1)
 }
 
 func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
-	changeRequestUseCase := &mainTestChangeRequestUseCase{}
+	overviewUseCase := &mainTestOverviewUseCase{}
 	githubClient := &mainTestGitHubClient{}
 
 	deps := autogitDeps{
@@ -254,8 +260,8 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 			}, nil
 		},
 		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
-			builder := func(_ string) (usecase.ChangeRequestUseCase, error) {
-				return changeRequestUseCase, nil
+			builder := func(_ string) (usecase.OverviewUseCase, error) {
+				return overviewUseCase, nil
 			}
 			return cliinbound.NewOverviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
@@ -269,8 +275,8 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 
 	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7"}, deps)
 	require.NoError(t, err)
-	require.Len(t, changeRequestUseCase.requests, 1)
-	require.NotEmpty(t, changeRequestUseCase.requests[0].OverviewIssueAlignment.Candidates)
+	require.Len(t, overviewUseCase.requests, 1)
+	require.NotEmpty(t, overviewUseCase.requests[0].IssueAlignment.Candidates)
 }
 
 func TestWebhookRequiresProvider(t *testing.T) {

@@ -53,8 +53,8 @@ func defaultAutogitDeps() autogitDeps {
 			if err != nil {
 				return nil, err
 			}
-			builder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
-				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride)
+			builder := func(repoURL string) (usecase.ReviewUseCase, error) {
+				return wiring.BuildReviewUseCase(cfg, opts, logLevelOverride)
 			}
 			return cliinbound.NewReviewCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
@@ -63,8 +63,8 @@ func defaultAutogitDeps() autogitDeps {
 			if err != nil {
 				return nil, err
 			}
-			builder := func(repoURL string) (usecase.ChangeRequestUseCase, error) {
-				return wiring.BuildChangeRequestUseCase(cfg, opts, logLevelOverride)
+			builder := func(repoURL string) (usecase.OverviewUseCase, error) {
+				return wiring.BuildOverviewUseCase(cfg, opts, logLevelOverride)
 			}
 			return cliinbound.NewOverviewCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},

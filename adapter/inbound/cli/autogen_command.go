@@ -182,19 +182,7 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 	startedAt := time.Now()
 	c.logger.Infof("CLI autogen started.")
 	c.logger.Debugf("Repository is %q and change request number is %d.", request.Input.Target.Repository, request.Input.Target.ChangeRequestNumber)
-	sharedlogging.LogInputSnapshot(c.logger, "cli", "", usecase.ChangeRequestRequest{
-		Repository:          request.Input.Target.Repository,
-		RepoURL:             request.Input.RepoURL,
-		ChangeRequestNumber: request.Input.Target.ChangeRequestNumber,
-		Title:               request.Input.Title,
-		Description:         request.Input.Description,
-		Base:                request.Input.Base,
-		Head:                request.Input.Head,
-		EnableReview:        false,
-		EnableOverview:      false,
-		EnableSuggestions:   false,
-		Metadata:            request.Input.Metadata,
-	})
+	sharedlogging.LogInputSnapshot(c.logger, "cli", "", request)
 
 	_, err = autogenUseCase.Execute(ctx, request)
 	if err != nil {
