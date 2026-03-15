@@ -21,9 +21,10 @@ Output JSON field definitions:
 - `keyIdeas`: array of key idea strings.
 - `requirements`: array of requirement coverage entries.
 - `requirements[].requirement`: requirement text from key ideas.
-- `requirements[].coverage`: coverage status from the input text.
+- `requirements[].coverage`: coverage explanation from the input text.
 
 Constraints:
+- Coverage must start with `COVERED`, `PARTIAL`, or `NOT COVERED`, followed by an explanatory sentence sourced from the input text.
 - Respect `additionalProperties: false` at every object level.
 - Use exact field names and types required by the schema.
 - Return strictly valid JSON only.

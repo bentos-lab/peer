@@ -1,4 +1,4 @@
-package llm
+package codeagent
 
 import (
 	"context"
@@ -17,6 +17,9 @@ import (
 //go:embed task.md
 var issueAlignmentTaskTemplateRaw string
 
+//go:embed key_ideas_prompt.md
+var issueAlignmentKeyIdeasPromptRaw string
+
 //go:embed formatting_system.md
 var issueAlignmentFormattingSystemPrompt string
 
@@ -30,21 +33,32 @@ type issueAlignmentModelOutput struct {
 	Requirements []domain.IssueAlignmentRequirement `json:"requirements"`
 }
 
-// IssueAlignmentGenerator implements usecase.IssueAlignmentGenerator via a generic LLM generator.
+// Config contains coding-agent runtime options.
+type Config struct {
+	Agent    string
+	Provider string
+	Model    string
+}
+
+// IssueAlignmentGenerator implements usecase.IssueAlignmentGenerator via a coding agent and LLM formatter.
 type IssueAlignmentGenerator struct {
-	generator contracts.LLMGenerator
+	formatter contracts.LLMGenerator
+	config    Config
 	logger    usecase.Logger
 }
 
-// NewIssueAlignmentGenerator creates an issue alignment generator backed by a generic LLM client.
-func NewIssueAlignmentGenerator(generator contracts.LLMGenerator, logger usecase.Logger) (*IssueAlignmentGenerator, error) {
-	if generator == nil {
-		return nil, fmt.Errorf("llm generator must not be nil")
+// NewIssueAlignmentGenerator creates an issue alignment generator backed by a coding agent and LLM formatter.
+func NewIssueAlignmentGenerator(formatter contracts.LLMGenerator, config Config, logger usecase.Logger) (*IssueAlignmentGenerator, error) {
+	if formatter == nil {
+		return nil, fmt.Errorf("formatter llm generator must not be nil")
+	}
+	if strings.TrimSpace(config.Agent) == "" {
+		return nil, fmt.Errorf("coding agent is required")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
-	return &IssueAlignmentGenerator{generator: generator, logger: logger}, nil
+	return &IssueAlignmentGenerator{formatter: formatter, config: config, logger: logger}, nil
 }
 
 // GenerateIssueAlignment creates issue alignment output from changed content and linked issues.
@@ -56,21 +70,23 @@ func (g *IssueAlignmentGenerator) GenerateIssueAlignment(ctx context.Context, pa
 		return domain.IssueAlignmentResult{}, fmt.Errorf("issue alignment requires issue candidates")
 	}
 
+	normalizedBase, normalizedHead := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+
 	changedFiles, err := payload.Environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
-		Base: payload.Input.Base,
-		Head: payload.Input.Head,
+		Base: normalizedBase,
+		Head: normalizedHead,
 	})
 	if err != nil {
 		return domain.IssueAlignmentResult{}, err
 	}
 	g.logger.Debugf("The issue alignment input includes %d changed files.", len(changedFiles))
 
-	keyIdeasPrompt, err := renderIssueKeyIdeasPrompt(payload.IssueAlignment.Candidates)
+	keyIdeasPrompt, err := renderIssueKeyIdeasPrompt(payload.IssueAlignment.Candidates, issueAlignmentKeyIdeasPromptRaw)
 	if err != nil {
 		return domain.IssueAlignmentResult{}, fmt.Errorf("issue alignment: render key ideas prompt: %w", err)
 	}
 
-	keyIdeasMap, err := g.generator.GenerateJSON(ctx, contracts.GenerateParams{
+	keyIdeasMap, err := g.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: issueKeyIdeasSystemPrompt,
 		Messages:     []string{keyIdeasPrompt},
 	}, issueKeyIdeasSchema())
@@ -98,15 +114,20 @@ func (g *IssueAlignmentGenerator) GenerateIssueAlignment(ctx context.Context, pa
 		return domain.IssueAlignmentResult{}, fmt.Errorf("issue alignment: render task prompt: %w", err)
 	}
 
-	rawText, err := g.generator.Generate(ctx, contracts.GenerateParams{
-		SystemPrompt: issueAlignmentSystemPrompt,
-		Messages:     []string{strings.TrimSpace(taskPrompt)},
+	agent, err := payload.Environment.SetupAgent(ctx, domain.CodingAgentSetupOptions{
+		Agent: g.config.Agent,
+		Ref:   normalizedHead,
 	})
 	if err != nil {
-		return domain.IssueAlignmentResult{}, fmt.Errorf("issue alignment: generate analysis: %w", err)
+		return domain.IssueAlignmentResult{}, fmt.Errorf("failed to setup coding agent: %w", err)
 	}
 
-	outputMap, err := g.generator.GenerateJSON(ctx, contracts.GenerateParams{
+	rawText, err := runTask(ctx, agent, g.config, taskPrompt)
+	if err != nil {
+		return domain.IssueAlignmentResult{}, err
+	}
+
+	outputMap, err := g.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: issueAlignmentFormattingSystemPrompt,
 		Messages:     []string{strings.TrimSpace(rawText)},
 	}, issueAlignmentResponseSchema())

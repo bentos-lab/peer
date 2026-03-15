@@ -11,7 +11,7 @@ import (
 	autogencodingagent "bentos-backend/adapter/outbound/autogen/codingagent"
 	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
 	customrecipe "bentos-backend/adapter/outbound/customrecipe"
-	issuealignment "bentos-backend/adapter/outbound/issuealignment/llm"
+	issuealignment "bentos-backend/adapter/outbound/issuealignment/codeagent"
 	llmtracing "bentos-backend/adapter/outbound/llm/tracing"
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
@@ -58,7 +58,11 @@ func BuildChangeRequestUseCase(cfg config.Config, opts CLILLMOptions, logLevelOv
 		return nil, err
 	}
 
-	issueAlignmentGenerator, err := issuealignment.NewIssueAlignmentGenerator(deps.tracedGenerator, deps.logger)
+	issueAlignmentGenerator, err := issuealignment.NewIssueAlignmentGenerator(deps.tracedGenerator, issuealignment.Config{
+		Agent:    deps.codingAgentConfig.Agent,
+		Provider: deps.codingAgentConfig.Provider,
+		Model:    deps.codingAgentConfig.Model,
+	}, deps.logger)
 	if err != nil {
 		return nil, err
 	}

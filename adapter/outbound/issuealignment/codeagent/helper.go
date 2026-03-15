@@ -1,14 +1,14 @@
-package llm
+package codeagent
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"strings"
-	"text/template"
 
 	"bentos-backend/domain"
 	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
+	"bentos-backend/usecase/contracts"
 )
 
 type issueAlignmentTaskTemplateData struct {
@@ -21,6 +21,10 @@ type issueAlignmentTaskTemplateData struct {
 	Issues        []issueAlignmentIssueData
 	Files         []issueAlignmentFileData
 	ExtraGuidance string
+}
+
+type issueAlignmentKeyIdeasTemplateData struct {
+	Issues []issueAlignmentIssueData
 }
 
 type issueAlignmentIssueData struct {
@@ -103,10 +107,12 @@ func renderIssueAlignmentTask(payload usecase.LLMIssueAlignmentPayload, keyIdeas
 		files = append(files, issueAlignmentFileData{Path: file.Path, ChangedText: changedText})
 	}
 
+	base, head := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+
 	data := issueAlignmentTaskTemplateData{
 		Repository:    payload.Input.Target.Repository,
-		Base:          payload.Input.Base,
-		Head:          payload.Input.Head,
+		Base:          base,
+		Head:          head,
 		Title:         payload.Input.Title,
 		Description:   sharedtext.SingleLine(payload.Input.Description),
 		KeyIdeas:      keyIdeas,
@@ -115,17 +121,7 @@ func renderIssueAlignmentTask(payload usecase.LLMIssueAlignmentPayload, keyIdeas
 		ExtraGuidance: strings.TrimSpace(payload.ExtraGuidance),
 	}
 
-	parsedTemplate, err := template.New("issue_alignment_task").Parse(taskTemplate)
-	if err != nil {
-		return "", err
-	}
-
-	var rendered bytes.Buffer
-	if err := parsedTemplate.Execute(&rendered, data); err != nil {
-		return "", err
-	}
-
-	return rendered.String(), nil
+	return sharedtext.RenderSimpleTemplate("issue_alignment_task", taskTemplate, data)
 }
 
 func mapIssueCandidates(candidates []domain.IssueContext) []issueAlignmentIssueData {
@@ -139,36 +135,35 @@ func mapIssueCandidates(candidates []domain.IssueContext) []issueAlignmentIssueD
 			Repository: issue.Repository,
 			Number:     issue.Number,
 			Title:      issue.Title,
-			Body:       issue.Body,
-			Comments:   candidate.Comments,
+			Body:       sharedtext.SingleLine(issue.Body),
+			Comments:   mapIssueComments(candidate.Comments),
 		})
 	}
 	return mapped
 }
 
-func renderIssueKeyIdeasPrompt(candidates []domain.IssueContext) (string, error) {
-	var builder strings.Builder
-	builder.WriteString("Extract the main, true requirements from the issue contents below.\n")
-	builder.WriteString("- Merge duplicates and keep only distinct requirements.\n")
-	builder.WriteString("- Prefer explicit requirements stated in the issue text.\n")
-	builder.WriteString("- Keep the list concise.\n\n")
-	builder.WriteString("Issues:\n")
-	for _, candidate := range candidates {
-		builder.WriteString(fmt.Sprintf("- %s#%d: %s\n", candidate.Issue.Repository, candidate.Issue.Number, candidate.Issue.Title))
-		if strings.TrimSpace(candidate.Issue.Body) != "" {
-			builder.WriteString(fmt.Sprintf("  Body: %s\n", sharedtext.SingleLine(candidate.Issue.Body)))
-		}
-		if len(candidate.Comments) > 0 {
-			builder.WriteString("  Comments:\n")
-			for _, comment := range candidate.Comments {
-				if strings.TrimSpace(comment.Body) == "" {
-					continue
-				}
-				builder.WriteString(fmt.Sprintf("  - %s: %s\n", comment.Author.Login, sharedtext.SingleLine(comment.Body)))
-			}
-		}
+func mapIssueComments(comments []domain.Comment) []domain.Comment {
+	if len(comments) == 0 {
+		return nil
 	}
-	return builder.String(), nil
+	mapped := make([]domain.Comment, 0, len(comments))
+	for _, comment := range comments {
+		if strings.TrimSpace(comment.Body) == "" {
+			continue
+		}
+		mapped = append(mapped, domain.Comment{
+			Author: comment.Author,
+			Body:   sharedtext.SingleLine(comment.Body),
+		})
+	}
+	return mapped
+}
+
+func renderIssueKeyIdeasPrompt(candidates []domain.IssueContext, promptTemplate string) (string, error) {
+	data := issueAlignmentKeyIdeasTemplateData{
+		Issues: mapIssueCandidates(candidates),
+	}
+	return sharedtext.RenderSimpleTemplate("issue_alignment_key_ideas", promptTemplate, data)
 }
 
 func normalizeKeyIdeas(ideas []string) []string {
@@ -202,4 +197,24 @@ func fallbackIssueReference(candidates []domain.IssueContext) domain.IssueRefere
 		Number:     issue.Number,
 		Title:      issue.Title,
 	}
+}
+
+func normalizePromptRefs(base string, head string) (string, string) {
+	normalizedBase := strings.TrimSpace(base)
+	normalizedHead := strings.TrimSpace(head)
+	if normalizedHead == "@staged" || normalizedHead == "@all" {
+		return "", normalizedHead
+	}
+	return normalizedBase, normalizedHead
+}
+
+func runTask(ctx context.Context, agent contracts.CodingAgent, cfg Config, task string) (string, error) {
+	result, err := agent.Run(ctx, strings.TrimSpace(task), domain.CodingAgentRunOptions{
+		Provider: cfg.Provider,
+		Model:    cfg.Model,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to run coding agent task: %w", err)
+	}
+	return strings.TrimSpace(result.Text), nil
 }

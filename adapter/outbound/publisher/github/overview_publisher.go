@@ -124,9 +124,28 @@ func formatIssueAlignmentMarkdown(alignment *domain.IssueAlignmentResult) string
 	builder.WriteString("| Requirement | Coverage |\n")
 	builder.WriteString("| --- | --- |\n")
 	for _, row := range alignment.Requirements {
-		builder.WriteString(fmt.Sprintf("| %s | %s |\n", escapeTableCell(row.Requirement), escapeTableCell(row.Coverage)))
+		coverage := formatIssueAlignmentCoverage(row.Coverage)
+		builder.WriteString(fmt.Sprintf("| %s | %s |\n", escapeTableCell(row.Requirement), escapeTableCell(coverage)))
 	}
 	return builder.String()
+}
+
+func formatIssueAlignmentCoverage(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return trimmed
+	}
+	normalized := strings.ToUpper(trimmed)
+	switch {
+	case strings.HasPrefix(normalized, "NOT COVERED"):
+		return fmt.Sprintf(":x: %s", trimmed)
+	case strings.HasPrefix(normalized, "PARTIAL"):
+		return fmt.Sprintf(":warning: %s", trimmed)
+	case strings.HasPrefix(normalized, "COVERED"):
+		return fmt.Sprintf(":white_check_mark: %s", trimmed)
+	default:
+		return trimmed
+	}
 }
 
 func escapeMarkdownText(value string) string {
