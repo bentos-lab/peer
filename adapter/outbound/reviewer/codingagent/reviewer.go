@@ -10,6 +10,7 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	"bentos-backend/shared/refs"
 	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -76,7 +77,7 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 	startedAt := time.Now()
 	r.logger.Infof("Coding-agent review started.")
 
-	normalizedBase, normalizedHead := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 
 	if payload.Environment == nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")

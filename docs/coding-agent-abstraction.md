@@ -61,7 +61,7 @@ _ = result.Text
 ## Host Environment Behavior
 
 - `Factory.New` with `RepoURL` empty:
-  - uses current working directory as workspace for token refs (`@staged`, `@all`, or empty),
+  - uses current working directory as workspace for token refs (`@staged`, `@all`); empty ref defaults to `@all`,
   - for non-token refs, reads `remote.origin.url`, clones into `~/.sisutmp`, and operates on that clone.
 - `Factory.New` with `RepoURL` non-empty:
   - creates a random temporary workspace under `~/.sisutmp`,

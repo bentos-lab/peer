@@ -20,6 +20,12 @@ import (
 
 const testWebhookSecret = "test-secret"
 
+var defaultTestReviewEvents = []string{"opened", "synchronize", "reopened"}
+var defaultTestOverviewEvents = []string{"opened"}
+var defaultTestAutogenEvents = []string{"opened", "reopened", "synchronize"}
+var defaultTestReplyEvents = []string{"issue_comment", "pull_request_review_comment"}
+var defaultTestReplyActions = []string{"created"}
+
 type mockReviewUseCase struct {
 	requestCh chan usecase.ReviewRequest
 	ctxCh     chan context.Context
@@ -292,8 +298,19 @@ func newTestHandler(
 		logger,
 		webhookSecret,
 		replyTriggerName,
-		enableOverview,
+		true,
+		defaultTestReviewEvents,
 		enableSuggestions,
+		enableOverview,
+		defaultTestOverviewEvents,
+		true,
+		false,
+		defaultTestAutogenEvents,
+		false,
+		false,
+		true,
+		defaultTestReplyEvents,
+		defaultTestReplyActions,
 		jobqueue.NewManager(1),
 	)
 }
@@ -404,7 +421,18 @@ func TestHandler_ServeHTTP_OverviewRunsBeforeReview(t *testing.T) {
 		testWebhookSecret,
 		"autogitbot",
 		true,
+		defaultTestReviewEvents,
 		true,
+		true,
+		defaultTestOverviewEvents,
+		true,
+		false,
+		defaultTestAutogenEvents,
+		false,
+		false,
+		true,
+		defaultTestReplyEvents,
+		defaultTestReplyActions,
 		queue,
 	)
 	payload := `{
@@ -837,7 +865,7 @@ func TestHandler_ServeHTTP_NonPullRequestEventIsIgnored(t *testing.T) {
 	require.Len(t, uc.requestCh, 0)
 }
 
-func TestHandler_ServeHTTP_ConfigDisablesAutoreplySkipsUsecase(t *testing.T) {
+func TestHandler_ServeHTTP_ConfigDisablesReplyCommentSkipsUsecase(t *testing.T) {
 	replyUseCase := &mockReplyCommentUseCase{requestCh: make(chan usecase.ReplyCommentRequest, 1)}
 	replyBuilder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return replyUseCase, nil
@@ -851,7 +879,7 @@ func TestHandler_ServeHTTP_ConfigDisablesAutoreplySkipsUsecase(t *testing.T) {
 		HeadRef:     "feature",
 	}
 	loader := &mockRecipeConfigLoader{
-		recipe: domain.CustomRecipe{AutoreplyEnabled: boolPointer(false)},
+		recipe: domain.CustomRecipe{ReplyCommentEnabled: boolPointer(false)},
 	}
 	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
 	payload := `{
@@ -881,7 +909,7 @@ func TestHandler_ServeHTTP_ConfigDisablesAutoreplySkipsUsecase(t *testing.T) {
 	}
 }
 
-func TestHandler_ServeHTTP_ConfigAutoreplyEventsSkipsIssueComment(t *testing.T) {
+func TestHandler_ServeHTTP_ConfigReplyCommentEventsSkipsIssueComment(t *testing.T) {
 	replyUseCase := &mockReplyCommentUseCase{requestCh: make(chan usecase.ReplyCommentRequest, 1)}
 	replyBuilder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return replyUseCase, nil
@@ -896,8 +924,8 @@ func TestHandler_ServeHTTP_ConfigAutoreplyEventsSkipsIssueComment(t *testing.T) 
 	}
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{
-			AutoreplyEvents:  []string{"pull_request_review_comment"},
-			AutoreplyActions: []string{"created"},
+			ReplyCommentEvents:  []string{"pull_request_review_comment"},
+			ReplyCommentActions: []string{"created"},
 		},
 	}
 	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)

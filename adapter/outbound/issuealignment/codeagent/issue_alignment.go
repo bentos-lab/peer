@@ -8,6 +8,7 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	"bentos-backend/shared/refs"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
 
@@ -70,7 +71,7 @@ func (g *IssueAlignmentGenerator) GenerateIssueAlignment(ctx context.Context, pa
 		return domain.IssueAlignmentResult{}, fmt.Errorf("issue alignment requires issue candidates")
 	}
 
-	normalizedBase, normalizedHead := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 
 	changedFiles, err := payload.Environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: normalizedBase,

@@ -7,7 +7,9 @@ import (
 	"time"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/config"
 	"bentos-backend/usecase"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,11 +31,11 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 	}
 	command := NewReviewCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, logger)
 
-	err := command.Run(context.Background(), ReviewParams{
+	err := command.Run(context.Background(), config.Config{}, ReviewParams{
 		Repo:          "https://github.com/owner/repo.git",
 		ChangeRequest: "9",
 		Publish:       true,
-		Suggest:       boolPointer(true),
+		Suggest:       new(true),
 	})
 
 	require.NoError(t, err)
@@ -51,6 +53,25 @@ func TestReviewCommandRunLogsPreUsecaseSnapshotWithoutSensitiveData(t *testing.T
 	}, time.Second, 10*time.Millisecond)
 	require.False(t, containsLogEvent(logger.events, "Super secret PR title"))
 	require.False(t, containsLogEvent(logger.events, "Confidential PR description"))
+}
+
+func TestReviewCommandRespectsBaseWhenHeadEmpty(t *testing.T) {
+	reviewUC := &fakeReviewUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "owner/repo"}
+	builder := func(_ string) (usecase.ReviewUseCase, error) {
+		return reviewUC, nil
+	}
+	command := NewReviewCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+
+	err := command.Run(context.Background(), config.Config{}, ReviewParams{
+		Base: "main",
+		Head: "",
+	})
+
+	require.NoError(t, err)
+	require.Len(t, reviewUC.requests, 1)
+	require.Equal(t, "main", reviewUC.requests[0].Input.Base)
+	require.Equal(t, "@all", reviewUC.requests[0].Input.Head)
 }
 
 type fakeReviewUseCase struct {

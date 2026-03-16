@@ -34,24 +34,18 @@ func (e webhookConfigLoadError) Is(target error) bool {
 }
 
 type webhookFlagValues struct {
-	logLevel                                string
-	overviewEnabled                         bool
-	reviewSuggestedChangesEnabled           bool
-	reviewSuggestedChangesMinSeverity       string
-	reviewSuggestedChangesMaxCandidates     int
-	reviewSuggestedChangesMaxGroupSize      int
-	reviewSuggestedChangesMaxWorkers        int
-	reviewSuggestedChangesGroupTimeoutMS    int
-	reviewSuggestedChangesGenerateTimeoutMS int
-	port                                    string
-	githubWebhookSecret                     string
-	githubAppID                             string
-	githubAppPrivateKey                     string
-	githubAPIBaseURL                        string
-	replycommentTriggerName                 string
-	codingAgentName                         string
-	codingAgentProvider                     string
-	codingAgentModel                        string
+	logLevel                      string
+	overviewEnabled               bool
+	reviewSuggestedChangesEnabled bool
+	port                          string
+	githubWebhookSecret           string
+	githubAppID                   string
+	githubAppPrivateKey           string
+	githubAPIBaseURL              string
+	replycommentTriggerName       string
+	codingAgentName               string
+	codingAgentProvider           string
+	codingAgentModel              string
 }
 
 func newWebhookSubcommand(
@@ -156,24 +150,18 @@ func newWebhookSubcommand(
 	}
 
 	sub.Flags().StringVar(&vcsProvider, "vcs-provider", "", "vcs provider names joined by + (currently only github is supported)")
-	sub.Flags().StringVar(&flags.logLevel, "log-level", "", "log level override (empty to use config or verbosity)")
-	sub.Flags().BoolVar(&flags.overviewEnabled, "overview-enabled", false, "enable or disable overview generation")
-	sub.Flags().BoolVar(&flags.reviewSuggestedChangesEnabled, "review-suggested-changes-enabled", false, "enable suggested code changes in review findings")
-	sub.Flags().StringVar(&flags.reviewSuggestedChangesMinSeverity, "review-suggested-changes-min-severity", "", "minimum severity for suggested changes")
-	sub.Flags().IntVar(&flags.reviewSuggestedChangesMaxCandidates, "review-suggested-changes-max-candidates", 0, "max candidates for suggested changes")
-	sub.Flags().IntVar(&flags.reviewSuggestedChangesMaxGroupSize, "review-suggested-changes-max-group-size", 0, "max group size for suggested changes")
-	sub.Flags().IntVar(&flags.reviewSuggestedChangesMaxWorkers, "review-suggested-changes-max-workers", 0, "max workers for suggested changes")
-	sub.Flags().IntVar(&flags.reviewSuggestedChangesGroupTimeoutMS, "review-suggested-changes-group-timeout-ms", 0, "group timeout (ms) for suggested changes")
-	sub.Flags().IntVar(&flags.reviewSuggestedChangesGenerateTimeoutMS, "review-suggested-changes-generate-timeout-ms", 0, "generate timeout (ms) for suggested changes")
-	sub.Flags().StringVar(&flags.port, "port", "", "server port")
-	sub.Flags().StringVar(&flags.githubWebhookSecret, "github-webhook-secret", "", "GitHub webhook secret")
-	sub.Flags().StringVar(&flags.githubAppID, "github-app-id", "", "GitHub app id")
-	sub.Flags().StringVar(&flags.githubAppPrivateKey, "github-app-private-key", "", "GitHub app private key")
-	sub.Flags().StringVar(&flags.githubAPIBaseURL, "github-api-base-url", "", "GitHub API base URL")
-	sub.Flags().StringVar(&flags.replycommentTriggerName, "replycomment-trigger-name", "", "replycomment trigger name")
-	sub.Flags().StringVar(&flags.codingAgentName, "coding-agent-name", "", "coding agent name override")
-	sub.Flags().StringVar(&flags.codingAgentProvider, "coding-agent-provider", "", "coding agent provider override")
-	sub.Flags().StringVar(&flags.codingAgentModel, "coding-agent-model", "", "coding agent model override")
+	sub.Flags().StringVar(&flags.logLevel, "log-level", "", "log level override (empty to use config or verbosity, env: LOG_LEVEL)")
+	sub.Flags().BoolVar(&flags.overviewEnabled, "overview", false, "enable or disable overview generation (env: OVERVIEW)")
+	sub.Flags().BoolVar(&flags.reviewSuggestedChangesEnabled, "review-suggested-changes", false, "enable suggested code changes in review findings (env: REVIEW_SUGGESTED_CHANGES)")
+	sub.Flags().StringVar(&flags.port, "port", "", "server port (env: PORT)")
+	sub.Flags().StringVar(&flags.githubWebhookSecret, "github-webhook-secret", "", "GitHub webhook secret (env: GITHUB_WEBHOOK_SECRET)")
+	sub.Flags().StringVar(&flags.githubAppID, "github-app-id", "", "GitHub app id (env: GITHUB_APP_ID)")
+	sub.Flags().StringVar(&flags.githubAppPrivateKey, "github-app-private-key", "", "GitHub app private key (env: GITHUB_APP_PRIVATE_KEY)")
+	sub.Flags().StringVar(&flags.githubAPIBaseURL, "github-api-base-url", "", "GitHub API base URL (env: GITHUB_API_BASE_URL)")
+	sub.Flags().StringVar(&flags.replycommentTriggerName, "replycomment-trigger-name", "", "replycomment trigger name (env: REPLYCOMMENT_TRIGGER_NAME)")
+	sub.Flags().StringVar(&flags.codingAgentName, "coding-agent-name", "", "coding agent name override (env: CODING_AGENT_NAME)")
+	sub.Flags().StringVar(&flags.codingAgentProvider, "coding-agent-provider", "", "coding agent provider override (env: CODING_AGENT_PROVIDER)")
+	sub.Flags().StringVar(&flags.codingAgentModel, "coding-agent-model", "", "coding agent model override (env: CODING_AGENT_MODEL)")
 
 	return sub
 }
@@ -222,45 +210,11 @@ func applyWebhookOverrides(
 	codeAgentProvider *string,
 	codeAgentModel *string,
 ) error {
-	if flagChanged(cmd, "overview-enabled") {
-		value := flags.overviewEnabled
-		cfg.OverviewEnabled = &value
+	if flagChanged(cmd, "overview") {
+		cfg.Overview.Enabled = flags.overviewEnabled
 	}
-	if flagChanged(cmd, "review-suggested-changes-enabled") {
-		cfg.SuggestedChanges.Enabled = flags.reviewSuggestedChangesEnabled
-	}
-	if flagChanged(cmd, "review-suggested-changes-min-severity") {
-		cfg.SuggestedChanges.MinSeverity = strings.TrimSpace(flags.reviewSuggestedChangesMinSeverity)
-	}
-	if flagChanged(cmd, "review-suggested-changes-max-candidates") {
-		if flags.reviewSuggestedChangesMaxCandidates <= 0 {
-			return fmt.Errorf("flag --review-suggested-changes-max-candidates requires a positive value")
-		}
-		cfg.SuggestedChanges.MaxCandidates = flags.reviewSuggestedChangesMaxCandidates
-	}
-	if flagChanged(cmd, "review-suggested-changes-max-group-size") {
-		if flags.reviewSuggestedChangesMaxGroupSize <= 0 {
-			return fmt.Errorf("flag --review-suggested-changes-max-group-size requires a positive value")
-		}
-		cfg.SuggestedChanges.MaxGroupSize = flags.reviewSuggestedChangesMaxGroupSize
-	}
-	if flagChanged(cmd, "review-suggested-changes-max-workers") {
-		if flags.reviewSuggestedChangesMaxWorkers <= 0 {
-			return fmt.Errorf("flag --review-suggested-changes-max-workers requires a positive value")
-		}
-		cfg.SuggestedChanges.MaxWorkers = flags.reviewSuggestedChangesMaxWorkers
-	}
-	if flagChanged(cmd, "review-suggested-changes-group-timeout-ms") {
-		if flags.reviewSuggestedChangesGroupTimeoutMS <= 0 {
-			return fmt.Errorf("flag --review-suggested-changes-group-timeout-ms requires a positive value")
-		}
-		cfg.SuggestedChanges.GroupTimeoutMS = flags.reviewSuggestedChangesGroupTimeoutMS
-	}
-	if flagChanged(cmd, "review-suggested-changes-generate-timeout-ms") {
-		if flags.reviewSuggestedChangesGenerateTimeoutMS <= 0 {
-			return fmt.Errorf("flag --review-suggested-changes-generate-timeout-ms requires a positive value")
-		}
-		cfg.SuggestedChanges.GenerateTimeoutMS = flags.reviewSuggestedChangesGenerateTimeoutMS
+	if flagChanged(cmd, "review-suggested-changes") {
+		cfg.Review.SuggestedChangesEnabled = flags.reviewSuggestedChangesEnabled
 	}
 	if flagChanged(cmd, "port") {
 		value := strings.TrimSpace(flags.port)
@@ -286,7 +240,7 @@ func applyWebhookOverrides(
 		cfg.Server.GitHub.APIBaseURL = strings.TrimSpace(flags.githubAPIBaseURL)
 	}
 	if flagChanged(cmd, "replycomment-trigger-name") {
-		cfg.Server.GitHub.ReplyCommentTriggerName = strings.TrimSpace(flags.replycommentTriggerName)
+		cfg.ReplyComment.TriggerName = strings.TrimSpace(flags.replycommentTriggerName)
 	}
 	if flagChanged(cmd, "llm-openai-base-url") {
 		cfg.OpenAI.BaseURL = strings.TrimSpace(*llmOpenAIBaseURL)

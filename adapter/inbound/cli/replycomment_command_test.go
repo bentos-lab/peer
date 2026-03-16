@@ -6,6 +6,7 @@ import (
 	"time"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/usecase"
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,7 @@ func TestReplyCommentCommandRejectsQuestionWithPublishFlag(t *testing.T) {
 	}
 	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
-	err := command.Run(context.Background(), ReplyCommentRunParams{
+	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		Repo:          "owner/repo",
 		ChangeRequest: "7",
@@ -96,7 +97,7 @@ func TestReplyCommentCommandQuestionBuildsInlineThread(t *testing.T) {
 	}
 	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
-	err := command.Run(context.Background(), ReplyCommentRunParams{
+	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		Question:      "What changed?",
@@ -134,7 +135,7 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 	}
 	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
-	err := command.Run(context.Background(), ReplyCommentRunParams{
+	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		Repo:          "owner/repo",
 		ChangeRequest: "7",
@@ -181,7 +182,7 @@ func TestReplyCommentCommandParsesDiscussionAnchor(t *testing.T) {
 	}
 	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
-	err := command.Run(context.Background(), ReplyCommentRunParams{
+	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		CommentID:     "discussion_r2909490245",
@@ -214,7 +215,7 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 	}
 	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
-	err := command.Run(context.Background(), ReplyCommentRunParams{
+	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		CommentID:     "issuecomment-12345",

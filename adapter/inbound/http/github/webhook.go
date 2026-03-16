@@ -135,8 +135,19 @@ type Handler struct {
 	logger              usecase.Logger
 	webhookSecret       string
 	replyTriggerName    string
-	enableOverview      bool
-	enableSuggestions   bool
+	reviewEnabled       bool
+	reviewEvents        []string
+	reviewSuggestions   bool
+	overviewEnabled     bool
+	overviewEvents      []string
+	overviewIssueAlign  bool
+	autogenEnabled      bool
+	autogenEvents       []string
+	autogenDocs         bool
+	autogenTests        bool
+	replyEnabled        bool
+	replyEvents         []string
+	replyActions        []string
 	jobQueue            *jobqueue.Manager
 }
 
@@ -165,8 +176,19 @@ func NewHandler(
 	logger usecase.Logger,
 	webhookSecret string,
 	replyTriggerName string,
-	enableOverview bool,
-	enableSuggestions bool,
+	reviewEnabled bool,
+	reviewEvents []string,
+	reviewSuggestions bool,
+	overviewEnabled bool,
+	overviewEvents []string,
+	overviewIssueAlign bool,
+	autogenEnabled bool,
+	autogenEvents []string,
+	autogenDocs bool,
+	autogenTests bool,
+	replyEnabled bool,
+	replyEvents []string,
+	replyActions []string,
 	jobQueue *jobqueue.Manager,
 ) *Handler {
 	if logger == nil {
@@ -184,8 +206,19 @@ func NewHandler(
 		logger:              logger,
 		webhookSecret:       strings.TrimSpace(webhookSecret),
 		replyTriggerName:    strings.TrimSpace(replyTriggerName),
-		enableOverview:      enableOverview,
-		enableSuggestions:   enableSuggestions,
+		reviewEnabled:       reviewEnabled,
+		reviewEvents:        reviewEvents,
+		reviewSuggestions:   reviewSuggestions,
+		overviewEnabled:     overviewEnabled,
+		overviewEvents:      overviewEvents,
+		overviewIssueAlign:  overviewIssueAlign,
+		autogenEnabled:      autogenEnabled,
+		autogenEvents:       autogenEvents,
+		autogenDocs:         autogenDocs,
+		autogenTests:        autogenTests,
+		replyEnabled:        replyEnabled,
+		replyEvents:         replyEvents,
+		replyActions:        replyActions,
 		jobQueue:            jobQueue,
 	}
 }
@@ -259,25 +292,31 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 	}
 
 	recipeConfig := h.loadRecipeConfig(r.Context(), repoURL, head)
-	reviewEnabled := isActionAllowed(event.Action, recipeConfig.ReviewEvents, defaultReviewActions)
-	if recipeConfig.ReviewEnabled != nil && !*recipeConfig.ReviewEnabled {
-		reviewEnabled = false
+	reviewEnabled := h.reviewEnabled
+	if recipeConfig.ReviewEnabled != nil {
+		reviewEnabled = *recipeConfig.ReviewEnabled
 	}
 
-	overviewEnabled := h.enableOverview && isActionAllowed(event.Action, recipeConfig.OverviewEvents, defaultOverviewActions)
-	if recipeConfig.OverviewEnabled != nil && !*recipeConfig.OverviewEnabled {
-		overviewEnabled = false
+	reviewEnabled = reviewEnabled && isActionAllowed(event.Action, recipeConfig.ReviewEvents, h.reviewEvents)
+
+	overviewEnabled := h.overviewEnabled
+	if recipeConfig.OverviewEnabled != nil {
+		overviewEnabled = *recipeConfig.OverviewEnabled
 	}
 
-	enableSuggestions := cli.ResolveBool(recipeConfig.ReviewSuggestions, nil, h.enableSuggestions)
-	issueAlignmentEnabled := cli.ResolveBool(recipeConfig.OverviewIssueAlignmentEnabled, nil, true)
+	overviewEnabled = overviewEnabled && isActionAllowed(event.Action, recipeConfig.OverviewEvents, h.overviewEvents)
 
-	autogenEnabled := isActionAllowed(event.Action, recipeConfig.AutogenEvents, defaultAutogenActions)
-	if recipeConfig.AutogenEnabled == nil || !*recipeConfig.AutogenEnabled {
-		autogenEnabled = false
+	enableSuggestions := cli.ResolveBool(recipeConfig.ReviewSuggestions, nil, h.reviewSuggestions)
+	issueAlignmentEnabled := cli.ResolveBool(recipeConfig.OverviewIssueAlignmentEnabled, nil, h.overviewIssueAlign)
+
+	autogenEnabled := h.autogenEnabled
+	if recipeConfig.AutogenEnabled != nil {
+		autogenEnabled = *recipeConfig.AutogenEnabled
 	}
-	autogenDocs := cli.ResolveBool(nil, recipeConfig.AutogenDocs, false)
-	autogenTests := cli.ResolveBool(nil, recipeConfig.AutogenTests, false)
+
+	autogenEnabled = autogenEnabled && isActionAllowed(event.Action, recipeConfig.AutogenEvents, h.autogenEvents)
+	autogenDocs := cli.ResolveBool(recipeConfig.AutogenDocs, nil, h.autogenDocs)
+	autogenTests := cli.ResolveBool(recipeConfig.AutogenTests, nil, h.autogenTests)
 	if !autogenDocs && !autogenTests {
 		autogenEnabled = false
 	}
@@ -403,17 +442,21 @@ func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request
 		return
 	}
 	recipeConfig := h.loadRecipeConfig(ctx, repoURL, prInfo.HeadRef)
-	if !isActionAllowed("issue_comment", recipeConfig.AutoreplyEvents, defaultAutoreplyEvents) {
+	replyEnabled := h.replyEnabled
+	if recipeConfig.ReplyCommentEnabled != nil {
+		replyEnabled = *recipeConfig.ReplyCommentEnabled
+	}
+	if !replyEnabled {
 		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.Issue.Number, event.Action)
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	if !isActionAllowed(event.Action, recipeConfig.AutoreplyActions, defaultAutoreplyActions) {
+	if !isActionAllowed("issue_comment", recipeConfig.ReplyCommentEvents, h.replyEvents) {
 		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.Issue.Number, event.Action)
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	if recipeConfig.AutoreplyEnabled != nil && !*recipeConfig.AutoreplyEnabled {
+	if !isActionAllowed(event.Action, recipeConfig.ReplyCommentActions, h.replyActions) {
 		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.Issue.Number, event.Action)
 		w.WriteHeader(http.StatusAccepted)
 		return
@@ -537,17 +580,21 @@ func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	recipeConfig := h.loadRecipeConfig(ctx, repoURL, prInfo.HeadRef)
-	if !isActionAllowed("pull_request_review_comment", recipeConfig.AutoreplyEvents, defaultAutoreplyEvents) {
+	replyEnabled := h.replyEnabled
+	if recipeConfig.ReplyCommentEnabled != nil {
+		replyEnabled = *recipeConfig.ReplyCommentEnabled
+	}
+	if !replyEnabled {
 		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.PullRequest.Number, event.Action)
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	if !isActionAllowed(event.Action, recipeConfig.AutoreplyActions, defaultAutoreplyActions) {
+	if !isActionAllowed("pull_request_review_comment", recipeConfig.ReplyCommentEvents, h.replyEvents) {
 		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.PullRequest.Number, event.Action)
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
-	if recipeConfig.AutoreplyEnabled != nil && !*recipeConfig.AutoreplyEnabled {
+	if !isActionAllowed(event.Action, recipeConfig.ReplyCommentActions, h.replyActions) {
 		h.logWebhookSkipped("replycomment", event.Repository.FullName, event.PullRequest.Number, event.Action)
 		w.WriteHeader(http.StatusAccepted)
 		return

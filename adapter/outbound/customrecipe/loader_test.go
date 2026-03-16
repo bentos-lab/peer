@@ -77,7 +77,7 @@ events = ["opened"]
 enabled = false
 extra_guidance = "issue_alignment.md"
 
-[autoreply]
+[replycomment]
 enabled = true
 extra_guidance = "reply.md"
 events = ["issue_comment", "pull_request_review_comment"]
@@ -101,7 +101,7 @@ tests = false
 	require.NoError(t, err)
 	require.Equal(t, "rules", recipe.ReviewRuleset)
 	require.Equal(t, "overview", recipe.OverviewGuidance)
-	require.Equal(t, "reply", recipe.AutoreplyGuidance)
+	require.Equal(t, "reply", recipe.ReplyCommentGuidance)
 	require.Equal(t, "autogen", recipe.AutogenGuidance)
 	require.NotNil(t, recipe.ReviewEnabled)
 	require.False(t, *recipe.ReviewEnabled)
@@ -111,14 +111,14 @@ tests = false
 	require.False(t, *recipe.OverviewEnabled)
 	require.NotNil(t, recipe.OverviewIssueAlignmentEnabled)
 	require.False(t, *recipe.OverviewIssueAlignmentEnabled)
-	require.NotNil(t, recipe.AutoreplyEnabled)
-	require.True(t, *recipe.AutoreplyEnabled)
+	require.NotNil(t, recipe.ReplyCommentEnabled)
+	require.True(t, *recipe.ReplyCommentEnabled)
 	require.NotNil(t, recipe.AutogenEnabled)
 	require.True(t, *recipe.AutogenEnabled)
 	require.Equal(t, []string{"opened", "synchronize"}, recipe.ReviewEvents)
 	require.Equal(t, []string{"opened"}, recipe.OverviewEvents)
-	require.Equal(t, []string{"issue_comment", "pull_request_review_comment"}, recipe.AutoreplyEvents)
-	require.Equal(t, []string{"created", "edited"}, recipe.AutoreplyActions)
+	require.Equal(t, []string{"issue_comment", "pull_request_review_comment"}, recipe.ReplyCommentEvents)
+	require.Equal(t, []string{"created", "edited"}, recipe.ReplyCommentActions)
 	require.Equal(t, []string{"opened"}, recipe.AutogenEvents)
 	require.NotNil(t, recipe.AutogenDocs)
 	require.True(t, *recipe.AutogenDocs)
@@ -166,7 +166,7 @@ extra_guidance = "overview.md"
 func TestLoaderUsesEnvDefaultsWhenConfigMissing(t *testing.T) {
 	t.Setenv(envReviewEnabled, "true")
 	t.Setenv(envOverviewEvents, "opened, synchronize")
-	t.Setenv(envAutoreplyActions, "")
+	t.Setenv(envReplyCommentActions, "")
 
 	loader, err := NewLoader(&recipeTestSanitizer{status: domain.PromptSafetyStatusOK}, &recipeTestSanitizer{status: domain.PromptSafetyStatusOK}, nil)
 	require.NoError(t, err)
@@ -176,8 +176,8 @@ func TestLoaderUsesEnvDefaultsWhenConfigMissing(t *testing.T) {
 	require.NotNil(t, recipe.ReviewEnabled)
 	require.True(t, *recipe.ReviewEnabled)
 	require.Equal(t, []string{"opened", "synchronize"}, recipe.OverviewEvents)
-	require.NotNil(t, recipe.AutoreplyActions)
-	require.Len(t, recipe.AutoreplyActions, 0)
+	require.NotNil(t, recipe.ReplyCommentActions)
+	require.Len(t, recipe.ReplyCommentActions, 0)
 }
 
 func TestLoaderConfigOverridesEnvWithExplicitEmpty(t *testing.T) {

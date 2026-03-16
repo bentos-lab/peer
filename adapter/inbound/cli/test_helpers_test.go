@@ -8,10 +8,6 @@ import (
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
-func boolPointer(value bool) *bool {
-	return &value
-}
-
 func containsLogEvent(events []string, needle string) bool {
 	for _, event := range events {
 		if strings.Contains(event, needle) {

@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/config"
 	"bentos-backend/usecase"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,13 +28,13 @@ func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 	}
 	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
-	err := cmd.Run(context.Background(), AutogenRunParams{
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider:   "github",
 		Repo:          "org/repo",
 		ChangeRequest: "123",
 		Base:          "main",
 		Head:          "feature",
-		Docs:          boolPointer(true),
+		Docs:          new(true),
 	})
 	require.ErrorContains(t, err, "--change-request")
 }
@@ -45,10 +47,10 @@ func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
 	}
 	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
-	err := cmd.Run(context.Background(), AutogenRunParams{
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider: "github",
 		Publish:     true,
-		Docs:        boolPointer(true),
+		Docs:        new(true),
 	})
 	require.ErrorContains(t, err, "--publish")
 }
@@ -61,14 +63,34 @@ func TestAutogenCommandDefaultsLocalWorkspace(t *testing.T) {
 	}
 	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
-	err := cmd.Run(context.Background(), AutogenRunParams{
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider: "github",
-		Docs:        boolPointer(true),
+		Docs:        new(true),
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
-	require.Equal(t, "@staged", useCase.requests[0].Input.Head)
+	require.Equal(t, "@all", useCase.requests[0].Input.Head)
 	require.Equal(t, "HEAD", useCase.requests[0].Input.Base)
+}
+
+func TestAutogenCommandRespectsBaseWhenHeadEmpty(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "org/repo"}
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
+		VCSProvider: "github",
+		Base:        "main",
+		Head:        "",
+		Docs:        new(true),
+	})
+	require.NoError(t, err)
+	require.Len(t, useCase.requests, 1)
+	require.Equal(t, "main", useCase.requests[0].Input.Base)
+	require.Equal(t, "@all", useCase.requests[0].Input.Head)
 }
 
 func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
@@ -90,12 +112,12 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 	}
 	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
-	err := cmd.Run(context.Background(), AutogenRunParams{
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
 		Publish:       true,
-		Docs:          boolPointer(true),
-		Tests:         boolPointer(true),
+		Docs:          new(true),
+		Tests:         new(true),
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)

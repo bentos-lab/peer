@@ -11,10 +11,10 @@ type CustomRecipe struct {
 	OverviewGuidance               string
 	OverviewEvents                 []string
 	OverviewIssueAlignmentGuidance string
-	AutoreplyEnabled               *bool
-	AutoreplyGuidance              string
-	AutoreplyEvents                []string
-	AutoreplyActions               []string
+	ReplyCommentEnabled            *bool
+	ReplyCommentGuidance           string
+	ReplyCommentEvents             []string
+	ReplyCommentActions            []string
 	AutogenEnabled                 *bool
 	AutogenGuidance                string
 	AutogenEvents                  []string

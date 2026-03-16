@@ -12,12 +12,29 @@ Hard constraints:
 Diff commands (required):
 {{- if eq .Head "@staged" }}
 - Head uses staged workspace mode. You are only allow to compare staged changes.
+{{- if .Base }}
+- Base is set; compare staged changes against Base.
+- Inspect changed files:
+  - `git diff --cached --name-status "{{ .Base }}"`
+- Inspect and anchor changed line ranges:
+  - `git diff --cached --unified=0 --no-color "{{ .Base }}"`
+{{- else }}
 - Inspect changed files:
   - `git diff --cached --name-status`
 - Inspect and anchor changed line ranges:
   - `git diff --cached --unified=0 --no-color`
+{{- end }}
 {{- else if eq .Head "@all" }}
 - Head uses full workspace mode (staged + unstaged + untracked). You should compare all current changes with base.
+{{- if .Base }}
+- Inspect changed files:
+  - `git diff --cached --name-status "{{ .Base }}"`
+  - `git diff --name-status "{{ .Base }}"`
+  - `git ls-files --others --exclude-standard`
+- Inspect and anchor changed line ranges:
+  - `git diff --cached --unified=0 --no-color "{{ .Base }}"`
+  - `git diff --unified=0 --no-color "{{ .Base }}"`
+{{- else }}
 - Inspect changed files:
   - `git diff --cached --name-status`
   - `git diff --name-status`
@@ -25,6 +42,7 @@ Diff commands (required):
 - Inspect and anchor changed line ranges:
   - `git diff --cached --unified=0 --no-color`
   - `git diff --unified=0 --no-color`
+{{- end }}
 {{- else if and .Base .Head }}
 - Verify refs:
   - `git rev-parse --verify "{{ .Base }}^{commit}"`
@@ -52,14 +70,15 @@ Diff commands (required):
 - Inspect and anchor changed line ranges:
   - `git show --unified=0 --no-color "{{ .Base }}"`
 {{- else }}
-- Base and Head are empty; fallback to workspace diff inspection.
+- Base and Head are empty; treat as full workspace mode with Base=`HEAD` and Head=`@all`.
 - Inspect changed files:
-  - `git status --short`
+  - `git diff --cached --name-status`
   - `git diff --name-status`
+  - `git ls-files --others --exclude-standard`
 - Inspect and anchor changed line ranges:
+  - `git diff --cached --unified=0 --no-color`
   - `git diff --unified=0 --no-color`
 {{- end }}
-- If fallback mode is used due to missing Base/Head, mention limited confidence.
 
 PR context:
 - Repository: {{ .Repository }}

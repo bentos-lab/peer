@@ -46,15 +46,6 @@ func resolveLanguage(language string) string {
 	return trimmed
 }
 
-func normalizePromptRefs(base string, head string) (string, string) {
-	normalizedBase := strings.TrimSpace(base)
-	normalizedHead := strings.TrimSpace(head)
-	if normalizedHead == "@staged" || normalizedHead == "@all" {
-		return "", normalizedHead
-	}
-	return normalizedBase, normalizedHead
-}
-
 func ensureDiffContentAvailable(ctx context.Context, environment contracts.CodeEnvironment, base string, head string) error {
 	changedFiles, err := environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: base,

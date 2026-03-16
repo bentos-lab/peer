@@ -62,18 +62,7 @@ func resolveChangeRequestParams(ctx context.Context, githubClient GitHubClient, 
 		return ChangeRequestResolution{}, err
 	}
 
-	base := strings.TrimSpace(params.Base)
-	head := strings.TrimSpace(params.Head)
-	if head == "" {
-		if repoProvided {
-			head = "HEAD"
-		} else {
-			head = "@staged"
-		}
-	}
-	if base == "" && head != "" {
-		base = "HEAD"
-	}
+	base, head := resolveBaseHeadDefaults(params.Base, params.Head, repoProvided)
 
 	prNumber := 0
 	title := ""

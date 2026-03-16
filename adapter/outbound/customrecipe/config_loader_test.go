@@ -40,7 +40,7 @@ events = ["opened"]
 [overview.issue_alignment]
 enabled = false
 
-[autoreply]
+[replycomment]
 enabled = true
 events = ["issue_comment"]
 actions = ["created"]
@@ -62,14 +62,14 @@ tests = false
 	require.True(t, *recipe.OverviewEnabled)
 	require.NotNil(t, recipe.OverviewIssueAlignmentEnabled)
 	require.False(t, *recipe.OverviewIssueAlignmentEnabled)
-	require.NotNil(t, recipe.AutoreplyEnabled)
-	require.True(t, *recipe.AutoreplyEnabled)
+	require.NotNil(t, recipe.ReplyCommentEnabled)
+	require.True(t, *recipe.ReplyCommentEnabled)
 	require.NotNil(t, recipe.AutogenEnabled)
 	require.False(t, *recipe.AutogenEnabled)
 	require.Equal(t, []string{"opened", "reopened"}, recipe.ReviewEvents)
 	require.Equal(t, []string{"opened"}, recipe.OverviewEvents)
-	require.Equal(t, []string{"issue_comment"}, recipe.AutoreplyEvents)
-	require.Equal(t, []string{"created"}, recipe.AutoreplyActions)
+	require.Equal(t, []string{"issue_comment"}, recipe.ReplyCommentEvents)
+	require.Equal(t, []string{"created"}, recipe.ReplyCommentActions)
 	require.Equal(t, []string{"opened"}, recipe.AutogenEvents)
 	require.NotNil(t, recipe.AutogenDocs)
 	require.True(t, *recipe.AutogenDocs)

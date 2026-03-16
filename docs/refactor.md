@@ -56,6 +56,8 @@ The agent MAY:
 - Move files between packages to better reflect domain boundaries.
 - Merge small packages that contain very little logic.
 - Remove unnecessary layers or pass-through code.
+- Place helpers in `shared/` when they are used across packages or likely to be reused broadly and are not tightly tied to app-specific logic.
+- Keep helpers within a package when they are only useful there and closely tied to that package's responsibilities.
 
 ### Code Duplication
 

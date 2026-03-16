@@ -100,15 +100,15 @@ func (l *Loader) Load(ctx context.Context, env uccontracts.CodeEnvironment, head
 		recipe.OverviewIssueAlignmentGuidance = issueAlignmentGuidance
 	}
 
-	if parsed.Autoreply.ExtraGuidance != nil {
-		autoreplyGuidance, missingPath, err := l.readAndSanitize(ctx, env, headRef, *parsed.Autoreply.ExtraGuidance, l.readOnlySanitizer)
+	if parsed.ReplyComment.ExtraGuidance != nil {
+		replyCommentGuidance, missingPath, err := l.readAndSanitize(ctx, env, headRef, *parsed.ReplyComment.ExtraGuidance, l.readOnlySanitizer)
 		if err != nil {
 			return domain.CustomRecipe{}, err
 		}
 		if missingPath != "" {
 			recipe.MissingPaths = append(recipe.MissingPaths, missingPath)
 		}
-		recipe.AutoreplyGuidance = autoreplyGuidance
+		recipe.ReplyCommentGuidance = replyCommentGuidance
 	}
 
 	if parsed.Autogen.ExtraGuidance != nil {

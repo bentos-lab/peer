@@ -9,6 +9,7 @@ import (
 
 	codeenv "bentos-backend/adapter/outbound/codeenv"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
 	"bentos-backend/shared/text"
@@ -66,7 +67,7 @@ func NewReplyCommentCommand(replyCommentUseCaseBuilder ReplyCommentUseCaseBuilde
 }
 
 // Run executes the CLI replycomment flow.
-func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunParams) error {
+func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params ReplyCommentRunParams) error {
 	if c.replyCommentUseCaseBuilder == nil {
 		return errors.New("replycomment usecase is not configured")
 	}
@@ -82,6 +83,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, params ReplyCommentRunPar
 	if c.logger == nil {
 		c.logger = stdlogger.Nop()
 	}
+	_ = cfg
 
 	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
 	if provider == "" {

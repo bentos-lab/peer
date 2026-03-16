@@ -14,6 +14,7 @@ Flags:
 - `--publish`: when set with `--change-request`, post a PR summary and push changes to the PR head branch.
 - `--base` / `--head`: diff anchors for local or remote execution (merge-base diff).
 - `--repo`: optional repository URL or `owner/repo` slug (empty means current workspace).
+  - In local workspace mode, empty `--head` defaults to `@all`.
 
 `--docs` and `--tests` can be combined.
 

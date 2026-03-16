@@ -6,6 +6,7 @@ import (
 	"time"
 
 	codeenv "bentos-backend/adapter/outbound/codeenv"
+	"bentos-backend/config"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
@@ -29,7 +30,7 @@ type OverviewParams struct {
 	Base           string
 	Head           string
 	Publish        bool
-	IssueAlignment bool
+	IssueAlignment *bool
 }
 
 // OverviewUseCaseBuilder builds an overview usecase for a specific repo.
@@ -50,7 +51,7 @@ func NewOverviewCommand(overviewUseCaseBuilder OverviewUseCaseBuilder, githubCli
 }
 
 // Run executes the CLI overview flow.
-func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error {
+func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params OverviewParams) error {
 	if c.overviewUseCaseBuilder == nil {
 		return errors.New("overview usecase is not configured")
 	}
@@ -67,6 +68,7 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		c.logger = stdlogger.Nop()
 	}
 
+	effectiveIssueAlignment := ResolveBool(params.IssueAlignment, nil, cfg.Overview.IssueAlignmentEnabled)
 	resolution, err := resolveChangeRequestParams(ctx, c.githubClient, ChangeRequestParams{
 		VCSProvider:    params.VCSProvider,
 		Repo:           params.Repo,
@@ -74,7 +76,7 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 		Base:           params.Base,
 		Head:           params.Head,
 		Publish:        params.Publish,
-		IssueAlignment: params.IssueAlignment,
+		IssueAlignment: effectiveIssueAlignment,
 	})
 	if err != nil {
 		return err
@@ -95,6 +97,15 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 	if err != nil {
 		return err
 	}
+	effectiveIssueAlignment = ResolveBool(params.IssueAlignment, recipe.OverviewIssueAlignmentEnabled, cfg.Overview.IssueAlignmentEnabled)
+	issueCandidates := resolution.IssueCandidates
+	if effectiveIssueAlignment {
+		if issueCandidates == nil {
+			issueCandidates = resolveIssueCandidates(ctx, c.githubClient, resolution.Repository, resolution.Description)
+		}
+	} else {
+		issueCandidates = nil
+	}
 
 	overviewUseCase, err := c.overviewUseCaseBuilder(resolution.RepoURL)
 	if err != nil {
@@ -112,7 +123,7 @@ func (c *OverviewCommand) Run(ctx context.Context, params OverviewParams) error 
 			resolution.Description,
 			map[string]string{},
 		),
-		IssueAlignment: usecase.OverviewIssueAlignmentInput{Candidates: resolution.IssueCandidates},
+		IssueAlignment: usecase.OverviewIssueAlignmentInput{Candidates: issueCandidates},
 		Environment:    environment,
 		Recipe:         recipe,
 	}

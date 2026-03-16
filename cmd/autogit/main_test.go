@@ -166,8 +166,8 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 						CodingAgent: config.CodingAgentConfig{
 							Agent: "opencode",
 						},
-						SuggestedChanges: config.SuggestedChangesConfig{
-							Enabled: testCase.envDefault,
+						Review: config.ReviewConfig{
+							SuggestedChangesEnabled: testCase.envDefault,
 						},
 					}, nil
 				},
@@ -326,12 +326,14 @@ func TestWebhookOverridesConfig(t *testing.T) {
 				Server: config.ServerConfig{
 					Port: "8080",
 					GitHub: config.GitHubConfig{
-						WebhookSecret:           "secret",
-						AppID:                   "123",
-						AppPrivateKey:           "key",
-						APIBaseURL:              "https://api.github.com",
-						ReplyCommentTriggerName: "autogitbot",
+						WebhookSecret: "secret",
+						AppID:         "123",
+						AppPrivateKey: "key",
+						APIBaseURL:    "https://api.github.com",
 					},
+				},
+				ReplyComment: config.ReplyCommentConfig{
+					TriggerName: "autogitbot",
 				},
 			}, nil
 		},
@@ -348,13 +350,10 @@ func TestWebhookOverridesConfig(t *testing.T) {
 		"webhook",
 		"--vcs-provider", "github",
 		"--github-app-id", "999",
-		"--overview-enabled=false",
-		"--review-suggested-changes-max-workers", "9",
+		"--overview=false",
 	}
 	err := runAutogit(context.Background(), args, deps)
 	require.NoError(t, err)
 	require.Equal(t, "999", captured.Server.GitHub.AppID)
-	require.NotNil(t, captured.OverviewEnabled)
-	require.False(t, *captured.OverviewEnabled)
-	require.Equal(t, 9, captured.SuggestedChanges.MaxWorkers)
+	require.False(t, captured.Overview.Enabled)
 }

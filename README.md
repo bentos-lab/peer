@@ -26,6 +26,8 @@ go test ./...
 
 ## Environment Variables
 
+Full list with defaults: [Configuration](/docs/configuration.md#environment-variables).
+
 LLM_OPENAI (formatter + sanitizer only when enabled):
 
 - `LLM_OPENAI_BASE_URL` (empty uses coding-agent LLM; shortcuts: `gemini`, `openai`, `anthropic`)
@@ -41,7 +43,7 @@ CODE AGENT:
 Feature: Core
 
 - `LOG_LEVEL` (default: `info`)
-- `OVERVIEW_ENABLED` (optional bool; server default when unset: `true`, CLI default when unset: `false`)
+- `OVERVIEW` (default: `true`)
 
 Feature: Server (webhook-only)
 
@@ -129,6 +131,8 @@ CLI review (local staged changes):
 ```bash
 go run ./cmd/autogit review --vcs-provider github --head @staged
 ```
+
+When `--head` is omitted in local workspace mode, it defaults to `@all` (staged + unstaged + untracked). Use `@staged` to limit to staged changes.
 
 CLI review (publish review comments):
 

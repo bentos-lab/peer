@@ -58,7 +58,7 @@ func buildRecipeFromDefaults(defaults recipeEnvDefaults) domain.CustomRecipe {
 		ReviewSuggestions:             defaults.ReviewSuggestions,
 		OverviewEnabled:               defaults.OverviewEnabled,
 		OverviewIssueAlignmentEnabled: defaults.OverviewIssueAlignmentEnabled,
-		AutoreplyEnabled:              defaults.AutoreplyEnabled,
+		ReplyCommentEnabled:           defaults.ReplyCommentEnabled,
 		AutogenEnabled:                defaults.AutogenEnabled,
 		AutogenDocs:                   defaults.AutogenDocs,
 		AutogenTests:                  defaults.AutogenTests,
@@ -69,11 +69,11 @@ func buildRecipeFromDefaults(defaults recipeEnvDefaults) domain.CustomRecipe {
 	if defaults.OverviewEvents.Set {
 		recipe.OverviewEvents = defaults.OverviewEvents.Values
 	}
-	if defaults.AutoreplyEvents.Set {
-		recipe.AutoreplyEvents = defaults.AutoreplyEvents.Values
+	if defaults.ReplyCommentEvents.Set {
+		recipe.ReplyCommentEvents = defaults.ReplyCommentEvents.Values
 	}
-	if defaults.AutoreplyActions.Set {
-		recipe.AutoreplyActions = defaults.AutoreplyActions.Values
+	if defaults.ReplyCommentActions.Set {
+		recipe.ReplyCommentActions = defaults.ReplyCommentActions.Values
 	}
 	if defaults.AutogenEvents.Set {
 		recipe.AutogenEvents = defaults.AutogenEvents.Values

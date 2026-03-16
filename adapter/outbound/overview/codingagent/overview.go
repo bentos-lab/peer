@@ -10,6 +10,7 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	"bentos-backend/shared/refs"
 	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -69,7 +70,7 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 	startedAt := time.Now()
 	g.logger.Infof("Coding-agent overview generation started.")
 
-	normalizedBase, normalizedHead := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 
 	if payload.Environment == nil {
 		return usecase.LLMOverviewResult{}, fmt.Errorf("code environment must not be nil")

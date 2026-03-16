@@ -129,5 +129,6 @@ For each review:
 - CLI: print grouped messages + summary
 - When overview is enabled, generation and publishing run in one flow.
 - GitHub overview comment is posted only on initial PR creation (`opened`).
+- Suggested changes are enabled only when configured (see [Configuration](/docs/configuration.md#environment-variables)).
 
 No merge-blocking logic is implemented in current version.

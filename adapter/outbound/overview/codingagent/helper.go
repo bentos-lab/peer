@@ -20,15 +20,6 @@ func runTask(ctx context.Context, agent contracts.CodingAgent, cfg Config, task 
 	return strings.TrimSpace(result.Text), nil
 }
 
-func normalizePromptRefs(base string, head string) (string, string) {
-	normalizedBase := strings.TrimSpace(base)
-	normalizedHead := strings.TrimSpace(head)
-	if normalizedHead == "@staged" || normalizedHead == "@all" {
-		return "", normalizedHead
-	}
-	return normalizedBase, normalizedHead
-}
-
 func ensureDiffContentAvailable(ctx context.Context, environment contracts.CodeEnvironment, base string, head string) error {
 	changedFiles, err := environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: base,

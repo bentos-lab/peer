@@ -9,6 +9,7 @@ import (
 
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
+	"bentos-backend/shared/refs"
 	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 )
@@ -57,7 +58,7 @@ func (a *Answerer) Answer(ctx context.Context, payload usecase.ReplyCommentAnswe
 	startedAt := time.Now()
 	a.logger.Infof("Coding-agent replycomment started.")
 
-	normalizedBase, normalizedHead := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 	if payload.Environment == nil {
 		return "", fmt.Errorf("code environment must not be nil")
 	}

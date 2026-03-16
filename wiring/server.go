@@ -66,22 +66,22 @@ func BuildGitHubHandler(cfg config.Config) (*githubinbound.Handler, error) {
 		deps.RecipeLoader,
 		logger,
 		cfg.Server.GitHub.WebhookSecret,
-		cfg.Server.GitHub.ReplyCommentTriggerName,
-		resolveOverviewEnabled(cfg),
-		resolveSuggestionsEnabled(cfg),
+		cfg.ReplyComment.TriggerName,
+		cfg.Review.Enabled,
+		cfg.Review.Events,
+		cfg.Review.SuggestedChangesEnabled,
+		cfg.Overview.Enabled,
+		cfg.Overview.Events,
+		cfg.Overview.IssueAlignmentEnabled,
+		cfg.Autogen.Enabled,
+		cfg.Autogen.Events,
+		cfg.Autogen.DocsEnabled,
+		cfg.Autogen.TestsEnabled,
+		cfg.ReplyComment.Enabled,
+		cfg.ReplyComment.Events,
+		cfg.ReplyComment.Actions,
 		queue,
 	), nil
-}
-
-func resolveOverviewEnabled(cfg config.Config) bool {
-	if cfg.OverviewEnabled == nil {
-		return true
-	}
-	return *cfg.OverviewEnabled
-}
-
-func resolveSuggestionsEnabled(cfg config.Config) bool {
-	return cfg.SuggestedChanges.Enabled
 }
 
 func resolveCodingAgentConfig(cfg config.Config) config.CodingAgentConfig {

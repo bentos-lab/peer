@@ -82,7 +82,7 @@ func (u *replyCommentUseCase) Execute(ctx context.Context, request ReplyCommentR
 			Thread:        request.Thread,
 			Question:      sanitized.SanitizedPrompt,
 			Environment:   request.Environment,
-			ExtraGuidance: strings.TrimSpace(request.Recipe.AutoreplyGuidance),
+			ExtraGuidance: strings.TrimSpace(request.Recipe.ReplyCommentGuidance),
 		})
 		if err != nil {
 			logStage(u.logger, "replycomment", "answer_question", target, "failure", answerStartedAt, "%v", err)

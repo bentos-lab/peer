@@ -7,6 +7,7 @@ import (
 
 	codeenv "bentos-backend/adapter/outbound/codeenv"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	"bentos-backend/config"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
@@ -61,7 +62,7 @@ func NewReviewCommand(reviewUseCaseBuilder ReviewUseCaseBuilder, githubClient Gi
 }
 
 // Run executes the CLI review flow.
-func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
+func (c *ReviewCommand) Run(ctx context.Context, cfg config.Config, params ReviewParams) error {
 	if c.reviewUseCaseBuilder == nil {
 		return errors.New("review usecase is not configured")
 	}
@@ -123,7 +124,7 @@ func (c *ReviewCommand) Run(ctx context.Context, params ReviewParams) error {
 			resolution.Description,
 			map[string]string{},
 		),
-		Suggestions: ResolveBool(params.Suggest, recipe.ReviewSuggestions, false),
+		Suggestions: ResolveBool(params.Suggest, recipe.ReviewSuggestions, cfg.Review.SuggestedChangesEnabled),
 		Environment: environment,
 		Recipe:      recipe,
 	}

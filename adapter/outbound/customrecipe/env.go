@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	envReviewEnabled                 = "REVIEW_ENABLED"
+	envReviewEnabled                 = "REVIEW"
 	envReviewSuggestions             = "REVIEW_SUGGESTED_CHANGES"
 	envReviewEvents                  = "REVIEW_EVENTS"
-	envOverviewEnabled               = "OVERVIEW_ENABLED"
+	envOverviewEnabled               = "OVERVIEW"
 	envOverviewEvents                = "OVERVIEW_EVENTS"
-	envOverviewIssueAlignmentEnabled = "OVERVIEW_ISSUE_ALIGNMENT_ENABLED"
-	envAutoreplyEnabled              = "AUTOREPLY_ENABLED"
-	envAutoreplyEvents               = "AUTOREPLY_EVENTS"
-	envAutoreplyActions              = "AUTOREPLY_ACTIONS"
-	envAutogenEnabled                = "AUTOGEN_ENABLED"
+	envOverviewIssueAlignmentEnabled = "OVERVIEW_ISSUE_ALIGNMENT"
+	envReplyCommentEnabled           = "REPLYCOMMENT"
+	envReplyCommentEvents            = "REPLYCOMMENT_EVENTS"
+	envReplyCommentActions           = "REPLYCOMMENT_ACTIONS"
+	envAutogenEnabled                = "AUTOGEN"
 	envAutogenEvents                 = "AUTOGEN_EVENTS"
 	envAutogenDocs                   = "AUTOGEN_DOCS"
 	envAutogenTests                  = "AUTOGEN_TESTS"
@@ -36,9 +36,9 @@ type recipeEnvDefaults struct {
 	OverviewEnabled               *bool
 	OverviewEvents                optionalStringList
 	OverviewIssueAlignmentEnabled *bool
-	AutoreplyEnabled              *bool
-	AutoreplyEvents               optionalStringList
-	AutoreplyActions              optionalStringList
+	ReplyCommentEnabled           *bool
+	ReplyCommentEvents            optionalStringList
+	ReplyCommentActions           optionalStringList
 	AutogenEnabled                *bool
 	AutogenEvents                 optionalStringList
 	AutogenDocs                   *bool
@@ -53,9 +53,9 @@ func loadRecipeEnvDefaults(logger usecase.Logger) recipeEnvDefaults {
 		OverviewEnabled:               envOptionalBool(logger, envOverviewEnabled),
 		OverviewEvents:                envOptionalStringList(envOverviewEvents),
 		OverviewIssueAlignmentEnabled: envOptionalBool(logger, envOverviewIssueAlignmentEnabled),
-		AutoreplyEnabled:              envOptionalBool(logger, envAutoreplyEnabled),
-		AutoreplyEvents:               envOptionalStringList(envAutoreplyEvents),
-		AutoreplyActions:              envOptionalStringList(envAutoreplyActions),
+		ReplyCommentEnabled:           envOptionalBool(logger, envReplyCommentEnabled),
+		ReplyCommentEvents:            envOptionalStringList(envReplyCommentEvents),
+		ReplyCommentActions:           envOptionalStringList(envReplyCommentActions),
 		AutogenEnabled:                envOptionalBool(logger, envAutogenEnabled),
 		AutogenEvents:                 envOptionalStringList(envAutogenEvents),
 		AutogenDocs:                   envOptionalBool(logger, envAutogenDocs),

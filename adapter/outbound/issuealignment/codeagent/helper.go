@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"bentos-backend/domain"
+	"bentos-backend/shared/refs"
 	sharedtext "bentos-backend/shared/text"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -107,7 +108,7 @@ func renderIssueAlignmentTask(payload usecase.LLMIssueAlignmentPayload, keyIdeas
 		files = append(files, issueAlignmentFileData{Path: file.Path, ChangedText: changedText})
 	}
 
-	base, head := normalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	base, head := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 
 	data := issueAlignmentTaskTemplateData{
 		Repository:    payload.Input.Target.Repository,
@@ -197,15 +198,6 @@ func fallbackIssueReference(candidates []domain.IssueContext) domain.IssueRefere
 		Number:     issue.Number,
 		Title:      issue.Title,
 	}
-}
-
-func normalizePromptRefs(base string, head string) (string, string) {
-	normalizedBase := strings.TrimSpace(base)
-	normalizedHead := strings.TrimSpace(head)
-	if normalizedHead == "@staged" || normalizedHead == "@all" {
-		return "", normalizedHead
-	}
-	return normalizedBase, normalizedHead
 }
 
 func runTask(ctx context.Context, agent contracts.CodingAgent, cfg Config, task string) (string, error) {

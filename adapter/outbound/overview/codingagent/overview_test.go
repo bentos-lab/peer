@@ -109,7 +109,7 @@ func TestGenerateOverviewUsesTaskPromptWithChangedFiles(t *testing.T) {
 	require.Contains(t, env.agent.lastTask, "git diff --unified=0 --no-color \"<merge-base>\" \"feature\"")
 	require.NotContains(t, env.agent.lastTask, "Base is empty; fallback to head-only inspection.")
 	require.NotContains(t, env.agent.lastTask, "Head is empty; fallback to base-only inspection.")
-	require.NotContains(t, env.agent.lastTask, "Base and Head are empty; fallback to workspace diff inspection.")
+	require.NotContains(t, env.agent.lastTask, "Base and Head are empty; treat as full workspace mode with Base=`HEAD` and Head=`@all`.")
 	require.Contains(t, env.agent.lastTask, "Use deterministic section order and stable labels exactly as below:")
 	require.Contains(t, env.agent.lastTask, "`summary`")
 	require.Contains(t, env.agent.lastTask, "`categories`")
@@ -234,10 +234,9 @@ func TestGenerateOverviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *test
 		Head:    "",
 	}})
 	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Base and Head are empty; fallback to workspace diff inspection.")
-	require.Contains(t, env.agent.lastTask, "git status --short")
-	require.Contains(t, env.agent.lastTask, "git diff --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --unified=0 --no-color")
+	require.Contains(t, env.agent.lastTask, "Base and Head are empty; treat as full workspace mode with Base=`HEAD` and Head=`@all`.")
+	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
+	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
 }
 
 func TestGenerateOverviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing.T) {

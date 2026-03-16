@@ -10,10 +10,10 @@ import (
 )
 
 type recipeConfig struct {
-	Review    recipeReviewConfig    `toml:"review"`
-	Overview  recipeOverviewConfig  `toml:"overview"`
-	Autoreply recipeAutoreplyConfig `toml:"autoreply"`
-	Autogen   recipeAutogenConfig   `toml:"autogen"`
+	Review       recipeReviewConfig       `toml:"review"`
+	Overview     recipeOverviewConfig     `toml:"overview"`
+	ReplyComment recipeReplyCommentConfig `toml:"replycomment"`
+	Autogen      recipeAutogenConfig      `toml:"autogen"`
 }
 
 type recipeReviewConfig struct {
@@ -23,7 +23,7 @@ type recipeReviewConfig struct {
 	Events      []string `toml:"events"`
 }
 
-type recipeAutoreplyConfig struct {
+type recipeReplyCommentConfig struct {
 	Enabled       *bool    `toml:"enabled"`
 	ExtraGuidance *string  `toml:"extra_guidance"`
 	Events        []string `toml:"events"`
@@ -84,14 +84,14 @@ func applyRecipeOverrides(recipe domain.CustomRecipe, parsed recipeConfig) domai
 	if parsed.Overview.IssueAlignment.Enabled != nil {
 		recipe.OverviewIssueAlignmentEnabled = parsed.Overview.IssueAlignment.Enabled
 	}
-	if parsed.Autoreply.Enabled != nil {
-		recipe.AutoreplyEnabled = parsed.Autoreply.Enabled
+	if parsed.ReplyComment.Enabled != nil {
+		recipe.ReplyCommentEnabled = parsed.ReplyComment.Enabled
 	}
-	if parsed.Autoreply.Events != nil {
-		recipe.AutoreplyEvents = normalizeStringList(parsed.Autoreply.Events)
+	if parsed.ReplyComment.Events != nil {
+		recipe.ReplyCommentEvents = normalizeStringList(parsed.ReplyComment.Events)
 	}
-	if parsed.Autoreply.Actions != nil {
-		recipe.AutoreplyActions = normalizeStringList(parsed.Autoreply.Actions)
+	if parsed.ReplyComment.Actions != nil {
+		recipe.ReplyCommentActions = normalizeStringList(parsed.ReplyComment.Actions)
 	}
 	if parsed.Autogen.Enabled != nil {
 		recipe.AutogenEnabled = parsed.Autogen.Enabled

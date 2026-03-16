@@ -86,7 +86,7 @@ func defaultAutogitDeps() autogitDeps {
 			if err != nil {
 				return nil, err
 			}
-			return cliinbound.NewReplyCommentCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, cfg.Server.GitHub.ReplyCommentTriggerName, deps.Logger), nil
+			return cliinbound.NewReplyCommentCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, cfg.ReplyComment.TriggerName, deps.Logger), nil
 		},
 		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
 			return wiring.BuildGitHubHandler(cfg)
@@ -114,12 +114,12 @@ func newRootCommand(ctx context.Context, deps autogitDeps) *cobra.Command {
 	}
 
 	persistentFlags := cmd.PersistentFlags()
-	persistentFlags.StringVar(&llmOpenAIBaseURL, "llm-openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM)")
-	persistentFlags.StringVar(&llmOpenAIModel, "llm-openai-model", "", "OpenAI compatible model override")
-	persistentFlags.StringVar(&llmOpenAIAPIKey, "llm-openai-api-key", "", "OpenAI compatible API key override")
-	persistentFlags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config)")
-	persistentFlags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config)")
-	persistentFlags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config)")
+	persistentFlags.StringVar(&llmOpenAIBaseURL, "llm-openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM, env: LLM_OPENAI_BASE_URL)")
+	persistentFlags.StringVar(&llmOpenAIModel, "llm-openai-model", "", "OpenAI compatible model override (env: LLM_OPENAI_MODEL)")
+	persistentFlags.StringVar(&llmOpenAIAPIKey, "llm-openai-api-key", "", "OpenAI compatible API key override (env: LLM_OPENAI_API_KEY)")
+	persistentFlags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
+	persistentFlags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
+	persistentFlags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
 	persistentFlags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
 
 	cmd.AddCommand(newReviewSubcommand(ctx, deps.loadConfig, deps.buildReviewCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
@@ -183,7 +183,7 @@ func newReviewSubcommand(
 				return err
 			}
 
-			return cliCommand.Run(ctx, cliinbound.ReviewParams{
+			return cliCommand.Run(ctx, cfg, cliinbound.ReviewParams{
 				VCSProvider:   vcsProvider,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
@@ -257,14 +257,14 @@ func newOverviewSubcommand(
 				return err
 			}
 
-			return cliCommand.Run(ctx, cliinbound.OverviewParams{
+			return cliCommand.Run(ctx, cfg, cliinbound.OverviewParams{
 				VCSProvider:    vcsProvider,
 				Repo:           repo,
 				ChangeRequest:  changeRequest,
 				Base:           base,
 				Head:           head,
 				Publish:        publish,
-				IssueAlignment: issueAlignment,
+				IssueAlignment: boolPointerIfChanged(cmd, "issue-alignment", issueAlignment),
 			})
 		},
 	}
@@ -332,7 +332,7 @@ func newAutogenSubcommand(
 				return err
 			}
 
-			return cliCommand.Run(ctx, cliinbound.AutogenRunParams{
+			return cliCommand.Run(ctx, cfg, cliinbound.AutogenRunParams{
 				VCSProvider:   vcsProvider,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
@@ -407,7 +407,7 @@ func newReplyCommentSubcommand(
 				return err
 			}
 
-			return cliCommand.Run(ctx, cliinbound.ReplyCommentRunParams{
+			return cliCommand.Run(ctx, cfg, cliinbound.ReplyCommentRunParams{
 				VCSProvider:   vcsProvider,
 				Repo:          repo,
 				ChangeRequest: changeRequest,

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	codeenv "bentos-backend/adapter/outbound/codeenv"
+	"bentos-backend/config"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
 	"bentos-backend/usecase"
@@ -54,7 +55,7 @@ func NewAutogenCommand(autogenUseCaseBuilder AutogenUseCaseBuilder, githubClient
 }
 
 // Run executes the CLI autogen flow.
-func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error {
+func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params AutogenRunParams) error {
 	if c.autogenUseCaseBuilder == nil {
 		return errors.New("autogen usecase is not configured")
 	}
@@ -96,18 +97,7 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		return err
 	}
 
-	base := strings.TrimSpace(params.Base)
-	head := strings.TrimSpace(params.Head)
-	if head == "" {
-		if repoProvided {
-			head = "HEAD"
-		} else {
-			head = "@staged"
-		}
-	}
-	if base == "" && head != "" {
-		base = "HEAD"
-	}
+	base, head := resolveBaseHeadDefaults(params.Base, params.Head, repoProvided)
 
 	prNumber := 0
 	headBranch := ""
@@ -161,8 +151,8 @@ func (c *AutogenCommand) Run(ctx context.Context, params AutogenRunParams) error
 		return err
 	}
 
-	effectiveDocs := ResolveBool(params.Docs, recipe.AutogenDocs, false)
-	effectiveTests := ResolveBool(params.Tests, recipe.AutogenTests, false)
+	effectiveDocs := ResolveBool(params.Docs, recipe.AutogenDocs, cfg.Autogen.DocsEnabled)
+	effectiveTests := ResolveBool(params.Tests, recipe.AutogenTests, cfg.Autogen.TestsEnabled)
 
 	request := usecase.AutogenRequest{
 		Input:       domainChangeRequestInputForAutogen(repository, prNumber, repoURL, base, head, title, description),
