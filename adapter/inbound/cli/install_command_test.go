@@ -26,6 +26,16 @@ func (r *installCallRecorder) EnsureOpencodeInstalled(context.Context) error {
 	return nil
 }
 
+func (r *installCallRecorder) EnsureGlabInstalled(context.Context) error {
+	r.calls = append(r.calls, "glab-install")
+	return nil
+}
+
+func (r *installCallRecorder) EnsureGlabAuthenticated(context.Context) error {
+	r.calls = append(r.calls, "glab-auth")
+	return nil
+}
+
 func TestInstallCommandGhLogin(t *testing.T) {
 	recorder := &installCallRecorder{}
 	cmd := &InstallCommand{installer: recorder}
@@ -42,6 +52,15 @@ func TestInstallCommandOpencode(t *testing.T) {
 	err := cmd.InstallOpencode(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, []string{"opencode-install"}, recorder.calls)
+}
+
+func TestInstallCommandGlabLogin(t *testing.T) {
+	recorder := &installCallRecorder{}
+	cmd := &InstallCommand{installer: recorder}
+
+	err := cmd.InstallGlab(context.Background(), true)
+	require.NoError(t, err)
+	require.Equal(t, []string{"glab-install", "glab-auth"}, recorder.calls)
 }
 
 func TestInstallCommandQuickstart(t *testing.T) {

@@ -7,6 +7,7 @@ The CLI provides `autogit install` subcommands to install required dependencies 
 ## Behavior
 
 - `autogit install gh --login` installs `gh` and prompts for `gh auth login` if needed.
+- `autogit install glab --login` installs `glab` and prompts for `glab auth login` if needed.
 - `autogit install opencode` installs OpenCode.
 - `autogit install quickstart` runs `gh --login` then `opencode`.
 - In non-interactive terminals, the CLI prints platform-specific instructions and exits with an error.
@@ -55,3 +56,25 @@ Windows:
 
 - WinGet: `winget install --id GitHub.cli`
 - MSI/EXE installers: https://github.com/cli/cli/releases
+
+## GitLab CLI (glab) Install Options
+
+Official instructions: https://gitlab.com/gitlab-org/cli/-/tree/main/docs/source
+
+macOS:
+
+- Homebrew: `brew install glab`
+
+Linux:
+
+- Debian/Ubuntu (WakeMeOps):
+  - `curl -sSL https://raw.githubusercontent.com/upciti/wakemeops/main/assets/install_repository | sudo bash`
+  - `sudo apt install glab`
+- Fedora (DNF):
+  - `sudo dnf install -y glab`
+
+Windows:
+
+- WinGet: `winget install glab.glab`
+- Chocolatey: `choco install glab`
+- Scoop: `scoop install glab`

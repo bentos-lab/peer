@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"bentos-backend/adapter/outbound/commandrunner"
+	"bentos-backend/domain"
 	"bentos-backend/shared/toolinstall"
 	"github.com/stretchr/testify/require"
 )
@@ -193,7 +194,7 @@ func TestClient_CreateReviewCommentSingleLine(t *testing.T) {
 	})
 	client := newTestCLIClient(runner)
 
-	err := client.CreateReviewComment(context.Background(), "org/repo", 21, CreateReviewCommentInput{
+	err := client.CreateReviewComment(context.Background(), "org/repo", 21, domain.ReviewCommentInput{
 		Body:      "hello",
 		Path:      "service.go",
 		StartLine: 9,
@@ -232,7 +233,7 @@ func TestClient_CreateReviewCommentRangeAndResolveRepo(t *testing.T) {
 	})
 	client := newTestCLIClient(runner)
 
-	err := client.CreateReviewComment(context.Background(), "", 3, CreateReviewCommentInput{
+	err := client.CreateReviewComment(context.Background(), "", 3, domain.ReviewCommentInput{
 		Body:      "body",
 		Path:      "a.go",
 		StartLine: 10,
@@ -266,7 +267,7 @@ func TestClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 	})
 	client := newTestCLIClient(runner)
 
-	err := client.CreateReviewComment(context.Background(), "org/repo", 7, CreateReviewCommentInput{
+	err := client.CreateReviewComment(context.Background(), "org/repo", 7, domain.ReviewCommentInput{
 		Body:      "bad",
 		Path:      "a.go",
 		StartLine: 90,

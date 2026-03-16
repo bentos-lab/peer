@@ -75,8 +75,12 @@ func newWebhookSubcommand(
 				return err
 			}
 			for _, provider := range providers {
-				if provider != "github" {
-					return fmt.Errorf("unsupported vcs provider: %s", provider)
+				parsedProvider, _, err := sharedcli.ParseVCSProvider(provider)
+				if err != nil {
+					return err
+				}
+				if parsedProvider != "github" {
+					return fmt.Errorf("unsupported vcs provider: %s", parsedProvider)
 				}
 			}
 			if len(providers) == 0 {
@@ -149,7 +153,7 @@ func newWebhookSubcommand(
 		},
 	}
 
-	sub.Flags().StringVar(&vcsProvider, "vcs-provider", "", "vcs provider names joined by + (currently only github is supported)")
+	sub.Flags().StringVar(&vcsProvider, "vcs-provider", "", "vcs provider names joined by + (e.g. github or gitlab:host; currently only github is supported)")
 	sub.Flags().StringVar(&flags.logLevel, "log-level", "", "log level override (empty to use config or verbosity, env: LOG_LEVEL)")
 	sub.Flags().BoolVar(&flags.overviewEnabled, "overview", false, "enable or disable overview generation (env: OVERVIEW)")
 	sub.Flags().BoolVar(&flags.reviewSuggestedChangesEnabled, "review-suggested-changes", false, "enable suggested code changes in review findings (env: REVIEW_SUGGESTED_CHANGES)")

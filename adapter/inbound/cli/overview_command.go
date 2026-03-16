@@ -16,7 +16,7 @@ import (
 // OverviewCommand runs autogit overview flow with the shared overview usecase.
 type OverviewCommand struct {
 	overviewUseCaseBuilder OverviewUseCaseBuilder
-	githubClient           GitHubClient
+	vcsResolver            VCSClientResolver
 	envFactory             uccontracts.CodeEnvironmentFactory
 	recipeLoader           usecase.CustomRecipeLoader
 	logger                 usecase.Logger
@@ -25,6 +25,7 @@ type OverviewCommand struct {
 // OverviewParams contains already-parsed CLI autogit parameters for overviews.
 type OverviewParams struct {
 	VCSProvider    string
+	VCSHost        string
 	Repo           string
 	ChangeRequest  string
 	Base           string
@@ -37,13 +38,13 @@ type OverviewParams struct {
 type OverviewUseCaseBuilder func(repoURL string) (usecase.OverviewUseCase, error)
 
 // NewOverviewCommand creates a new CLI command for autogit overviews.
-func NewOverviewCommand(overviewUseCaseBuilder OverviewUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *OverviewCommand {
+func NewOverviewCommand(overviewUseCaseBuilder OverviewUseCaseBuilder, vcsResolver VCSClientResolver, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *OverviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &OverviewCommand{
 		overviewUseCaseBuilder: overviewUseCaseBuilder,
-		githubClient:           githubClient,
+		vcsResolver:            vcsResolver,
 		envFactory:             envFactory,
 		recipeLoader:           recipeLoader,
 		logger:                 logger,
@@ -55,8 +56,8 @@ func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params Ove
 	if c.overviewUseCaseBuilder == nil {
 		return errors.New("overview usecase is not configured")
 	}
-	if c.githubClient == nil {
-		return errors.New("github client is not configured")
+	if c.vcsResolver == nil {
+		return errors.New("vcs client resolver is not configured")
 	}
 	if c.envFactory == nil {
 		return errors.New("code environment factory is not configured")
@@ -69,8 +70,14 @@ func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params Ove
 	}
 
 	effectiveIssueAlignment := ResolveBool(params.IssueAlignment, nil, cfg.Overview.IssueAlignmentEnabled)
-	resolution, err := resolveChangeRequestParams(ctx, c.githubClient, ChangeRequestParams{
+	vcsClient, err := c.vcsResolver.Resolve(params.VCSProvider)
+	if err != nil {
+		return err
+	}
+
+	resolution, err := resolveChangeRequestParams(ctx, vcsClient, ChangeRequestParams{
 		VCSProvider:    params.VCSProvider,
+		VCSHost:        params.VCSHost,
 		Repo:           params.Repo,
 		ChangeRequest:  params.ChangeRequest,
 		Base:           params.Base,
@@ -101,7 +108,7 @@ func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params Ove
 	issueCandidates := resolution.IssueCandidates
 	if effectiveIssueAlignment {
 		if issueCandidates == nil {
-			issueCandidates = resolveIssueCandidates(ctx, c.githubClient, resolution.Repository, resolution.Description)
+			issueCandidates = resolveIssueCandidates(ctx, normalizeVCSProvider(params.VCSProvider), vcsClient, resolution.Repository, resolution.Description)
 		}
 	} else {
 		issueCandidates = nil

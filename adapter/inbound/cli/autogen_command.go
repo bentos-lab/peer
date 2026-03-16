@@ -3,8 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +17,7 @@ import (
 // AutogenCommand runs autogen flow with the shared autogen usecase.
 type AutogenCommand struct {
 	autogenUseCaseBuilder AutogenUseCaseBuilder
-	githubClient          GitHubClient
+	vcsResolver           VCSClientResolver
 	envFactory            uccontracts.CodeEnvironmentFactory
 	recipeLoader          usecase.CustomRecipeLoader
 	logger                usecase.Logger
@@ -31,6 +29,7 @@ type AutogenUseCaseBuilder func(repoURL string) (usecase.AutogenUseCase, error)
 // AutogenRunParams contains already-parsed CLI autogen parameters.
 type AutogenRunParams struct {
 	VCSProvider   string
+	VCSHost       string
 	Repo          string
 	ChangeRequest string
 	Base          string
@@ -41,13 +40,13 @@ type AutogenRunParams struct {
 }
 
 // NewAutogenCommand creates a new CLI command for autogen.
-func NewAutogenCommand(autogenUseCaseBuilder AutogenUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *AutogenCommand {
+func NewAutogenCommand(autogenUseCaseBuilder AutogenUseCaseBuilder, vcsResolver VCSClientResolver, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *AutogenCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &AutogenCommand{
 		autogenUseCaseBuilder: autogenUseCaseBuilder,
-		githubClient:          githubClient,
+		vcsResolver:           vcsResolver,
 		envFactory:            envFactory,
 		recipeLoader:          recipeLoader,
 		logger:                logger,
@@ -59,8 +58,8 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 	if c.autogenUseCaseBuilder == nil {
 		return errors.New("autogen usecase is not configured")
 	}
-	if c.githubClient == nil {
-		return errors.New("github client is not configured")
+	if c.vcsResolver == nil {
+		return errors.New("vcs client resolver is not configured")
 	}
 	if c.envFactory == nil {
 		return errors.New("code environment factory is not configured")
@@ -72,62 +71,26 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 		c.logger = stdlogger.Nop()
 	}
 
-	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
-	if provider == "" {
-		provider = "github"
-	}
-	if provider != "github" {
-		return fmt.Errorf("unsupported vcs provider: %s", provider)
-	}
-
-	if strings.TrimSpace(params.ChangeRequest) != "" && (strings.TrimSpace(params.Base) != "" || strings.TrimSpace(params.Head) != "") {
-		return errors.New("--change-request cannot be used with --base or --head")
-	}
-	if params.Publish && strings.TrimSpace(params.ChangeRequest) == "" {
-		return errors.New("--publish requires --change-request")
-	}
-
-	repository, repoURL, buildRepoURL, err := normalizeRepo(params.Repo)
-	if err != nil {
-		return err
-	}
-	repoProvided := strings.TrimSpace(params.Repo) != ""
-	repository, err = c.githubClient.ResolveRepository(ctx, repository)
+	vcsClient, err := c.vcsResolver.Resolve(params.VCSProvider)
 	if err != nil {
 		return err
 	}
 
-	base, head := resolveBaseHeadDefaults(params.Base, params.Head, repoProvided)
-
-	prNumber := 0
-	headBranch := ""
-	title := ""
-	description := ""
-	if strings.TrimSpace(params.ChangeRequest) != "" {
-		parsed, parseErr := strconv.Atoi(strings.TrimSpace(params.ChangeRequest))
-		if parseErr != nil || parsed <= 0 {
-			return fmt.Errorf("--change-request must be a positive integer")
-		}
-		prNumber = parsed
-		prInfo, infoErr := c.githubClient.GetPullRequestInfo(ctx, repository, prNumber)
-		if infoErr != nil {
-			return infoErr
-		}
-		repository = prInfo.Repository
-		if repoProvided && buildRepoURL != nil {
-			repoURL = buildRepoURL(prInfo.Repository)
-		}
-		base = prInfo.BaseRef
-		head = prInfo.HeadRef
-		headBranch = prInfo.HeadRefName
-		title = prInfo.Title
-		description = prInfo.Description
-	}
-	if repoProvided && isWorkspaceHeadToken(head) {
-		return fmt.Errorf("--head %s requires local workspace mode; omit --repo", head)
+	resolution, err := resolveChangeRequestParams(ctx, vcsClient, ChangeRequestParams{
+		VCSProvider:    params.VCSProvider,
+		VCSHost:        params.VCSHost,
+		Repo:           params.Repo,
+		ChangeRequest:  params.ChangeRequest,
+		Base:           params.Base,
+		Head:           params.Head,
+		Publish:        params.Publish,
+		IssueAlignment: false,
+	})
+	if err != nil {
+		return err
 	}
 
-	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, repoURL)
+	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, resolution.RepoURL)
 	if err != nil {
 		return err
 	}
@@ -137,7 +100,7 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 		}
 	}()
 
-	headRef := strings.TrimSpace(head)
+	headRef := strings.TrimSpace(resolution.Head)
 	if headRef == "" {
 		headRef = "HEAD"
 	}
@@ -146,7 +109,7 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 		return err
 	}
 
-	autogenUseCase, err := c.autogenUseCaseBuilder(repoURL)
+	autogenUseCase, err := c.autogenUseCaseBuilder(resolution.RepoURL)
 	if err != nil {
 		return err
 	}
@@ -155,11 +118,11 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 	effectiveTests := ResolveBool(params.Tests, recipe.AutogenTests, cfg.Autogen.TestsEnabled)
 
 	request := usecase.AutogenRequest{
-		Input:       domainChangeRequestInputForAutogen(repository, prNumber, repoURL, base, head, title, description),
+		Input:       domainChangeRequestInputForAutogen(resolution.Repository, resolution.ChangeRequestNumber, resolution.RepoURL, resolution.Base, resolution.Head, resolution.Title, resolution.Description),
 		Docs:        effectiveDocs,
 		Tests:       effectiveTests,
 		Publish:     params.Publish,
-		HeadBranch:  headBranch,
+		HeadBranch:  strings.TrimSpace(resolution.HeadRefName),
 		Environment: environment,
 		Recipe:      recipe,
 	}

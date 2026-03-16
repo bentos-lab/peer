@@ -17,6 +17,7 @@ import (
 const (
 	opencodeInstallScript = "curl -fsSL https://opencode.ai/install | bash"
 	ghInstallHint         = "GitHub CLI can be installed from official releases if package managers are unavailable."
+	glabInstallHint       = "GitLab CLI can be installed from official releases if package managers are unavailable."
 )
 
 var (
@@ -46,6 +47,12 @@ var (
 		"sudo yum-config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo",
 		"sudo yum install gh",
 	}, " && ")
+
+	glabAptInstallCommand = strings.Join([]string{
+		"curl -sSL https://raw.githubusercontent.com/upciti/wakemeops/main/assets/install_repository | sudo bash",
+		"sudo apt install glab",
+	}, " && ")
+	glabDnfInstallCommand = "sudo dnf install -y glab"
 )
 
 // Config configures the installer dependencies.
@@ -136,7 +143,7 @@ func (i *Installer) EnsureOpencodeInstalled(ctx context.Context) error {
 		i.printOpencodeInstructions()
 		return errors.New("opencode installation requires an interactive terminal")
 	}
-	ok, err := i.promptYesNo("opencode not found. Install now? [y/N]: ")
+	ok, err := i.promptYesNo("opencode not found. Install now? [Y/n]: ")
 	if err != nil {
 		return err
 	}
@@ -171,34 +178,51 @@ func (i *Installer) EnsureGhInstalled(ctx context.Context) error {
 	}
 	if !i.isTerminal() {
 		i.printGhInstructions()
+		i.printManualActionHint("gh", "install")
 		return errors.New("gh installation requires an interactive terminal")
 	}
-	ok, err := i.promptYesNo("GitHub CLI (gh) not found. Install now? [y/N]: ")
+	ok, err := i.promptYesNo("GitHub CLI (gh) not found. Install now? [Y/n]: ")
 	if err != nil {
 		return err
 	}
 	if !ok {
 		i.printGhInstructions()
+		i.printManualActionHint("gh", "install")
 		return errors.New("gh not installed")
 	}
 
 	switch i.goos {
 	case "darwin":
 		if i.commandAvailable("brew") {
-			return i.run(ctx, "brew", "install", "gh")
+			if err := i.run(ctx, "brew", "install", "gh"); err != nil {
+				i.printManualActionHint("gh", "install")
+				return err
+			}
+			return nil
 		}
 		i.printGhInstructions()
+		i.printManualActionHint("gh", "install")
 		return errors.New("homebrew not found for gh install")
 	case "linux":
-		return i.installGhLinux(ctx)
+		if err := i.installGhLinux(ctx); err != nil {
+			i.printManualActionHint("gh", "install")
+			return err
+		}
+		return nil
 	case "windows":
 		if i.commandAvailable("winget") {
-			return i.run(ctx, "winget", "install", "--id", "GitHub.cli")
+			if err := i.run(ctx, "winget", "install", "--id", "GitHub.cli"); err != nil {
+				i.printManualActionHint("gh", "install")
+				return err
+			}
+			return nil
 		}
 		i.printGhInstructions()
+		i.printManualActionHint("gh", "install")
 		return errors.New("winget not found for gh install")
 	default:
 		i.printGhInstructions()
+		i.printManualActionHint("gh", "install")
 		return fmt.Errorf("unsupported platform %q for gh install", i.goos)
 	}
 }
@@ -215,7 +239,7 @@ func (i *Installer) EnsureGhAuthenticated(ctx context.Context) error {
 		_, _ = fmt.Fprintln(i.stderr, "gh is not authenticated. Skipping 'gh auth login' because no TTY is available.")
 		return nil
 	}
-	ok, err := i.promptYesNo("gh is not authenticated. Run 'gh auth login' now? [y/N]: ")
+	ok, err := i.promptYesNo("gh is not authenticated. Run 'gh auth login' now? [Y/n]: ")
 	if err != nil {
 		return err
 	}
@@ -223,7 +247,108 @@ func (i *Installer) EnsureGhAuthenticated(ctx context.Context) error {
 		_, _ = fmt.Fprintln(i.stderr, "gh is not authenticated. Run: gh auth login")
 		return errors.New("gh is not authenticated")
 	}
-	return i.run(ctx, "gh", "auth", "login")
+	if err := i.run(ctx, "gh", "auth", "login"); err != nil {
+		i.printManualActionHint("gh", "auth login")
+		return err
+	}
+	return nil
+}
+
+// EnsureGlabInstalled installs glab when missing.
+func (i *Installer) EnsureGlabInstalled(ctx context.Context) error {
+	if i.commandAvailable("glab") {
+		return nil
+	}
+	if !i.isTerminal() {
+		i.printGlabInstructions()
+		i.printManualActionHint("glab", "install")
+		return errors.New("glab installation requires an interactive terminal")
+	}
+	ok, err := i.promptYesNo("GitLab CLI (glab) not found. Install now? [Y/n]: ")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		i.printGlabInstructions()
+		i.printManualActionHint("glab", "install")
+		return errors.New("glab not installed")
+	}
+
+	switch i.goos {
+	case "darwin":
+		if i.commandAvailable("brew") {
+			if err := i.run(ctx, "brew", "install", "glab"); err != nil {
+				i.printManualActionHint("glab", "install")
+				return err
+			}
+			return nil
+		}
+		i.printGlabInstructions()
+		i.printManualActionHint("glab", "install")
+		return errors.New("homebrew not found for glab install")
+	case "linux":
+		if err := i.installGlabLinux(ctx); err != nil {
+			i.printManualActionHint("glab", "install")
+			return err
+		}
+		return nil
+	case "windows":
+		if i.commandAvailable("winget") {
+			if err := i.run(ctx, "winget", "install", "glab.glab"); err != nil {
+				i.printManualActionHint("glab", "install")
+				return err
+			}
+			return nil
+		}
+		if i.commandAvailable("choco") {
+			if err := i.run(ctx, "choco", "install", "glab"); err != nil {
+				i.printManualActionHint("glab", "install")
+				return err
+			}
+			return nil
+		}
+		if i.commandAvailable("scoop") {
+			if err := i.run(ctx, "scoop", "install", "glab"); err != nil {
+				i.printManualActionHint("glab", "install")
+				return err
+			}
+			return nil
+		}
+		i.printGlabInstructions()
+		i.printManualActionHint("glab", "install")
+		return errors.New("no supported package manager found for glab install")
+	default:
+		i.printGlabInstructions()
+		i.printManualActionHint("glab", "install")
+		return fmt.Errorf("unsupported platform %q for glab install", i.goos)
+	}
+}
+
+// EnsureGlabAuthenticated checks glab auth and optionally prompts to login.
+func (i *Installer) EnsureGlabAuthenticated(ctx context.Context) error {
+	if !i.commandAvailable("glab") {
+		return errors.New("glab is not installed")
+	}
+	if err := i.run(ctx, "glab", "auth", "status"); err == nil {
+		return nil
+	}
+	if !i.isTerminal() {
+		_, _ = fmt.Fprintln(i.stderr, "glab is not authenticated. Skipping 'glab auth login' because no TTY is available.")
+		return nil
+	}
+	ok, err := i.promptYesNo("glab is not authenticated. Run 'glab auth login' now? [Y/n]: ")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		_, _ = fmt.Fprintln(i.stderr, "glab is not authenticated. Run: glab auth login")
+		return errors.New("glab is not authenticated")
+	}
+	if err := i.run(ctx, "glab", "auth", "login"); err != nil {
+		i.printManualActionHint("glab", "auth login")
+		return err
+	}
+	return nil
 }
 
 func (i *Installer) installOpencodeWindows(ctx context.Context) error {
@@ -253,6 +378,18 @@ func (i *Installer) installGhLinux(ctx context.Context) error {
 	default:
 		i.printGhInstructions()
 		return errors.New("no supported package manager found for gh install")
+	}
+}
+
+func (i *Installer) installGlabLinux(ctx context.Context) error {
+	switch {
+	case i.commandAvailable("apt"):
+		return i.runShell(ctx, glabAptInstallCommand)
+	case i.commandAvailable("dnf"):
+		return i.runShell(ctx, glabDnfInstallCommand)
+	default:
+		i.printGlabInstructions()
+		return errors.New("no supported package manager found for glab install")
 	}
 }
 
@@ -316,6 +453,8 @@ func (i *Installer) promptYesNo(prompt string) (bool, error) {
 	}
 	line = strings.TrimSpace(line)
 	switch strings.ToLower(line) {
+	case "":
+		return true, nil
 	case "y", "yes":
 		return true, nil
 	default:
@@ -350,6 +489,29 @@ func (i *Installer) printGhInstructions() {
 	_, _ = fmt.Fprintln(i.stderr, "- Windows (WinGet): winget install --id GitHub.cli")
 	_, _ = fmt.Fprintf(i.stderr, "- %s\n", ghInstallHint)
 	_, _ = fmt.Fprintln(i.stderr, "- Releases: https://github.com/cli/cli/releases")
+}
+
+func (i *Installer) printGlabInstructions() {
+	_, _ = fmt.Fprintln(i.stderr, "GitLab CLI install options:")
+	_, _ = fmt.Fprintln(i.stderr, "- macOS Homebrew: brew install glab")
+	_, _ = fmt.Fprintln(i.stderr, "- Linux (Debian/Ubuntu):")
+	_, _ = fmt.Fprintf(i.stderr, "  %s\n", glabAptInstallCommand)
+	_, _ = fmt.Fprintln(i.stderr, "- Linux (DNF):")
+	_, _ = fmt.Fprintf(i.stderr, "  %s\n", glabDnfInstallCommand)
+	_, _ = fmt.Fprintln(i.stderr, "- Windows (WinGet): winget install glab.glab")
+	_, _ = fmt.Fprintln(i.stderr, "- Windows (Chocolatey): choco install glab")
+	_, _ = fmt.Fprintln(i.stderr, "- Windows (Scoop): scoop install glab")
+	_, _ = fmt.Fprintf(i.stderr, "- %s\n", glabInstallHint)
+	_, _ = fmt.Fprintln(i.stderr, "- Releases: https://gitlab.com/gitlab-org/cli/-/releases")
+}
+
+func (i *Installer) printManualActionHint(tool string, action string) {
+	tool = strings.TrimSpace(tool)
+	action = strings.TrimSpace(action)
+	if tool == "" || action == "" {
+		return
+	}
+	_, _ = fmt.Fprintf(i.stderr, "Manual action required: run `%s %s`.\n", tool, action)
 }
 
 func isTerminalReader(reader io.Reader) bool {

@@ -11,6 +11,8 @@ import (
 type ToolInstaller interface {
 	EnsureGhInstalled(ctx context.Context) error
 	EnsureGhAuthenticated(ctx context.Context) error
+	EnsureGlabInstalled(ctx context.Context) error
+	EnsureGlabAuthenticated(ctx context.Context) error
 	EnsureOpencodeInstalled(ctx context.Context) error
 }
 
@@ -36,6 +38,18 @@ func (c *InstallCommand) InstallGh(ctx context.Context, login bool) error {
 	return installer.EnsureGhAuthenticated(ctx)
 }
 
+// InstallGlab installs GitLab CLI and optionally logs in.
+func (c *InstallCommand) InstallGlab(ctx context.Context, login bool) error {
+	installer := c.resolveInstaller()
+	if err := installer.EnsureGlabInstalled(ctx); err != nil {
+		return err
+	}
+	if !login {
+		return nil
+	}
+	return installer.EnsureGlabAuthenticated(ctx)
+}
+
 // InstallOpencode installs OpenCode (opencode).
 func (c *InstallCommand) InstallOpencode(ctx context.Context) error {
 	installer := c.resolveInstaller()
@@ -57,6 +71,14 @@ func (missingInstaller) EnsureGhInstalled(context.Context) error {
 }
 
 func (missingInstaller) EnsureGhAuthenticated(context.Context) error {
+	return errors.New("install command is not configured")
+}
+
+func (missingInstaller) EnsureGlabInstalled(context.Context) error {
+	return errors.New("install command is not configured")
+}
+
+func (missingInstaller) EnsureGlabAuthenticated(context.Context) error {
 	return errors.New("install command is not configured")
 }
 

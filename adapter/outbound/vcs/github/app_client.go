@@ -139,7 +139,7 @@ func (c *AppClient) CreateComment(ctx context.Context, repository string, pullRe
 }
 
 // CreateReviewComment posts a file-anchored review comment to GitHub.
-func (c *AppClient) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input CreateReviewCommentInput) error {
+func (c *AppClient) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input domain.ReviewCommentInput) error {
 	if pullRequestNumber <= 0 {
 		return fmt.Errorf("pull request number must be positive")
 	}
@@ -212,17 +212,17 @@ func (c *AppClient) CreateReviewReply(ctx context.Context, repository string, pu
 }
 
 // GetIssueComment loads a single issue comment by ID.
-func (c *AppClient) GetIssueComment(ctx context.Context, repository string, commentID int64) (IssueComment, error) {
+func (c *AppClient) GetIssueComment(ctx context.Context, repository string, _ int, commentID int64) (domain.IssueComment, error) {
 	if commentID <= 0 {
-		return IssueComment{}, fmt.Errorf("comment id must be positive")
+		return domain.IssueComment{}, fmt.Errorf("comment id must be positive")
 	}
 	repository = strings.TrimSpace(repository)
 	if repository == "" {
-		return IssueComment{}, fmt.Errorf("repository is required")
+		return domain.IssueComment{}, fmt.Errorf("repository is required")
 	}
 	token, err := c.installationAccessToken(ctx)
 	if err != nil {
-		return IssueComment{}, err
+		return domain.IssueComment{}, err
 	}
 
 	var payload struct {
@@ -236,32 +236,32 @@ func (c *AppClient) GetIssueComment(ctx context.Context, repository string, comm
 	}
 	endpoint := fmt.Sprintf("%s/repos/%s/issues/comments/%d", c.apiBaseURL, repository, commentID)
 	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
-		return IssueComment{}, fmt.Errorf("failed to load issue comment: %w", err)
+		return domain.IssueComment{}, fmt.Errorf("failed to load issue comment: %w", err)
 	}
 	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.CreatedAt))
 	if err != nil {
-		return IssueComment{}, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
+		return domain.IssueComment{}, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
 	}
-	return IssueComment{
+	return domain.IssueComment{
 		ID:        payload.ID,
 		Body:      payload.Body,
-		Author:    CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		Author:    domain.CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
 		CreatedAt: createdAt,
 	}, nil
 }
 
 // GetReviewComment loads a single review comment by ID.
-func (c *AppClient) GetReviewComment(ctx context.Context, repository string, commentID int64) (ReviewComment, error) {
+func (c *AppClient) GetReviewComment(ctx context.Context, repository string, _ int, commentID int64) (domain.ReviewComment, error) {
 	if commentID <= 0 {
-		return ReviewComment{}, fmt.Errorf("comment id must be positive")
+		return domain.ReviewComment{}, fmt.Errorf("comment id must be positive")
 	}
 	repository = strings.TrimSpace(repository)
 	if repository == "" {
-		return ReviewComment{}, fmt.Errorf("repository is required")
+		return domain.ReviewComment{}, fmt.Errorf("repository is required")
 	}
 	token, err := c.installationAccessToken(ctx)
 	if err != nil {
-		return ReviewComment{}, err
+		return domain.ReviewComment{}, err
 	}
 
 	var payload struct {
@@ -286,16 +286,16 @@ func (c *AppClient) GetReviewComment(ctx context.Context, repository string, com
 	}
 	endpoint := fmt.Sprintf("%s/repos/%s/pulls/comments/%d", c.apiBaseURL, repository, commentID)
 	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
-		return ReviewComment{}, fmt.Errorf("failed to load review comment: %w", err)
+		return domain.ReviewComment{}, fmt.Errorf("failed to load review comment: %w", err)
 	}
 	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.CreatedAt))
 	if err != nil {
-		return ReviewComment{}, fmt.Errorf("failed to parse review comment timestamp: %w", err)
+		return domain.ReviewComment{}, fmt.Errorf("failed to parse review comment timestamp: %w", err)
 	}
-	return ReviewComment{
+	return domain.ReviewComment{
 		ID:                payload.ID,
 		Body:              payload.Body,
-		Author:            CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		Author:            domain.CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
 		CreatedAt:         createdAt,
 		InReplyToID:       payload.InReplyToID,
 		Path:              payload.Path,
@@ -312,7 +312,7 @@ func (c *AppClient) GetReviewComment(ctx context.Context, repository string, com
 }
 
 // ListIssueComments loads issue comments for a pull request.
-func (c *AppClient) ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]IssueComment, error) {
+func (c *AppClient) ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.IssueComment, error) {
 	if pullRequestNumber <= 0 {
 		return nil, fmt.Errorf("pull request number must be positive")
 	}
@@ -325,7 +325,7 @@ func (c *AppClient) ListIssueComments(ctx context.Context, repository string, pu
 		return nil, err
 	}
 
-	comments := make([]IssueComment, 0)
+	comments := make([]domain.IssueComment, 0)
 	page := 1
 	for {
 		endpoint := fmt.Sprintf("%s/repos/%s/issues/%d/comments?per_page=100&page=%d", c.apiBaseURL, repository, pullRequestNumber, page)
@@ -346,10 +346,10 @@ func (c *AppClient) ListIssueComments(ctx context.Context, repository string, pu
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
 			}
-			comments = append(comments, IssueComment{
+			comments = append(comments, domain.IssueComment{
 				ID:        item.ID,
 				Body:      item.Body,
-				Author:    CommentAuthor{Login: item.User.Login, Type: item.User.Type},
+				Author:    domain.CommentAuthor{Login: item.User.Login, Type: item.User.Type},
 				CreatedAt: createdAt,
 			})
 		}
@@ -361,8 +361,13 @@ func (c *AppClient) ListIssueComments(ctx context.Context, repository string, pu
 	return comments, nil
 }
 
+// ListChangeRequestComments loads issue-style comments for a pull request.
+func (c *AppClient) ListChangeRequestComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.IssueComment, error) {
+	return c.ListIssueComments(ctx, repository, pullRequestNumber)
+}
+
 // ListReviewComments loads review comments for a pull request.
-func (c *AppClient) ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]ReviewComment, error) {
+func (c *AppClient) ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.ReviewComment, error) {
 	if pullRequestNumber <= 0 {
 		return nil, fmt.Errorf("pull request number must be positive")
 	}
@@ -375,7 +380,7 @@ func (c *AppClient) ListReviewComments(ctx context.Context, repository string, p
 		return nil, err
 	}
 
-	comments := make([]ReviewComment, 0)
+	comments := make([]domain.ReviewComment, 0)
 	page := 1
 	for {
 		endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/comments?per_page=100&page=%d", c.apiBaseURL, repository, pullRequestNumber, page)
@@ -407,10 +412,10 @@ func (c *AppClient) ListReviewComments(ctx context.Context, repository string, p
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse review comment timestamp: %w", err)
 			}
-			comments = append(comments, ReviewComment{
+			comments = append(comments, domain.ReviewComment{
 				ID:                item.ID,
 				Body:              item.Body,
-				Author:            CommentAuthor{Login: item.User.Login, Type: item.User.Type},
+				Author:            domain.CommentAuthor{Login: item.User.Login, Type: item.User.Type},
 				CreatedAt:         createdAt,
 				InReplyToID:       item.InReplyToID,
 				Path:              item.Path,
@@ -434,20 +439,20 @@ func (c *AppClient) ListReviewComments(ctx context.Context, repository string, p
 }
 
 // GetPullRequestReview loads a pull request review summary.
-func (c *AppClient) GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (PullRequestReviewSummary, error) {
+func (c *AppClient) GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (domain.ReviewSummary, error) {
 	if pullRequestNumber <= 0 {
-		return PullRequestReviewSummary{}, fmt.Errorf("pull request number must be positive")
+		return domain.ReviewSummary{}, fmt.Errorf("pull request number must be positive")
 	}
 	if reviewID <= 0 {
-		return PullRequestReviewSummary{}, fmt.Errorf("review id must be positive")
+		return domain.ReviewSummary{}, fmt.Errorf("review id must be positive")
 	}
 	repository = strings.TrimSpace(repository)
 	if repository == "" {
-		return PullRequestReviewSummary{}, fmt.Errorf("repository is required")
+		return domain.ReviewSummary{}, fmt.Errorf("repository is required")
 	}
 	token, err := c.installationAccessToken(ctx)
 	if err != nil {
-		return PullRequestReviewSummary{}, err
+		return domain.ReviewSummary{}, err
 	}
 
 	var payload struct {
@@ -461,28 +466,28 @@ func (c *AppClient) GetPullRequestReview(ctx context.Context, repository string,
 	}
 	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d/reviews/%d", c.apiBaseURL, repository, pullRequestNumber, reviewID)
 	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
-		return PullRequestReviewSummary{}, fmt.Errorf("failed to load pull request review: %w", err)
+		return domain.ReviewSummary{}, fmt.Errorf("failed to load pull request review: %w", err)
 	}
-	return PullRequestReviewSummary{
+	return domain.ReviewSummary{
 		ID:    payload.ID,
 		Body:  strings.TrimSpace(payload.Body),
 		State: strings.TrimSpace(payload.State),
-		User:  CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		User:  domain.CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
 	}, nil
 }
 
 // GetPullRequestInfo loads title/body/base/head for a pull request.
-func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (PullRequestInfo, error) {
+func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (domain.ChangeRequestInfo, error) {
 	if pullRequestNumber <= 0 {
-		return PullRequestInfo{}, fmt.Errorf("pull request number must be positive")
+		return domain.ChangeRequestInfo{}, fmt.Errorf("pull request number must be positive")
 	}
 	repository = strings.TrimSpace(repository)
 	if repository == "" {
-		return PullRequestInfo{}, fmt.Errorf("repository is required")
+		return domain.ChangeRequestInfo{}, fmt.Errorf("repository is required")
 	}
 	token, err := c.installationAccessToken(ctx)
 	if err != nil {
-		return PullRequestInfo{}, err
+		return domain.ChangeRequestInfo{}, err
 	}
 
 	var payload struct {
@@ -499,7 +504,7 @@ func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, p
 	}
 	endpoint := fmt.Sprintf("%s/repos/%s/pulls/%d", c.apiBaseURL, repository, pullRequestNumber)
 	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
-		return PullRequestInfo{}, fmt.Errorf("failed to load pull request metadata: %w", err)
+		return domain.ChangeRequestInfo{}, fmt.Errorf("failed to load pull request metadata: %w", err)
 	}
 	base := strings.TrimSpace(payload.Base.SHA)
 	if base == "" {
@@ -510,9 +515,9 @@ func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, p
 		head = strings.TrimSpace(payload.Head.Ref)
 	}
 	if base == "" || head == "" {
-		return PullRequestInfo{}, fmt.Errorf("failed to resolve pull request base/head refs")
+		return domain.ChangeRequestInfo{}, fmt.Errorf("failed to resolve pull request base/head refs")
 	}
-	return PullRequestInfo{
+	return domain.ChangeRequestInfo{
 		Repository:  repository,
 		Number:      pullRequestNumber,
 		Title:       strings.TrimSpace(payload.Title),
@@ -524,17 +529,17 @@ func (c *AppClient) GetPullRequestInfo(ctx context.Context, repository string, p
 }
 
 // GetIssue loads issue metadata for a repository issue.
-func (c *AppClient) GetIssue(ctx context.Context, repository string, issueNumber int) (Issue, error) {
+func (c *AppClient) GetIssue(ctx context.Context, repository string, issueNumber int) (domain.Issue, error) {
 	if issueNumber <= 0 {
-		return Issue{}, fmt.Errorf("issue number must be positive")
+		return domain.Issue{}, fmt.Errorf("issue number must be positive")
 	}
 	repository = strings.TrimSpace(repository)
 	if repository == "" {
-		return Issue{}, fmt.Errorf("repository is required")
+		return domain.Issue{}, fmt.Errorf("repository is required")
 	}
 	token, err := c.installationAccessToken(ctx)
 	if err != nil {
-		return Issue{}, err
+		return domain.Issue{}, err
 	}
 
 	var payload struct {
@@ -545,9 +550,9 @@ func (c *AppClient) GetIssue(ctx context.Context, repository string, issueNumber
 	}
 	endpoint := fmt.Sprintf("%s/repos/%s/issues/%d", c.apiBaseURL, repository, issueNumber)
 	if err := c.requestJSON(ctx, token, http.MethodGet, endpoint, nil, &payload); err != nil {
-		return Issue{}, fmt.Errorf("failed to load issue: %w", err)
+		return domain.Issue{}, fmt.Errorf("failed to load issue: %w", err)
 	}
-	return Issue{
+	return domain.Issue{
 		Repository: repository,
 		Number:     payload.Number,
 		Title:      strings.TrimSpace(payload.Title),

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	codeenv "bentos-backend/adapter/outbound/codeenv"
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/shared/logger/stdlogger"
@@ -17,21 +16,10 @@ import (
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
-// ReplyCommentGitHubClient resolves repository and pull-request metadata for replycomment.
-type ReplyCommentGitHubClient interface {
-	ResolveRepository(ctx context.Context, repository string) (string, error)
-	GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (githubvcs.PullRequestInfo, error)
-	GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (githubvcs.PullRequestReviewSummary, error)
-	GetIssueComment(ctx context.Context, repository string, commentID int64) (githubvcs.IssueComment, error)
-	GetReviewComment(ctx context.Context, repository string, commentID int64) (githubvcs.ReviewComment, error)
-	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.IssueComment, error)
-	ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.ReviewComment, error)
-}
-
 // ReplyCommentCommand runs the replycomment flow.
 type ReplyCommentCommand struct {
 	replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder
-	githubClient               ReplyCommentGitHubClient
+	vcsResolver                VCSClientResolver
 	envFactory                 uccontracts.CodeEnvironmentFactory
 	recipeLoader               usecase.CustomRecipeLoader
 	triggerName                string
@@ -44,6 +32,7 @@ type ReplyCommentUseCaseBuilder func(repoURL string) (usecase.ReplyCommentUseCas
 // ReplyCommentRunParams contains already-parsed replycomment parameters.
 type ReplyCommentRunParams struct {
 	VCSProvider   string
+	VCSHost       string
 	Repo          string
 	ChangeRequest string
 	CommentID     string
@@ -52,13 +41,13 @@ type ReplyCommentRunParams struct {
 }
 
 // NewReplyCommentCommand creates a new CLI command for replycomment.
-func NewReplyCommentCommand(replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder, githubClient ReplyCommentGitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, triggerName string, logger usecase.Logger) *ReplyCommentCommand {
+func NewReplyCommentCommand(replyCommentUseCaseBuilder ReplyCommentUseCaseBuilder, vcsResolver VCSClientResolver, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, triggerName string, logger usecase.Logger) *ReplyCommentCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &ReplyCommentCommand{
 		replyCommentUseCaseBuilder: replyCommentUseCaseBuilder,
-		githubClient:               githubClient,
+		vcsResolver:                vcsResolver,
 		envFactory:                 envFactory,
 		recipeLoader:               recipeLoader,
 		triggerName:                strings.TrimSpace(triggerName),
@@ -71,8 +60,8 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 	if c.replyCommentUseCaseBuilder == nil {
 		return errors.New("replycomment usecase is not configured")
 	}
-	if c.githubClient == nil {
-		return errors.New("github client is not configured")
+	if c.vcsResolver == nil {
+		return errors.New("vcs client resolver is not configured")
 	}
 	if c.envFactory == nil {
 		return errors.New("code environment factory is not configured")
@@ -85,12 +74,9 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 	}
 	_ = cfg
 
-	provider := strings.TrimSpace(strings.ToLower(params.VCSProvider))
-	if provider == "" {
-		provider = "github"
-	}
-	if provider != "github" {
-		return fmt.Errorf("unsupported vcs provider: %s", provider)
+	vcsClient, err := c.vcsResolver.Resolve(params.VCSProvider)
+	if err != nil {
+		return err
 	}
 
 	if strings.TrimSpace(params.ChangeRequest) == "" {
@@ -111,7 +97,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 		return fmt.Errorf("--change-request must be a positive integer")
 	}
 
-	repository, repoURL, _, err := normalizeRepo(params.Repo)
+	repository, repoURL, _, err := normalizeRepo(normalizeVCSProvider(params.VCSProvider), params.VCSHost, params.Repo)
 	if err != nil {
 		return err
 	}
@@ -130,12 +116,12 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 	if err != nil {
 		return err
 	}
-	repository, err = c.githubClient.ResolveRepository(ctx, repository)
+	repository, err = vcsClient.ResolveRepository(ctx, repository)
 	if err != nil {
 		return err
 	}
 
-	prInfo, err := c.githubClient.GetPullRequestInfo(ctx, repository, prNumber)
+	prInfo, err := vcsClient.GetPullRequestInfo(ctx, repository, prNumber)
 	if err != nil {
 		return err
 	}
@@ -172,11 +158,11 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 	}
 	request.CommentID = commentID
 
-	reviewComment, reviewErr := c.githubClient.GetReviewComment(ctx, prInfo.Repository, commentID)
+	reviewComment, reviewErr := vcsClient.GetReviewComment(ctx, prInfo.Repository, prNumber, commentID)
 	if reviewErr == nil && reviewComment.ID > 0 {
 		request.CommentKind = domain.CommentKindReview
 		request.Question = text.StripTrigger(reviewComment.Body, c.triggerName)
-		thread, err := buildReviewThread(ctx, c.githubClient, prInfo.Repository, prNumber, commentID)
+		thread, err := buildReviewThread(ctx, vcsClient, prInfo.Repository, prNumber, commentID)
 		if err != nil {
 			return err
 		}
@@ -185,7 +171,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 		return err
 	}
 
-	issueComment, issueErr := c.githubClient.GetIssueComment(ctx, prInfo.Repository, commentID)
+	issueComment, issueErr := vcsClient.GetIssueComment(ctx, prInfo.Repository, prNumber, commentID)
 	if issueErr != nil || issueComment.ID <= 0 {
 		if reviewErr != nil {
 			return fmt.Errorf("failed to resolve comment: %v", reviewErr)
@@ -194,7 +180,7 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 	}
 	request.CommentKind = domain.CommentKindIssue
 	request.Question = text.StripTrigger(issueComment.Body, c.triggerName)
-	thread, err := buildIssueThread(ctx, c.githubClient, prInfo.Repository, prNumber, commentID, prInfo)
+	thread, err := buildIssueThread(ctx, vcsClient, prInfo.Repository, prNumber, commentID, prInfo)
 	if err != nil {
 		return err
 	}

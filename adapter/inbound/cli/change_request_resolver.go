@@ -4,6 +4,7 @@ import "bentos-backend/domain"
 
 type ChangeRequestParams struct {
 	VCSProvider    string
+	VCSHost        string
 	Repo           string
 	ChangeRequest  string
 	Base           string
@@ -20,5 +21,6 @@ type ChangeRequestResolution struct {
 	Description         string
 	Base                string
 	Head                string
+	HeadRefName         string
 	IssueCandidates     []domain.IssueContext
 }

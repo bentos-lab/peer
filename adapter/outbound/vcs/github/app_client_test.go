@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"bentos-backend/domain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -160,7 +161,7 @@ func TestAppClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = client.CreateReviewComment(WithInstallationID(context.Background(), "42"), "org/repo", 7, CreateReviewCommentInput{
+	err = client.CreateReviewComment(WithInstallationID(context.Background(), "42"), "org/repo", 7, domain.ReviewCommentInput{
 		Body:      "bad",
 		Path:      "a.go",
 		StartLine: 90,

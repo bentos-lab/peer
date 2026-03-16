@@ -6,7 +6,6 @@ import (
 	"time"
 
 	codeenv "bentos-backend/adapter/outbound/codeenv"
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/shared/logger/stdlogger"
 	sharedlogging "bentos-backend/shared/logging"
@@ -14,21 +13,13 @@ import (
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
-// GitHubClient resolves repository and pull-request metadata.
-type GitHubClient interface {
-	ResolveRepository(ctx context.Context, repository string) (string, error)
-	GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (githubvcs.PullRequestInfo, error)
-	GetIssue(ctx context.Context, repository string, issueNumber int) (githubvcs.Issue, error)
-	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.IssueComment, error)
-}
-
 // ReviewUseCaseBuilder builds a review usecase for a specific repo.
 type ReviewUseCaseBuilder func(repoURL string) (usecase.ReviewUseCase, error)
 
 // ReviewCommand runs autogit review flow with the shared review usecase.
 type ReviewCommand struct {
 	reviewUseCaseBuilder ReviewUseCaseBuilder
-	githubClient         GitHubClient
+	vcsResolver          VCSClientResolver
 	envFactory           uccontracts.CodeEnvironmentFactory
 	recipeLoader         usecase.CustomRecipeLoader
 	logger               usecase.Logger
@@ -37,6 +28,7 @@ type ReviewCommand struct {
 // ReviewParams contains already-parsed CLI autogit parameters.
 type ReviewParams struct {
 	VCSProvider   string
+	VCSHost       string
 	Repo          string
 	ChangeRequest string
 	Base          string
@@ -45,16 +37,14 @@ type ReviewParams struct {
 	Suggest       *bool
 }
 
-type repoURLBuilder func(repository string) string
-
 // NewReviewCommand creates a new CLI command for autogit reviews.
-func NewReviewCommand(reviewUseCaseBuilder ReviewUseCaseBuilder, githubClient GitHubClient, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *ReviewCommand {
+func NewReviewCommand(reviewUseCaseBuilder ReviewUseCaseBuilder, vcsResolver VCSClientResolver, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *ReviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	return &ReviewCommand{
 		reviewUseCaseBuilder: reviewUseCaseBuilder,
-		githubClient:         githubClient,
+		vcsResolver:          vcsResolver,
 		envFactory:           envFactory,
 		recipeLoader:         recipeLoader,
 		logger:               logger,
@@ -66,8 +56,8 @@ func (c *ReviewCommand) Run(ctx context.Context, cfg config.Config, params Revie
 	if c.reviewUseCaseBuilder == nil {
 		return errors.New("review usecase is not configured")
 	}
-	if c.githubClient == nil {
-		return errors.New("github client is not configured")
+	if c.vcsResolver == nil {
+		return errors.New("vcs client resolver is not configured")
 	}
 	if c.envFactory == nil {
 		return errors.New("code environment factory is not configured")
@@ -79,8 +69,14 @@ func (c *ReviewCommand) Run(ctx context.Context, cfg config.Config, params Revie
 		c.logger = stdlogger.Nop()
 	}
 
-	resolution, err := resolveChangeRequestParams(ctx, c.githubClient, ChangeRequestParams{
+	vcsClient, err := c.vcsResolver.Resolve(params.VCSProvider)
+	if err != nil {
+		return err
+	}
+
+	resolution, err := resolveChangeRequestParams(ctx, vcsClient, ChangeRequestParams{
 		VCSProvider:    params.VCSProvider,
+		VCSHost:        params.VCSHost,
 		Repo:           params.Repo,
 		ChangeRequest:  params.ChangeRequest,
 		Base:           params.Base,

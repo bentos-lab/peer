@@ -110,11 +110,11 @@ type InstallationTokenProvider interface {
 // CommentClient provides PR/comment metadata for replycomment handling.
 type CommentClient interface {
 	InstallationTokenProvider
-	GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (githubvcs.PullRequestInfo, error)
-	GetIssue(ctx context.Context, repository string, issueNumber int) (githubvcs.Issue, error)
-	GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (githubvcs.PullRequestReviewSummary, error)
-	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.IssueComment, error)
-	ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]githubvcs.ReviewComment, error)
+	GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (domain.ChangeRequestInfo, error)
+	GetIssue(ctx context.Context, repository string, issueNumber int) (domain.Issue, error)
+	GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (domain.ReviewSummary, error)
+	ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.IssueComment, error)
+	ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.ReviewComment, error)
 }
 
 // RecipeConfigLoader reads enabled toggles from the repo-scoped recipe config.

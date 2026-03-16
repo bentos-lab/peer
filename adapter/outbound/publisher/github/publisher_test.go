@@ -7,14 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
 	"bentos-backend/usecase"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeClient struct {
-	reviewInputs []githubvcs.CreateReviewCommentInput
+	reviewInputs []domain.ReviewCommentInput
 	bodies       []string
 	reviewErr    error
 	commentErr   error
@@ -28,7 +27,7 @@ func (f *fakeClient) CreateComment(_ context.Context, _ string, _ int, body stri
 	return nil
 }
 
-func (f *fakeClient) CreateReviewComment(_ context.Context, _ string, _ int, input githubvcs.CreateReviewCommentInput) error {
+func (f *fakeClient) CreateReviewComment(_ context.Context, _ string, _ int, input domain.ReviewCommentInput) error {
 	if f.reviewErr != nil {
 		return f.reviewErr
 	}
@@ -259,7 +258,7 @@ func TestPublisher_PublishSkipsInvalidLocalAnchor(t *testing.T) {
 
 func TestPublisher_PublishSkipsInvalidAnchorFromClient(t *testing.T) {
 	client := &fakeClient{
-		reviewErr: &githubvcs.InvalidAnchorError{Message: "invalid review comment anchor"},
+		reviewErr: &domain.InvalidAnchorError{Message: "invalid review comment anchor"},
 	}
 	logger := &spyLogger{}
 	pub := NewPublisher(client, logger)

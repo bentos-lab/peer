@@ -127,23 +127,23 @@ func (m mockInstallationTokenProvider) GetInstallationAccessToken(_ context.Cont
 	return m.token, nil
 }
 
-func (m mockInstallationTokenProvider) GetPullRequestInfo(_ context.Context, _ string, _ int) (githubvcs.PullRequestInfo, error) {
-	return githubvcs.PullRequestInfo{}, errors.New("not implemented")
+func (m mockInstallationTokenProvider) GetPullRequestInfo(_ context.Context, _ string, _ int) (domain.ChangeRequestInfo, error) {
+	return domain.ChangeRequestInfo{}, errors.New("not implemented")
 }
 
-func (m mockInstallationTokenProvider) GetIssue(_ context.Context, _ string, _ int) (githubvcs.Issue, error) {
-	return githubvcs.Issue{}, errors.New("not implemented")
+func (m mockInstallationTokenProvider) GetIssue(_ context.Context, _ string, _ int) (domain.Issue, error) {
+	return domain.Issue{}, errors.New("not implemented")
 }
 
-func (m mockInstallationTokenProvider) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (githubvcs.PullRequestReviewSummary, error) {
-	return githubvcs.PullRequestReviewSummary{}, errors.New("not implemented")
+func (m mockInstallationTokenProvider) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (domain.ReviewSummary, error) {
+	return domain.ReviewSummary{}, errors.New("not implemented")
 }
 
-func (m mockInstallationTokenProvider) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
+func (m mockInstallationTokenProvider) ListIssueComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m mockInstallationTokenProvider) ListReviewComments(_ context.Context, _ string, _ int) ([]githubvcs.ReviewComment, error) {
+func (m mockInstallationTokenProvider) ListReviewComments(_ context.Context, _ string, _ int) ([]domain.ReviewComment, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -157,54 +157,54 @@ func (m *issueAlignmentTokenProvider) GetInstallationAccessToken(_ context.Conte
 	return m.token, nil
 }
 
-func (m *issueAlignmentTokenProvider) GetPullRequestInfo(_ context.Context, _ string, _ int) (githubvcs.PullRequestInfo, error) {
-	return githubvcs.PullRequestInfo{}, errors.New("not implemented")
+func (m *issueAlignmentTokenProvider) GetPullRequestInfo(_ context.Context, _ string, _ int) (domain.ChangeRequestInfo, error) {
+	return domain.ChangeRequestInfo{}, errors.New("not implemented")
 }
 
-func (m *issueAlignmentTokenProvider) GetIssue(_ context.Context, repository string, issueNumber int) (githubvcs.Issue, error) {
+func (m *issueAlignmentTokenProvider) GetIssue(_ context.Context, repository string, issueNumber int) (domain.Issue, error) {
 	m.issueCalls++
-	return githubvcs.Issue{Repository: repository, Number: issueNumber, Title: "Issue", Body: "Body"}, nil
+	return domain.Issue{Repository: repository, Number: issueNumber, Title: "Issue", Body: "Body"}, nil
 }
 
-func (m *issueAlignmentTokenProvider) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (githubvcs.PullRequestReviewSummary, error) {
-	return githubvcs.PullRequestReviewSummary{}, errors.New("not implemented")
+func (m *issueAlignmentTokenProvider) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (domain.ReviewSummary, error) {
+	return domain.ReviewSummary{}, errors.New("not implemented")
 }
 
-func (m *issueAlignmentTokenProvider) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
+func (m *issueAlignmentTokenProvider) ListIssueComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
 	m.commentCalls++
 	return nil, nil
 }
 
-func (m *issueAlignmentTokenProvider) ListReviewComments(_ context.Context, _ string, _ int) ([]githubvcs.ReviewComment, error) {
+func (m *issueAlignmentTokenProvider) ListReviewComments(_ context.Context, _ string, _ int) ([]domain.ReviewComment, error) {
 	return nil, errors.New("not implemented")
 }
 
 type replyCommentTokenProvider struct {
 	token  string
-	prInfo githubvcs.PullRequestInfo
+	prInfo domain.ChangeRequestInfo
 }
 
 func (m *replyCommentTokenProvider) GetInstallationAccessToken(_ context.Context, _ string) (string, error) {
 	return m.token, nil
 }
 
-func (m *replyCommentTokenProvider) GetPullRequestInfo(_ context.Context, _ string, _ int) (githubvcs.PullRequestInfo, error) {
+func (m *replyCommentTokenProvider) GetPullRequestInfo(_ context.Context, _ string, _ int) (domain.ChangeRequestInfo, error) {
 	return m.prInfo, nil
 }
 
-func (m *replyCommentTokenProvider) GetIssue(_ context.Context, _ string, _ int) (githubvcs.Issue, error) {
-	return githubvcs.Issue{}, errors.New("not implemented")
+func (m *replyCommentTokenProvider) GetIssue(_ context.Context, _ string, _ int) (domain.Issue, error) {
+	return domain.Issue{}, errors.New("not implemented")
 }
 
-func (m *replyCommentTokenProvider) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (githubvcs.PullRequestReviewSummary, error) {
-	return githubvcs.PullRequestReviewSummary{}, errors.New("not implemented")
+func (m *replyCommentTokenProvider) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (domain.ReviewSummary, error) {
+	return domain.ReviewSummary{}, errors.New("not implemented")
 }
 
-func (m *replyCommentTokenProvider) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
+func (m *replyCommentTokenProvider) ListIssueComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
 	return nil, nil
 }
 
-func (m *replyCommentTokenProvider) ListReviewComments(_ context.Context, _ string, _ int) ([]githubvcs.ReviewComment, error) {
+func (m *replyCommentTokenProvider) ListReviewComments(_ context.Context, _ string, _ int) ([]domain.ReviewComment, error) {
 	return nil, nil
 }
 
@@ -870,7 +870,7 @@ func TestHandler_ServeHTTP_ConfigDisablesReplyCommentSkipsUsecase(t *testing.T) 
 	replyBuilder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return replyUseCase, nil
 	}
-	prInfo := githubvcs.PullRequestInfo{
+	prInfo := domain.ChangeRequestInfo{
 		Repository:  "org/repo",
 		Number:      7,
 		Title:       "Title",
@@ -914,7 +914,7 @@ func TestHandler_ServeHTTP_ConfigReplyCommentEventsSkipsIssueComment(t *testing.
 	replyBuilder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return replyUseCase, nil
 	}
-	prInfo := githubvcs.PullRequestInfo{
+	prInfo := domain.ChangeRequestInfo{
 		Repository:  "org/repo",
 		Number:      7,
 		Title:       "Title",

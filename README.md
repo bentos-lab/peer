@@ -5,8 +5,9 @@ LLM-based pull/merge request reviewer built with Clean Architecture.
 ## Supported Flows
 
 - GitHub webhook flow (`/webhook/github`) using GitHub App authentication.
-- GitLab webhook flow (`/webhook/gitlab`).
-- CLI flow for local/GitHub PR review.
+- CLI flow for local/GitHub/GitLab PR/MR review.
+
+Note: GitLab webhook support is not available in this version.
 
 ## Prerequisites
 
@@ -56,6 +57,10 @@ Feature: GitHub webhook
 - `GITHUB_APP_PRIVATE_KEY` (required, PEM content or path to PEM file; escaped `\n` is supported for inline mode)
 - `GITHUB_API_BASE_URL` (optional, default: `https://api.github.com`)
 
+Feature: GitLab CLI
+
+- `GITLAB_HOST` (optional, default: `gitlab.com`)
+
 Example: Inline PEM mode:
 
 `GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----`
@@ -102,6 +107,8 @@ go run ./cmd/autogit webhook --vcs-provider github -vv
 Webhook routes:
 
 - `POST /webhook/github`
+
+GitLab webhooks are not supported in this version.
 
 GitHub PR actions that trigger review:
 
@@ -156,6 +163,36 @@ CLI autogen (docs + tests, publish):
 
 ```bash
 go run ./cmd/autogit autogen --vcs-provider github --change-request 123 --docs --tests --publish
+```
+
+CLI review (GitLab MR by number):
+
+```bash
+go run ./cmd/autogit review --vcs-provider gitlab --change-request 123
+```
+
+CLI review (self-managed GitLab host):
+
+```bash
+go run ./cmd/autogit review --vcs-provider gitlab:gitlab.example.com --change-request 123
+```
+
+CLI overview (GitLab MR):
+
+```bash
+go run ./cmd/autogit overview --vcs-provider gitlab --change-request 123
+```
+
+CLI replycomment (GitLab MR note/discussion, publish reply):
+
+```bash
+go run ./cmd/autogit replycomment --vcs-provider gitlab --change-request 123 --comment-id note_456789 --publish
+```
+
+CLI autogen (GitLab MR, docs + tests, publish):
+
+```bash
+go run ./cmd/autogit autogen --vcs-provider gitlab --change-request 123 --docs --tests --publish
 ```
 
 See `go run ./cmd/autogit --help` for flags and defaults.

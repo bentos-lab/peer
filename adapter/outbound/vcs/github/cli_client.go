@@ -20,33 +20,6 @@ type CLIClient struct {
 	authChecked bool
 }
 
-// CreateReviewCommentInput contains one anchored GitHub review comment payload.
-type CreateReviewCommentInput struct {
-	Body      string
-	Path      string
-	StartLine int
-	EndLine   int
-}
-
-// PullRequestInfo contains normalized pull-request metadata.
-type PullRequestInfo struct {
-	Repository  string
-	Number      int
-	Title       string
-	Description string
-	BaseRef     string
-	HeadRef     string
-	HeadRefName string
-}
-
-// PullRequestReviewSummary contains normalized pull request review metadata.
-type PullRequestReviewSummary struct {
-	ID    int64
-	Body  string
-	State string
-	User  CommentAuthor
-}
-
 // NewCLIClient creates a GitHub CLI API client.
 func NewCLIClient() *CLIClient {
 	return &CLIClient{
@@ -115,7 +88,7 @@ func (c *CLIClient) CreateComment(ctx context.Context, repository string, pullRe
 }
 
 // CreateReviewComment posts a file-anchored review comment to GitHub.
-func (c *CLIClient) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input CreateReviewCommentInput) error {
+func (c *CLIClient) CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input domain.ReviewCommentInput) error {
 	if pullRequestNumber <= 0 {
 		return fmt.Errorf("pull request number must be positive")
 	}
@@ -209,16 +182,16 @@ func (c *CLIClient) CreateReviewReply(ctx context.Context, repository string, pu
 }
 
 // GetIssueComment loads a single issue comment by ID.
-func (c *CLIClient) GetIssueComment(ctx context.Context, repository string, commentID int64) (IssueComment, error) {
+func (c *CLIClient) GetIssueComment(ctx context.Context, repository string, _ int, commentID int64) (domain.IssueComment, error) {
 	if commentID <= 0 {
-		return IssueComment{}, fmt.Errorf("comment id must be positive")
+		return domain.IssueComment{}, fmt.Errorf("comment id must be positive")
 	}
 	if err := c.ensureAuth(ctx); err != nil {
-		return IssueComment{}, err
+		return domain.IssueComment{}, err
 	}
 	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
-		return IssueComment{}, err
+		return domain.IssueComment{}, err
 	}
 
 	result, err := c.runner.Run(
@@ -228,22 +201,22 @@ func (c *CLIClient) GetIssueComment(ctx context.Context, repository string, comm
 		fmt.Sprintf("repos/%s/issues/comments/%d", resolvedRepo, commentID),
 	)
 	if err != nil {
-		return IssueComment{}, fmt.Errorf("failed to load issue comment: %w", formatCommandError(err, result))
+		return domain.IssueComment{}, fmt.Errorf("failed to load issue comment: %w", formatCommandError(err, result))
 	}
 	return parseIssueComment(result.Stdout)
 }
 
 // GetReviewComment loads a single review comment by ID.
-func (c *CLIClient) GetReviewComment(ctx context.Context, repository string, commentID int64) (ReviewComment, error) {
+func (c *CLIClient) GetReviewComment(ctx context.Context, repository string, _ int, commentID int64) (domain.ReviewComment, error) {
 	if commentID <= 0 {
-		return ReviewComment{}, fmt.Errorf("comment id must be positive")
+		return domain.ReviewComment{}, fmt.Errorf("comment id must be positive")
 	}
 	if err := c.ensureAuth(ctx); err != nil {
-		return ReviewComment{}, err
+		return domain.ReviewComment{}, err
 	}
 	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
-		return ReviewComment{}, err
+		return domain.ReviewComment{}, err
 	}
 
 	result, err := c.runner.Run(
@@ -253,13 +226,13 @@ func (c *CLIClient) GetReviewComment(ctx context.Context, repository string, com
 		fmt.Sprintf("repos/%s/pulls/comments/%d", resolvedRepo, commentID),
 	)
 	if err != nil {
-		return ReviewComment{}, fmt.Errorf("failed to load review comment: %w", formatCommandError(err, result))
+		return domain.ReviewComment{}, fmt.Errorf("failed to load review comment: %w", formatCommandError(err, result))
 	}
 	return parseReviewComment(result.Stdout)
 }
 
 // ListIssueComments loads issue comments for a pull request.
-func (c *CLIClient) ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]IssueComment, error) {
+func (c *CLIClient) ListIssueComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.IssueComment, error) {
 	if pullRequestNumber <= 0 {
 		return nil, fmt.Errorf("pull request number must be positive")
 	}
@@ -284,8 +257,13 @@ func (c *CLIClient) ListIssueComments(ctx context.Context, repository string, pu
 	return parseIssueComments(result.Stdout)
 }
 
+// ListChangeRequestComments loads issue-style comments for a pull request.
+func (c *CLIClient) ListChangeRequestComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.IssueComment, error) {
+	return c.ListIssueComments(ctx, repository, pullRequestNumber)
+}
+
 // ListReviewComments loads review comments for a pull request.
-func (c *CLIClient) ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]ReviewComment, error) {
+func (c *CLIClient) ListReviewComments(ctx context.Context, repository string, pullRequestNumber int) ([]domain.ReviewComment, error) {
 	if pullRequestNumber <= 0 {
 		return nil, fmt.Errorf("pull request number must be positive")
 	}
@@ -311,19 +289,19 @@ func (c *CLIClient) ListReviewComments(ctx context.Context, repository string, p
 }
 
 // GetPullRequestReview loads a pull request review summary.
-func (c *CLIClient) GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (PullRequestReviewSummary, error) {
+func (c *CLIClient) GetPullRequestReview(ctx context.Context, repository string, pullRequestNumber int, reviewID int64) (domain.ReviewSummary, error) {
 	if pullRequestNumber <= 0 {
-		return PullRequestReviewSummary{}, fmt.Errorf("pull request number must be positive")
+		return domain.ReviewSummary{}, fmt.Errorf("pull request number must be positive")
 	}
 	if reviewID <= 0 {
-		return PullRequestReviewSummary{}, fmt.Errorf("review id must be positive")
+		return domain.ReviewSummary{}, fmt.Errorf("review id must be positive")
 	}
 	if err := c.ensureAuth(ctx); err != nil {
-		return PullRequestReviewSummary{}, err
+		return domain.ReviewSummary{}, err
 	}
 	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
-		return PullRequestReviewSummary{}, err
+		return domain.ReviewSummary{}, err
 	}
 
 	result, err := c.runner.Run(
@@ -333,7 +311,7 @@ func (c *CLIClient) GetPullRequestReview(ctx context.Context, repository string,
 		fmt.Sprintf("repos/%s/pulls/%d/reviews/%d", resolvedRepo, pullRequestNumber, reviewID),
 	)
 	if err != nil {
-		return PullRequestReviewSummary{}, fmt.Errorf("failed to load pull request review: %w", formatCommandError(err, result))
+		return domain.ReviewSummary{}, fmt.Errorf("failed to load pull request review: %w", formatCommandError(err, result))
 	}
 	return parsePullRequestReview(result.Stdout)
 }
@@ -349,16 +327,16 @@ func (c *CLIClient) ResolveRepository(ctx context.Context, repository string) (s
 }
 
 // GetPullRequestInfo loads title/body/base/head for a pull request.
-func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (PullRequestInfo, error) {
+func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, pullRequestNumber int) (domain.ChangeRequestInfo, error) {
 	if pullRequestNumber <= 0 {
-		return PullRequestInfo{}, fmt.Errorf("pull request number must be positive")
+		return domain.ChangeRequestInfo{}, fmt.Errorf("pull request number must be positive")
 	}
 	if err := c.ensureAuth(ctx); err != nil {
-		return PullRequestInfo{}, err
+		return domain.ChangeRequestInfo{}, err
 	}
 	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
-		return PullRequestInfo{}, err
+		return domain.ChangeRequestInfo{}, err
 	}
 
 	result, err := c.runner.Run(
@@ -368,7 +346,7 @@ func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, p
 		fmt.Sprintf("repos/%s/pulls/%d", resolvedRepo, pullRequestNumber),
 	)
 	if err != nil {
-		return PullRequestInfo{}, fmt.Errorf("failed to load pull request metadata: %w", formatCommandError(err, result))
+		return domain.ChangeRequestInfo{}, fmt.Errorf("failed to load pull request metadata: %w", formatCommandError(err, result))
 	}
 
 	var payload struct {
@@ -384,7 +362,7 @@ func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, p
 		} `json:"head"`
 	}
 	if err := json.Unmarshal(result.Stdout, &payload); err != nil {
-		return PullRequestInfo{}, fmt.Errorf("failed to parse pull request metadata: %w", err)
+		return domain.ChangeRequestInfo{}, fmt.Errorf("failed to parse pull request metadata: %w", err)
 	}
 
 	base := strings.TrimSpace(payload.Base.SHA)
@@ -396,10 +374,10 @@ func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, p
 		head = strings.TrimSpace(payload.Head.Ref)
 	}
 	if base == "" || head == "" {
-		return PullRequestInfo{}, fmt.Errorf("failed to resolve pull request base/head refs")
+		return domain.ChangeRequestInfo{}, fmt.Errorf("failed to resolve pull request base/head refs")
 	}
 
-	return PullRequestInfo{
+	return domain.ChangeRequestInfo{
 		Repository:  resolvedRepo,
 		Number:      pullRequestNumber,
 		Title:       strings.TrimSpace(payload.Title),
@@ -411,16 +389,16 @@ func (c *CLIClient) GetPullRequestInfo(ctx context.Context, repository string, p
 }
 
 // GetIssue loads issue metadata for a repository issue.
-func (c *CLIClient) GetIssue(ctx context.Context, repository string, issueNumber int) (Issue, error) {
+func (c *CLIClient) GetIssue(ctx context.Context, repository string, issueNumber int) (domain.Issue, error) {
 	if issueNumber <= 0 {
-		return Issue{}, fmt.Errorf("issue number must be positive")
+		return domain.Issue{}, fmt.Errorf("issue number must be positive")
 	}
 	if err := c.ensureAuth(ctx); err != nil {
-		return Issue{}, err
+		return domain.Issue{}, err
 	}
 	resolvedRepo, err := c.ResolveRepository(ctx, repository)
 	if err != nil {
-		return Issue{}, err
+		return domain.Issue{}, err
 	}
 
 	result, err := c.runner.Run(
@@ -430,7 +408,7 @@ func (c *CLIClient) GetIssue(ctx context.Context, repository string, issueNumber
 		fmt.Sprintf("repos/%s/issues/%d", resolvedRepo, issueNumber),
 	)
 	if err != nil {
-		return Issue{}, fmt.Errorf("failed to load issue: %w", formatCommandError(err, result))
+		return domain.Issue{}, fmt.Errorf("failed to load issue: %w", formatCommandError(err, result))
 	}
 
 	var payload struct {
@@ -440,10 +418,9 @@ func (c *CLIClient) GetIssue(ctx context.Context, repository string, issueNumber
 		HTMLURL string `json:"html_url"`
 	}
 	if err := json.Unmarshal(result.Stdout, &payload); err != nil {
-		return Issue{}, fmt.Errorf("failed to parse issue metadata: %w", err)
+		return domain.Issue{}, fmt.Errorf("failed to parse issue metadata: %w", err)
 	}
-
-	return Issue{
+	return domain.Issue{
 		Repository: resolvedRepo,
 		Number:     payload.Number,
 		Title:      strings.TrimSpace(payload.Title),
@@ -538,7 +515,7 @@ func formatCommandError(err error, result commandrunner.Result) error {
 	return fmt.Errorf("%w: %s", err, message)
 }
 
-func parseIssueComment(raw []byte) (IssueComment, error) {
+func parseIssueComment(raw []byte) (domain.IssueComment, error) {
 	var payload struct {
 		ID        int64  `json:"id"`
 		Body      string `json:"body"`
@@ -549,21 +526,21 @@ func parseIssueComment(raw []byte) (IssueComment, error) {
 		} `json:"user"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return IssueComment{}, fmt.Errorf("failed to parse issue comment: %w", err)
+		return domain.IssueComment{}, fmt.Errorf("failed to parse issue comment: %w", err)
 	}
 	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.CreatedAt))
 	if err != nil {
-		return IssueComment{}, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
+		return domain.IssueComment{}, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
 	}
-	return IssueComment{
+	return domain.IssueComment{
 		ID:        payload.ID,
 		Body:      payload.Body,
-		Author:    CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		Author:    domain.CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
 		CreatedAt: createdAt,
 	}, nil
 }
 
-func parseReviewComment(raw []byte) (ReviewComment, error) {
+func parseReviewComment(raw []byte) (domain.ReviewComment, error) {
 	var payload struct {
 		ID                int64  `json:"id"`
 		Body              string `json:"body"`
@@ -585,16 +562,16 @@ func parseReviewComment(raw []byte) (ReviewComment, error) {
 		} `json:"user"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return ReviewComment{}, fmt.Errorf("failed to parse review comment: %w", err)
+		return domain.ReviewComment{}, fmt.Errorf("failed to parse review comment: %w", err)
 	}
 	createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(payload.CreatedAt))
 	if err != nil {
-		return ReviewComment{}, fmt.Errorf("failed to parse review comment timestamp: %w", err)
+		return domain.ReviewComment{}, fmt.Errorf("failed to parse review comment timestamp: %w", err)
 	}
-	return ReviewComment{
+	return domain.ReviewComment{
 		ID:                payload.ID,
 		Body:              payload.Body,
-		Author:            CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		Author:            domain.CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
 		CreatedAt:         createdAt,
 		InReplyToID:       payload.InReplyToID,
 		Path:              payload.Path,
@@ -610,7 +587,7 @@ func parseReviewComment(raw []byte) (ReviewComment, error) {
 	}, nil
 }
 
-func parseIssueComments(raw []byte) ([]IssueComment, error) {
+func parseIssueComments(raw []byte) ([]domain.IssueComment, error) {
 	var payload []struct {
 		ID        int64  `json:"id"`
 		Body      string `json:"body"`
@@ -623,23 +600,23 @@ func parseIssueComments(raw []byte) ([]IssueComment, error) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, fmt.Errorf("failed to parse issue comments: %w", err)
 	}
-	comments := make([]IssueComment, 0, len(payload))
+	comments := make([]domain.IssueComment, 0, len(payload))
 	for _, item := range payload {
 		createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(item.CreatedAt))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse issue comment timestamp: %w", err)
 		}
-		comments = append(comments, IssueComment{
+		comments = append(comments, domain.IssueComment{
 			ID:        item.ID,
 			Body:      item.Body,
-			Author:    CommentAuthor{Login: item.User.Login, Type: item.User.Type},
+			Author:    domain.CommentAuthor{Login: item.User.Login, Type: item.User.Type},
 			CreatedAt: createdAt,
 		})
 	}
 	return comments, nil
 }
 
-func parseReviewComments(raw []byte) ([]ReviewComment, error) {
+func parseReviewComments(raw []byte) ([]domain.ReviewComment, error) {
 	var payload []struct {
 		ID                int64  `json:"id"`
 		Body              string `json:"body"`
@@ -663,16 +640,16 @@ func parseReviewComments(raw []byte) ([]ReviewComment, error) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, fmt.Errorf("failed to parse review comments: %w", err)
 	}
-	comments := make([]ReviewComment, 0, len(payload))
+	comments := make([]domain.ReviewComment, 0, len(payload))
 	for _, item := range payload {
 		createdAt, err := time.Parse(time.RFC3339, strings.TrimSpace(item.CreatedAt))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse review comment timestamp: %w", err)
 		}
-		comments = append(comments, ReviewComment{
+		comments = append(comments, domain.ReviewComment{
 			ID:                item.ID,
 			Body:              item.Body,
-			Author:            CommentAuthor{Login: item.User.Login, Type: item.User.Type},
+			Author:            domain.CommentAuthor{Login: item.User.Login, Type: item.User.Type},
 			CreatedAt:         createdAt,
 			InReplyToID:       item.InReplyToID,
 			Path:              item.Path,
@@ -690,7 +667,7 @@ func parseReviewComments(raw []byte) ([]ReviewComment, error) {
 	return comments, nil
 }
 
-func parsePullRequestReview(raw []byte) (PullRequestReviewSummary, error) {
+func parsePullRequestReview(raw []byte) (domain.ReviewSummary, error) {
 	var payload struct {
 		ID    int64  `json:"id"`
 		Body  string `json:"body"`
@@ -701,12 +678,12 @@ func parsePullRequestReview(raw []byte) (PullRequestReviewSummary, error) {
 		} `json:"user"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return PullRequestReviewSummary{}, fmt.Errorf("failed to parse pull request review: %w", err)
+		return domain.ReviewSummary{}, fmt.Errorf("failed to parse pull request review: %w", err)
 	}
-	return PullRequestReviewSummary{
+	return domain.ReviewSummary{
 		ID:    payload.ID,
 		Body:  strings.TrimSpace(payload.Body),
 		State: strings.TrimSpace(payload.State),
-		User:  CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
+		User:  domain.CommentAuthor{Login: payload.User.Login, Type: payload.User.Type},
 	}, nil
 }

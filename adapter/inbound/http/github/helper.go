@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/domain"
 	"bentos-backend/shared/text"
 )
@@ -18,7 +17,7 @@ func resolveWebhookIssueCandidates(
 	repository string,
 	description string,
 ) []domain.IssueContext {
-	references := text.ExtractIssueReferences(description, repository)
+	references := text.ExtractGitHubIssueReferences(description, repository)
 	if len(references) == 0 {
 		return nil
 	}
@@ -38,7 +37,7 @@ func resolveWebhookIssueCandidates(
 			issueComments = append(issueComments, comment.ToDomain())
 		}
 		candidates = append(candidates, domain.IssueContext{
-			Issue:    issue.ToDomain(),
+			Issue:    issue,
 			Comments: issueComments,
 		})
 	}
@@ -75,7 +74,7 @@ func isBotAuthor(authorType string) bool {
 	return strings.EqualFold(strings.TrimSpace(authorType), "bot")
 }
 
-func buildIssueThreadForWebhook(ctx context.Context, client CommentClient, repository string, prNumber int, commentID int64, prInfo githubvcs.PullRequestInfo) (domain.CommentThread, error) {
+func buildIssueThreadForWebhook(ctx context.Context, client CommentClient, repository string, prNumber int, commentID int64, prInfo domain.ChangeRequestInfo) (domain.CommentThread, error) {
 	comments, err := client.ListIssueComments(ctx, repository, prNumber)
 	if err != nil {
 		return domain.CommentThread{}, err
@@ -100,17 +99,17 @@ func buildReviewThreadForWebhook(ctx context.Context, client CommentClient, repo
 	if err != nil {
 		return domain.CommentThread{}, err
 	}
-	byID := make(map[int64]githubvcs.ReviewComment, len(comments))
+	byID := make(map[int64]domain.ReviewComment, len(comments))
 	for _, comment := range comments {
 		byID[comment.ID] = comment
 	}
 	rootID := resolveReviewRootID(byID, commentID)
 	threadComments := make([]domain.Comment, 0, len(comments))
-	var root githubvcs.ReviewComment
+	var root domain.ReviewComment
 	if comment, ok := byID[rootID]; ok {
 		root = comment
 	}
-	reviewSummary := githubvcs.PullRequestReviewSummary{}
+	reviewSummary := domain.ReviewSummary{}
 	if root.ReviewID > 0 {
 		if summary, err := client.GetPullRequestReview(ctx, repository, prNumber, root.ReviewID); err == nil {
 			reviewSummary = summary
@@ -132,7 +131,7 @@ func buildReviewThreadForWebhook(ctx context.Context, client CommentClient, repo
 	}, nil
 }
 
-func resolveReviewRootID(byID map[int64]githubvcs.ReviewComment, commentID int64) int64 {
+func resolveReviewRootID(byID map[int64]domain.ReviewComment, commentID int64) int64 {
 	currentID := commentID
 	for {
 		comment, ok := byID[currentID]
@@ -143,7 +142,7 @@ func resolveReviewRootID(byID map[int64]githubvcs.ReviewComment, commentID int64
 	}
 }
 
-func buildIssueThreadContext(prInfo githubvcs.PullRequestInfo) []string {
+func buildIssueThreadContext(prInfo domain.ChangeRequestInfo) []string {
 	title := strings.TrimSpace(prInfo.Title)
 	description := strings.TrimSpace(prInfo.Description)
 	if title == "" && description == "" {
@@ -159,7 +158,7 @@ func buildIssueThreadContext(prInfo githubvcs.PullRequestInfo) []string {
 	return lines
 }
 
-func buildReviewThreadContext(root githubvcs.ReviewComment, reviewSummary githubvcs.PullRequestReviewSummary) []string {
+func buildReviewThreadContext(root domain.ReviewComment, reviewSummary domain.ReviewSummary) []string {
 	lines := make([]string, 0)
 	if strings.TrimSpace(root.Path) != "" {
 		lines = append(lines, fmt.Sprintf("File: %s", strings.TrimSpace(root.Path)))
@@ -180,7 +179,7 @@ func buildReviewThreadContext(root githubvcs.ReviewComment, reviewSummary github
 	return lines
 }
 
-func formatReviewLineInfo(root githubvcs.ReviewComment) string {
+func formatReviewLineInfo(root domain.ReviewComment) string {
 	if root.Line > 0 {
 		return fmt.Sprintf("Line: %d (%s)", root.Line, strings.TrimSpace(root.Side))
 	}
@@ -190,7 +189,7 @@ func formatReviewLineInfo(root githubvcs.ReviewComment) string {
 	return ""
 }
 
-func formatReviewSummary(summary githubvcs.PullRequestReviewSummary) string {
+func formatReviewSummary(summary domain.ReviewSummary) string {
 	body := strings.TrimSpace(summary.Body)
 	if body == "" {
 		return ""

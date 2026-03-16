@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/usecase"
@@ -39,8 +38,8 @@ func (c *mainTestGitHubClient) ResolveRepository(_ context.Context, _ string) (s
 	return "org/repo", nil
 }
 
-func (c *mainTestGitHubClient) GetPullRequestInfo(_ context.Context, _ string, _ int) (githubvcs.PullRequestInfo, error) {
-	return githubvcs.PullRequestInfo{
+func (c *mainTestGitHubClient) GetPullRequestInfo(_ context.Context, _ string, _ int) (domain.ChangeRequestInfo, error) {
+	return domain.ChangeRequestInfo{
 		Repository:  "org/repo",
 		Number:      7,
 		Title:       "Title",
@@ -50,8 +49,8 @@ func (c *mainTestGitHubClient) GetPullRequestInfo(_ context.Context, _ string, _
 	}, nil
 }
 
-func (c *mainTestGitHubClient) GetIssue(_ context.Context, repository string, issueNumber int) (githubvcs.Issue, error) {
-	return githubvcs.Issue{
+func (c *mainTestGitHubClient) GetIssue(_ context.Context, repository string, issueNumber int) (domain.Issue, error) {
+	return domain.Issue{
 		Repository: repository,
 		Number:     issueNumber,
 		Title:      "Issue",
@@ -59,7 +58,27 @@ func (c *mainTestGitHubClient) GetIssue(_ context.Context, repository string, is
 	}, nil
 }
 
-func (c *mainTestGitHubClient) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
+func (c *mainTestGitHubClient) ListIssueComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
+	return nil, nil
+}
+
+func (c *mainTestGitHubClient) ListChangeRequestComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
+	return nil, nil
+}
+
+func (c *mainTestGitHubClient) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (domain.ReviewSummary, error) {
+	return domain.ReviewSummary{}, nil
+}
+
+func (c *mainTestGitHubClient) GetIssueComment(_ context.Context, _ string, _ int, _ int64) (domain.IssueComment, error) {
+	return domain.IssueComment{}, nil
+}
+
+func (c *mainTestGitHubClient) GetReviewComment(_ context.Context, _ string, _ int, _ int64) (domain.ReviewComment, error) {
+	return domain.ReviewComment{}, nil
+}
+
+func (c *mainTestGitHubClient) ListReviewComments(_ context.Context, _ string, _ int) ([]domain.ReviewComment, error) {
 	return nil, nil
 }
 
@@ -175,7 +194,8 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 					builder := func(_ string) (usecase.ReviewUseCase, error) {
 						return reviewUseCase, nil
 					}
-					return cliinbound.NewReviewCommand(builder, githubClient, envFactory, recipeLoader, nil), nil
+					resolver := cliinbound.StaticVCSClients{GitHub: githubClient}
+					return cliinbound.NewReviewCommand(builder, resolver, envFactory, recipeLoader, nil), nil
 				},
 				buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
 					return nil, nil
@@ -219,13 +239,15 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 			builder := func(_ string) (usecase.ReviewUseCase, error) {
 				return &mainTestReviewUseCase{}, nil
 			}
-			return cliinbound.NewReviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
+			resolver := cliinbound.StaticVCSClients{GitHub: githubClient}
+			return cliinbound.NewReviewCommand(builder, resolver, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
 			builder := func(_ string) (usecase.OverviewUseCase, error) {
 				return overviewUseCase, nil
 			}
-			return cliinbound.NewOverviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
+			resolver := cliinbound.StaticVCSClients{GitHub: githubClient}
+			return cliinbound.NewOverviewCommand(builder, resolver, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 			return nil, nil
@@ -263,7 +285,8 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 			builder := func(_ string) (usecase.OverviewUseCase, error) {
 				return overviewUseCase, nil
 			}
-			return cliinbound.NewOverviewCommand(builder, githubClient, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
+			resolver := cliinbound.StaticVCSClients{GitHub: githubClient}
+			return cliinbound.NewOverviewCommand(builder, resolver, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildGitHubHandler: func(config.Config) (http.Handler, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil

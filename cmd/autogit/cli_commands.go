@@ -9,6 +9,7 @@ import (
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
 	"bentos-backend/config"
 	sharedcli "bentos-backend/shared/cli"
 	"bentos-backend/usecase"
@@ -56,7 +57,11 @@ func defaultAutogitDeps() autogitDeps {
 			builder := func(repoURL string) (usecase.ReviewUseCase, error) {
 				return wiring.BuildReviewUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewReviewCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
+			resolver := cliinbound.StaticVCSClients{
+				GitHub: githubvcs.NewCLIClient(),
+				GitLab: gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost}),
+			}
+			return cliinbound.NewReviewCommand(builder, resolver, deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
 		buildOverviewCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.OverviewCommand, error) {
 			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
@@ -66,7 +71,11 @@ func defaultAutogitDeps() autogitDeps {
 			builder := func(repoURL string) (usecase.OverviewUseCase, error) {
 				return wiring.BuildOverviewUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewOverviewCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
+			resolver := cliinbound.StaticVCSClients{
+				GitHub: githubvcs.NewCLIClient(),
+				GitLab: gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost}),
+			}
+			return cliinbound.NewOverviewCommand(builder, resolver, deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
 		buildAutogenCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.AutogenCommand, error) {
 			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
@@ -76,7 +85,11 @@ func defaultAutogitDeps() autogitDeps {
 			builder := func(repoURL string) (usecase.AutogenUseCase, error) {
 				return wiring.BuildAutogenUseCase(cfg, opts, logLevelOverride)
 			}
-			return cliinbound.NewAutogenCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
+			resolver := cliinbound.StaticVCSClients{
+				GitHub: githubvcs.NewCLIClient(),
+				GitLab: gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost}),
+			}
+			return cliinbound.NewAutogenCommand(builder, resolver, deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
 		},
 		buildReplyCommentCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReplyCommentCommand, error) {
 			builder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
@@ -86,7 +99,11 @@ func defaultAutogitDeps() autogitDeps {
 			if err != nil {
 				return nil, err
 			}
-			return cliinbound.NewReplyCommentCommand(builder, githubvcs.NewCLIClient(), deps.CodeEnvironmentFactory, deps.RecipeLoader, cfg.ReplyComment.TriggerName, deps.Logger), nil
+			resolver := cliinbound.StaticVCSClients{
+				GitHub: githubvcs.NewCLIClient(),
+				GitLab: gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost}),
+			}
+			return cliinbound.NewReplyCommentCommand(builder, resolver, deps.CodeEnvironmentFactory, deps.RecipeLoader, cfg.ReplyComment.TriggerName, deps.Logger), nil
 		},
 		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
 			return wiring.BuildGitHubHandler(cfg)
@@ -160,6 +177,12 @@ func newReviewSubcommand(
 			if err != nil {
 				return err
 			}
+			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			if err != nil {
+				return err
+			}
+			opts.VCSProvider = parsedProvider
+			opts.VCSHost = vcsHost
 			cfg, err := loadConfig()
 			if err != nil {
 				return cliConfigLoadError{cause: err}
@@ -184,7 +207,8 @@ func newReviewSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cfg, cliinbound.ReviewParams{
-				VCSProvider:   vcsProvider,
+				VCSProvider:   parsedProvider,
+				VCSHost:       vcsHost,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
 				Base:          base,
@@ -196,7 +220,7 @@ func newReviewSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -234,6 +258,12 @@ func newOverviewSubcommand(
 			if err != nil {
 				return err
 			}
+			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			if err != nil {
+				return err
+			}
+			opts.VCSProvider = parsedProvider
+			opts.VCSHost = vcsHost
 			cfg, err := loadConfig()
 			if err != nil {
 				return cliConfigLoadError{cause: err}
@@ -258,7 +288,8 @@ func newOverviewSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cfg, cliinbound.OverviewParams{
-				VCSProvider:    vcsProvider,
+				VCSProvider:    parsedProvider,
+				VCSHost:        vcsHost,
 				Repo:           repo,
 				ChangeRequest:  changeRequest,
 				Base:           base,
@@ -270,7 +301,7 @@ func newOverviewSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -309,6 +340,12 @@ func newAutogenSubcommand(
 			if err != nil {
 				return err
 			}
+			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			if err != nil {
+				return err
+			}
+			opts.VCSProvider = parsedProvider
+			opts.VCSHost = vcsHost
 			cfg, err := loadConfig()
 			if err != nil {
 				return cliConfigLoadError{cause: err}
@@ -333,7 +370,8 @@ func newAutogenSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cfg, cliinbound.AutogenRunParams{
-				VCSProvider:   vcsProvider,
+				VCSProvider:   parsedProvider,
+				VCSHost:       vcsHost,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
 				Base:          base,
@@ -346,7 +384,7 @@ func newAutogenSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -384,6 +422,12 @@ func newReplyCommentSubcommand(
 			if err != nil {
 				return err
 			}
+			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			if err != nil {
+				return err
+			}
+			opts.VCSProvider = parsedProvider
+			opts.VCSHost = vcsHost
 			cfg, err := loadConfig()
 			if err != nil {
 				return cliConfigLoadError{cause: err}
@@ -408,7 +452,8 @@ func newReplyCommentSubcommand(
 			}
 
 			return cliCommand.Run(ctx, cfg, cliinbound.ReplyCommentRunParams{
-				VCSProvider:   vcsProvider,
+				VCSProvider:   parsedProvider,
+				VCSHost:       vcsHost,
 				Repo:          repo,
 				ChangeRequest: changeRequest,
 				CommentID:     commentID,
@@ -419,7 +464,7 @@ func newReplyCommentSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (only github is supported)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&commentID, "comment-id", "", "comment id to answer")
@@ -449,6 +494,19 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 	}
 	ghCmd.Flags().Bool("login", false, "run `gh auth login` after install")
 
+	glabCmd := &cobra.Command{
+		Use:   "glab",
+		Short: "Install GitLab CLI (glab)",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			login, err := cmd.Flags().GetBool("login")
+			if err != nil {
+				return err
+			}
+			return command.InstallGlab(ctx, login)
+		},
+	}
+	glabCmd.Flags().Bool("login", false, "run `glab auth login` after install")
+
 	opencodeCmd := &cobra.Command{
 		Use:   "opencode",
 		Short: "Install OpenCode (opencode)",
@@ -466,6 +524,7 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 	}
 
 	sub.AddCommand(ghCmd)
+	sub.AddCommand(glabCmd)
 	sub.AddCommand(opencodeCmd)
 	sub.AddCommand(quickstartCmd)
 	return sub

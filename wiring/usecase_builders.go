@@ -15,11 +15,13 @@ import (
 	overviewcodingagent "bentos-backend/adapter/outbound/overview/codingagent"
 	clipublisher "bentos-backend/adapter/outbound/publisher/cli"
 	githubpublisher "bentos-backend/adapter/outbound/publisher/github"
+	gitlabpublisher "bentos-backend/adapter/outbound/publisher/gitlab"
 	routerpublisher "bentos-backend/adapter/outbound/publisher/router"
 	replycommentcodingagent "bentos-backend/adapter/outbound/replycomment/codingagent"
 	reviewercodingagent "bentos-backend/adapter/outbound/reviewer/codingagent"
 	safetysanitizer "bentos-backend/adapter/outbound/safetysanitizer"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
+	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
 	"bentos-backend/config"
 	"bentos-backend/usecase"
 	"bentos-backend/usecase/contracts"
@@ -225,14 +227,27 @@ func BuildCommonDependencies(cfg config.Config, opts CLILLMOptions, logLevelOver
 
 func buildReviewPublishers(cfg config.Config, opts CLILLMOptions, logger usecase.Logger) (usecase.ReviewResultPublisher, usecase.OverviewPublisher, error) {
 	if shouldUseCLIPublishers(opts, cfg) {
-		githubClient := githubvcs.NewCLIClient()
-		return routerpublisher.NewReviewPublisher(
-				clipublisher.NewPublisher(os.Stdout),
-				githubpublisher.NewPublisher(githubClient, logger),
-			), routerpublisher.NewOverviewPublisher(
-				clipublisher.NewOverviewPublisher(os.Stdout),
-				githubpublisher.NewOverviewPublisher(githubClient, logger),
-			), nil
+		provider := normalizeVCSProvider(opts.VCSProvider)
+		switch provider {
+		case "gitlab":
+			gitlabClient := gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost})
+			return routerpublisher.NewReviewPublisher(
+					clipublisher.NewPublisher(os.Stdout),
+					gitlabpublisher.NewPublisher(gitlabClient, logger),
+				), routerpublisher.NewOverviewPublisher(
+					clipublisher.NewOverviewPublisher(os.Stdout),
+					gitlabpublisher.NewOverviewPublisher(gitlabClient, logger),
+				), nil
+		default:
+			githubClient := githubvcs.NewCLIClient()
+			return routerpublisher.NewReviewPublisher(
+					clipublisher.NewPublisher(os.Stdout),
+					githubpublisher.NewPublisher(githubClient, logger),
+				), routerpublisher.NewOverviewPublisher(
+					clipublisher.NewOverviewPublisher(os.Stdout),
+					githubpublisher.NewOverviewPublisher(githubClient, logger),
+				), nil
+		}
 	}
 
 	client, err := newAppGitHubClient(cfg)
@@ -244,11 +259,21 @@ func buildReviewPublishers(cfg config.Config, opts CLILLMOptions, logger usecase
 
 func buildAutogenPublisher(cfg config.Config, opts CLILLMOptions, logger usecase.Logger) (usecase.AutogenPublisher, error) {
 	if shouldUseCLIPublishers(opts, cfg) {
-		githubClient := githubvcs.NewCLIClient()
-		return routerpublisher.NewAutogenPublisher(
-			clipublisher.NewAutogenPublisher(os.Stdout),
-			githubpublisher.NewAutogenPublisher(githubClient, logger),
-		), nil
+		provider := normalizeVCSProvider(opts.VCSProvider)
+		switch provider {
+		case "gitlab":
+			gitlabClient := gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost})
+			return routerpublisher.NewAutogenPublisher(
+				clipublisher.NewAutogenPublisher(os.Stdout),
+				gitlabpublisher.NewAutogenPublisher(gitlabClient, logger),
+			), nil
+		default:
+			githubClient := githubvcs.NewCLIClient()
+			return routerpublisher.NewAutogenPublisher(
+				clipublisher.NewAutogenPublisher(os.Stdout),
+				githubpublisher.NewAutogenPublisher(githubClient, logger),
+			), nil
+		}
 	}
 
 	client, err := newAppGitHubClient(cfg)
@@ -260,11 +285,21 @@ func buildAutogenPublisher(cfg config.Config, opts CLILLMOptions, logger usecase
 
 func buildReplyCommentPublisher(cfg config.Config, opts CLILLMOptions, logger usecase.Logger) (usecase.ReplyCommentPublisher, error) {
 	if shouldUseCLIPublishers(opts, cfg) {
-		githubClient := githubvcs.NewCLIClient()
-		return routerpublisher.NewReplyCommentPublisher(
-			clipublisher.NewReplyCommentPublisher(os.Stdout),
-			githubpublisher.NewReplyCommentPublisher(githubClient, logger),
-		), nil
+		provider := normalizeVCSProvider(opts.VCSProvider)
+		switch provider {
+		case "gitlab":
+			gitlabClient := gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost})
+			return routerpublisher.NewReplyCommentPublisher(
+				clipublisher.NewReplyCommentPublisher(os.Stdout),
+				gitlabpublisher.NewReplyCommentPublisher(gitlabClient, logger),
+			), nil
+		default:
+			githubClient := githubvcs.NewCLIClient()
+			return routerpublisher.NewReplyCommentPublisher(
+				clipublisher.NewReplyCommentPublisher(os.Stdout),
+				githubpublisher.NewReplyCommentPublisher(githubClient, logger),
+			), nil
+		}
 	}
 
 	client, err := newAppGitHubClient(cfg)
@@ -279,6 +314,14 @@ func shouldUseCLIPublishers(opts CLILLMOptions, cfg config.Config) bool {
 		return true
 	}
 	return !hasGitHubAppConfig(cfg)
+}
+
+func normalizeVCSProvider(provider string) string {
+	provider = strings.TrimSpace(strings.ToLower(provider))
+	if provider == "" {
+		return "github"
+	}
+	return provider
 }
 
 func hasGitHubAppConfig(cfg config.Config) bool {

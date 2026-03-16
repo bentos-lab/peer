@@ -22,6 +22,8 @@ type CLILLMOptions struct {
 	CodeAgentModel       string
 	CodeAgentModelSet    bool
 	ForceCLIPublishers   bool
+	VCSProvider          string
+	VCSHost              string
 }
 
 // EffectiveOpenAIConfig contains the resolved OpenAI-compatible endpoint and model.

@@ -1,34 +1,17 @@
 package github
 
 import (
-	"errors"
-	"fmt"
 	"strings"
+
+	"bentos-backend/domain"
 )
 
 // InvalidAnchorError means GitHub rejected the requested file/line anchor.
-type InvalidAnchorError struct {
-	Message string
-	Cause   error
-}
-
-// Error returns the invalid-anchor error message.
-func (e *InvalidAnchorError) Error() string {
-	if e.Cause == nil {
-		return e.Message
-	}
-	return fmt.Sprintf("%s: %v", e.Message, e.Cause)
-}
-
-// Unwrap returns the underlying cause.
-func (e *InvalidAnchorError) Unwrap() error {
-	return e.Cause
-}
+type InvalidAnchorError = domain.InvalidAnchorError
 
 // IsInvalidAnchorError reports whether err wraps InvalidAnchorError.
 func IsInvalidAnchorError(err error) bool {
-	var invalidAnchorErr *InvalidAnchorError
-	return errors.As(err, &invalidAnchorErr)
+	return domain.IsInvalidAnchorError(err)
 }
 
 func isInvalidAnchorErrorText(text string) bool {
@@ -57,3 +40,4 @@ func isInvalidAnchorCommandError(err error) bool {
 	}
 	return isInvalidAnchorErrorText(errorText)
 }
+

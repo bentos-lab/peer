@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
+	"bentos-backend/domain"
 	"bentos-backend/usecase"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,8 @@ func TestAutogenCommandRejectsChangeRequestWithBaseHead(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider:   "github",
@@ -45,7 +46,8 @@ func TestAutogenCommandRequiresChangeRequestForPublish(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider: "github",
@@ -61,7 +63,8 @@ func TestAutogenCommandDefaultsLocalWorkspace(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider: "github",
@@ -79,7 +82,8 @@ func TestAutogenCommandRespectsBaseWhenHeadEmpty(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider: "github",
@@ -97,7 +101,7 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 	useCase := &fakeAutogenUseCase{}
 	githubClient := &fakeGitHubClient{
 		resolvedRepository: "org/repo",
-		pullRequestInfo: githubvcs.PullRequestInfo{
+		pullRequestInfo: domain.ChangeRequestInfo{
 			Repository:  "org/repo",
 			Number:      7,
 			Title:       "title",
@@ -110,7 +114,8 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 	builder := func(_ string) (usecase.AutogenUseCase, error) {
 		return useCase, nil
 	}
-	cmd := NewAutogenCommand(builder, githubClient, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
 
 	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
 		VCSProvider:   "github",

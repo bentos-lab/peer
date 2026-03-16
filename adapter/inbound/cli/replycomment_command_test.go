@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/usecase"
@@ -23,12 +22,13 @@ func (f *fakeReplyCommentUseCase) Execute(_ context.Context, request usecase.Rep
 
 type fakeReplyCommentGitHubClient struct {
 	resolvedRepository string
-	prInfo             githubvcs.PullRequestInfo
+	prInfo             domain.ChangeRequestInfo
 	resolveInputs      []string
-	reviewComment      githubvcs.ReviewComment
-	reviewComments     []githubvcs.ReviewComment
-	issueComment       githubvcs.IssueComment
-	reviewSummary      githubvcs.PullRequestReviewSummary
+	reviewComment      domain.ReviewComment
+	reviewComments     []domain.ReviewComment
+	issue              domain.Issue
+	issueComment       domain.IssueComment
+	reviewSummary      domain.ReviewSummary
 }
 
 func (f *fakeReplyCommentGitHubClient) ResolveRepository(_ context.Context, repository string) (string, error) {
@@ -36,27 +36,35 @@ func (f *fakeReplyCommentGitHubClient) ResolveRepository(_ context.Context, repo
 	return f.resolvedRepository, nil
 }
 
-func (f *fakeReplyCommentGitHubClient) GetPullRequestInfo(_ context.Context, _ string, _ int) (githubvcs.PullRequestInfo, error) {
+func (f *fakeReplyCommentGitHubClient) GetPullRequestInfo(_ context.Context, _ string, _ int) (domain.ChangeRequestInfo, error) {
 	return f.prInfo, nil
 }
 
-func (f *fakeReplyCommentGitHubClient) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (githubvcs.PullRequestReviewSummary, error) {
+func (f *fakeReplyCommentGitHubClient) GetIssue(_ context.Context, _ string, _ int) (domain.Issue, error) {
+	return f.issue, nil
+}
+
+func (f *fakeReplyCommentGitHubClient) GetPullRequestReview(_ context.Context, _ string, _ int, _ int64) (domain.ReviewSummary, error) {
 	return f.reviewSummary, nil
 }
 
-func (f *fakeReplyCommentGitHubClient) GetIssueComment(_ context.Context, _ string, _ int64) (githubvcs.IssueComment, error) {
+func (f *fakeReplyCommentGitHubClient) GetIssueComment(_ context.Context, _ string, _ int, _ int64) (domain.IssueComment, error) {
 	return f.issueComment, nil
 }
 
-func (f *fakeReplyCommentGitHubClient) GetReviewComment(_ context.Context, _ string, _ int64) (githubvcs.ReviewComment, error) {
+func (f *fakeReplyCommentGitHubClient) GetReviewComment(_ context.Context, _ string, _ int, _ int64) (domain.ReviewComment, error) {
 	return f.reviewComment, nil
 }
 
-func (f *fakeReplyCommentGitHubClient) ListIssueComments(_ context.Context, _ string, _ int) ([]githubvcs.IssueComment, error) {
+func (f *fakeReplyCommentGitHubClient) ListIssueComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
 	return nil, nil
 }
 
-func (f *fakeReplyCommentGitHubClient) ListReviewComments(_ context.Context, _ string, _ int) ([]githubvcs.ReviewComment, error) {
+func (f *fakeReplyCommentGitHubClient) ListChangeRequestComments(_ context.Context, _ string, _ int) ([]domain.IssueComment, error) {
+	return nil, nil
+}
+
+func (f *fakeReplyCommentGitHubClient) ListReviewComments(_ context.Context, _ string, _ int) ([]domain.ReviewComment, error) {
 	return f.reviewComments, nil
 }
 
@@ -66,7 +74,8 @@ func TestReplyCommentCommandRejectsQuestionWithPublishFlag(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	resolver := StaticVCSClients{GitHub: client}
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -83,7 +92,7 @@ func TestReplyCommentCommandQuestionBuildsInlineThread(t *testing.T) {
 	useCase := &fakeReplyCommentUseCase{}
 	client := &fakeReplyCommentGitHubClient{
 		resolvedRepository: "owner/repo",
-		prInfo: githubvcs.PullRequestInfo{
+		prInfo: domain.ChangeRequestInfo{
 			Repository:  "owner/repo",
 			Number:      7,
 			Title:       "title",
@@ -95,7 +104,8 @@ func TestReplyCommentCommandQuestionBuildsInlineThread(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	resolver := StaticVCSClients{GitHub: client}
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -121,7 +131,7 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 	useCase := &fakeReplyCommentUseCase{}
 	client := &fakeReplyCommentGitHubClient{
 		resolvedRepository: "owner/repo",
-		prInfo: githubvcs.PullRequestInfo{
+		prInfo: domain.ChangeRequestInfo{
 			Repository:  "owner/repo",
 			Number:      7,
 			Title:       "title",
@@ -133,11 +143,12 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	resolver := StaticVCSClients{GitHub: client}
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
-		Repo:          "owner/repo",
+		Repo:          "https://github.com/owner/repo.git",
 		ChangeRequest: "7",
 		Question:      "What changed?",
 	})
@@ -147,11 +158,11 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 	require.Equal(t, []string{"owner/repo"}, client.resolveInputs)
 }
 
-func TestReplyCommentCommandParsesDiscussionAnchor(t *testing.T) {
+func TestReplyCommentCommandUsesReviewThreadWhenReviewCommentResolved(t *testing.T) {
 	useCase := &fakeReplyCommentUseCase{}
 	client := &fakeReplyCommentGitHubClient{
 		resolvedRepository: "owner/repo",
-		prInfo: githubvcs.PullRequestInfo{
+		prInfo: domain.ChangeRequestInfo{
 			Repository:  "owner/repo",
 			Number:      7,
 			Title:       "title",
@@ -159,46 +170,69 @@ func TestReplyCommentCommandParsesDiscussionAnchor(t *testing.T) {
 			BaseRef:     "main",
 			HeadRef:     "feature",
 		},
-		reviewComment: githubvcs.ReviewComment{
-			ID:       2909490245,
-			Path:     "adapter/file.go",
-			DiffHunk: "@@ -1 +1 @@\n- old\n+ new",
-			Line:     12,
+		reviewComment: domain.ReviewComment{
+			ID:          123,
+			Body:        "@autogitbot Can you clarify this?",
+			InReplyToID: 111,
+			Path:        "main.go",
+			DiffHunk:    "diff",
+			Line:        42,
+			Side:        "RIGHT",
+			ReviewID:    9,
+			CreatedAt:   time.Now().Add(-time.Minute),
 		},
-		reviewComments: []githubvcs.ReviewComment{{
-			ID:       2909490245,
-			Path:     "adapter/file.go",
-			DiffHunk: "@@ -1 +1 @@\n- old\n+ new",
-			Line:     12,
+		reviewComments: []domain.ReviewComment{{
+			ID:        111,
+			Body:      "Initial comment",
+			Path:      "main.go",
+			DiffHunk:  "diff",
+			Line:      42,
+			Side:      "RIGHT",
+			ReviewID:  9,
+			CreatedAt: time.Now().Add(-time.Hour),
+		}, {
+			ID:          123,
+			Body:        "@autogitbot Can you clarify this?",
+			InReplyToID: 111,
+			Path:        "main.go",
+			DiffHunk:    "diff",
+			Line:        42,
+			Side:        "RIGHT",
+			ReviewID:    9,
+			CreatedAt:   time.Now().Add(-time.Minute),
 		}},
-		reviewSummary: githubvcs.PullRequestReviewSummary{
-			Body:  "LGTM",
-			State: "APPROVED",
-			User:  githubvcs.CommentAuthor{Login: "reviewer"},
+		reviewSummary: domain.ReviewSummary{
+			ID:    9,
+			Body:  "Review body",
+			State: "commented",
+			User:  domain.CommentAuthor{Login: "reviewer"},
 		},
 	}
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	resolver := StaticVCSClients{GitHub: client}
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
-		CommentID:     "discussion_r2909490245",
-		Publish:       true,
+		CommentID:     "123",
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
-	require.Equal(t, int64(2909490245), useCase.requests[0].CommentID)
-	require.NotEmpty(t, useCase.requests[0].Thread.Context)
+	request := useCase.requests[0]
+	require.Equal(t, domain.CommentKindReview, request.CommentKind)
+	require.Equal(t, 111, int(request.Thread.RootID))
+	require.Equal(t, "Can you clarify this?", request.Question)
+	require.Len(t, request.Thread.Comments, 2)
 }
 
 func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 	useCase := &fakeReplyCommentUseCase{}
 	client := &fakeReplyCommentGitHubClient{
 		resolvedRepository: "owner/repo",
-		prInfo: githubvcs.PullRequestInfo{
+		prInfo: domain.ChangeRequestInfo{
 			Repository:  "owner/repo",
 			Number:      7,
 			Title:       "title",
@@ -206,22 +240,26 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 			BaseRef:     "main",
 			HeadRef:     "feature",
 		},
-		issueComment: githubvcs.IssueComment{
-			ID: 12345,
+		issueComment: domain.IssueComment{
+			ID:        222,
+			Body:      "@autogitbot Please explain",
+			CreatedAt: time.Now().Add(-time.Minute),
 		},
 	}
 	builder := func(_ string) (usecase.ReplyCommentUseCase, error) {
 		return useCase, nil
 	}
-	command := NewReplyCommentCommand(builder, client, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	resolver := StaticVCSClients{GitHub: client}
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
 		ChangeRequest: "7",
-		CommentID:     "issuecomment-12345",
-		Publish:       true,
+		CommentID:     "issuecomment-222",
 	})
 	require.NoError(t, err)
 	require.Len(t, useCase.requests, 1)
-	require.Equal(t, int64(12345), useCase.requests[0].CommentID)
+	request := useCase.requests[0]
+	require.Equal(t, domain.CommentKindIssue, request.CommentKind)
+	require.Equal(t, "Please explain", request.Question)
 }

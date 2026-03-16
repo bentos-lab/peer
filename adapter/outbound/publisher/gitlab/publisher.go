@@ -1,4 +1,4 @@
-package github
+package gitlab
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 	"bentos-backend/usecase"
 )
 
-// CommentClient posts comments to GitHub PRs.
+// CommentClient posts comments to GitLab merge requests.
 type CommentClient interface {
 	CreateComment(ctx context.Context, repository string, pullRequestNumber int, body string) error
 	CreateReviewComment(ctx context.Context, repository string, pullRequestNumber int, input domain.ReviewCommentInput) error
 }
 
-// Publisher publishes review comments to GitHub.
+// Publisher publishes review comments to GitLab.
 type Publisher struct {
 	client CommentClient
 	logger usecase.Logger
 }
 
-// NewPublisher creates a GitHub publisher.
+// NewPublisher creates a GitLab publisher.
 func NewPublisher(client CommentClient, logger usecase.Logger) *Publisher {
 	if logger == nil {
 		logger = stdlogger.Nop()
@@ -30,20 +30,20 @@ func NewPublisher(client CommentClient, logger usecase.Logger) *Publisher {
 	return &Publisher{client: client, logger: logger}
 }
 
-// Publish posts one anchored review comment per finding and one summary PR comment.
+// Publish posts one anchored review comment per finding and one summary MR comment.
 func (p *Publisher) Publish(ctx context.Context, result usecase.ReviewPublishResult) error {
 	for _, finding := range result.Findings {
 		input, err := p.buildReviewCommentInput(finding)
 		if err != nil {
 			p.logFindingPayload("skipped_invalid_anchor", result.Target, finding, buildFindingCommentBody(finding))
-			p.logger.Warnf("Skipped one GitHub review comment because its anchor is invalid.")
+			p.logger.Warnf("Skipped one GitLab review comment because its anchor is invalid.")
 			continue
 		}
 
 		if err := p.client.CreateReviewComment(ctx, result.Target.Repository, result.Target.ChangeRequestNumber, input); err != nil {
 			if domain.IsInvalidAnchorError(err) {
 				p.logFindingPayload("skipped_invalid_anchor", result.Target, finding, input.Body)
-				p.logger.Warnf("Skipped one GitHub review comment because its anchor is invalid.")
+				p.logger.Warnf("Skipped one GitLab review comment because its anchor is invalid.")
 				continue
 			}
 			p.logFindingPayload("failed", result.Target, finding, input.Body)
@@ -107,7 +107,7 @@ func buildFindingCommentBody(finding domain.Finding) string {
 }
 
 func (p *Publisher) logFindingPayload(state string, target domain.ChangeRequestTarget, finding domain.Finding, commentBody string) {
-	p.logger.Debugf("GitHub review comment metadata state=%q repo=%q pr=%d file=%q startLine=%d endLine=%d severity=%q title=%q.",
+	p.logger.Debugf("GitLab review comment metadata state=%q repo=%q mr=%d file=%q startLine=%d endLine=%d severity=%q title=%q.",
 		state, target.Repository, target.ChangeRequestNumber, finding.FilePath, finding.StartLine, finding.EndLine, finding.Severity, finding.Title)
 
 	suggestedChangeKind := ""
@@ -119,13 +119,13 @@ func (p *Publisher) logFindingPayload(state string, target domain.ChangeRequestT
 		suggestedChangeReplacement = finding.SuggestedChange.Replacement
 	}
 
-	p.logger.Tracef("GitHub review comment content state=%q detail=%q suggestion=%q suggestedChangeKind=%q suggestedChangeReason=%q suggestedChangeReplacement=%q body=%q.",
+	p.logger.Tracef("GitLab review comment content state=%q detail=%q suggestion=%q suggestedChangeKind=%q suggestedChangeReason=%q suggestedChangeReplacement=%q body=%q.",
 		state, finding.Detail, finding.Suggestion, suggestedChangeKind, suggestedChangeReason, suggestedChangeReplacement, commentBody)
 }
 
 func (p *Publisher) logSummaryPayload(state string, target domain.ChangeRequestTarget, body string) {
-	p.logger.Debugf("GitHub review summary metadata state=%q repo=%q pr=%d.", state, target.Repository, target.ChangeRequestNumber)
-	p.logger.Tracef("GitHub review summary content state=%q body=%q.", state, body)
+	p.logger.Debugf("GitLab review summary metadata state=%q repo=%q mr=%d.", state, target.Repository, target.ChangeRequestNumber)
+	p.logger.Tracef("GitLab review summary content state=%q body=%q.", state, body)
 }
 
 func renderSuggestedChangeBlock(finding domain.Finding) (string, bool) {
@@ -149,3 +149,4 @@ func renderSuggestedChangeBlock(finding domain.Finding) (string, bool) {
 		return "", false
 	}
 }
+

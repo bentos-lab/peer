@@ -23,6 +23,7 @@ Define the architecture and dependency rules for this repository so implementati
     - loading changed content
     - calling LLM
     - publishing review output
+- Helper components should remain general-purpose and must not embed higher-layer or detail-specific logic.
 - `wiring`
   - Builds object graph and injects concrete adapters into usecase.
 - `cmd`
