@@ -130,6 +130,7 @@ func TestGitLabClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{
 			"api", "--method", "POST",
 			"--raw-field", "body=bad",
+			"--raw-field", "position[position_type]=text",
 			"--raw-field", "position[base_sha]=base123",
 			"--raw-field", "position[start_sha]=start123",
 			"--raw-field", "position[head_sha]=head123",
@@ -151,6 +152,96 @@ func TestGitLabClient_CreateReviewCommentClassifiesInvalidAnchor(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.True(t, domain.IsInvalidAnchorError(err))
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestGitLabClient_CreateReviewCommentUsesOldLineWhenLineSideOld(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{"auth", "status"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{"api", "--method", "GET", "projects/group%2Fproject/merge_requests/3"}},
+		Result: commandrunner.Result{Stdout: []byte(`{
+			"title":"MR title",
+			"description":"MR body",
+			"source_branch":"feature",
+			"diff_refs":{"base_sha":"base123","start_sha":"start123","head_sha":"head123"}
+		}`)},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{
+			"api", "--method", "POST",
+			"--raw-field", "body=old",
+			"--raw-field", "position[position_type]=text",
+			"--raw-field", "position[base_sha]=base123",
+			"--raw-field", "position[start_sha]=start123",
+			"--raw-field", "position[head_sha]=head123",
+			"--raw-field", "position[new_path]=main.go",
+			"--raw-field", "position[old_path]=main.go",
+			"--raw-field", "position[old_line]=8",
+			"projects/group%2Fproject/merge_requests/3/discussions",
+		}},
+		Result: commandrunner.Result{Stdout: []byte(`{}`)},
+	})
+	client := newTestGitLabCLIClient(runner)
+
+	err := client.CreateReviewComment(context.Background(), "group/project", 3, domain.ReviewCommentInput{
+		Body:      "old",
+		Path:      "main.go",
+		StartLine: 8,
+		EndLine:   8,
+		LineSide:  domain.LineSideOld,
+	})
+	require.NoError(t, err)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestGitLabClient_CreateReviewCommentUsesLineRangeForMultiLine(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{"auth", "status"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{"api", "--method", "GET", "projects/group%2Fproject/merge_requests/3"}},
+		Result: commandrunner.Result{Stdout: []byte(`{
+			"title":"MR title",
+			"description":"MR body",
+			"source_branch":"feature",
+			"diff_refs":{"base_sha":"base123","start_sha":"start123","head_sha":"head123"}
+		}`)},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{
+			"api", "--method", "POST",
+			"--raw-field", "body=range",
+			"--raw-field", "position[position_type]=text",
+			"--raw-field", "position[base_sha]=base123",
+			"--raw-field", "position[start_sha]=start123",
+			"--raw-field", "position[head_sha]=head123",
+			"--raw-field", "position[new_path]=main.go",
+			"--raw-field", "position[old_path]=main.go",
+			"--raw-field", "position[line_range][start][type]=new",
+			"--raw-field", "position[line_range][start][line_code]=0607f785dfa3c3861b3239f6723eb276d8056461_0_10",
+			"--raw-field", "position[line_range][start][new_line]=10",
+			"--raw-field", "position[line_range][end][type]=new",
+			"--raw-field", "position[line_range][end][line_code]=0607f785dfa3c3861b3239f6723eb276d8056461_0_12",
+			"--raw-field", "position[line_range][end][new_line]=12",
+			"projects/group%2Fproject/merge_requests/3/discussions",
+		}},
+		Result: commandrunner.Result{Stdout: []byte(`{}`)},
+	})
+	client := newTestGitLabCLIClient(runner)
+
+	err := client.CreateReviewComment(context.Background(), "group/project", 3, domain.ReviewCommentInput{
+		Body:      "range",
+		Path:      "main.go",
+		StartLine: 10,
+		EndLine:   12,
+	})
+	require.NoError(t, err)
 	require.NoError(t, runner.VerifyDone())
 }
 

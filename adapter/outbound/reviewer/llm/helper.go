@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -16,9 +17,10 @@ import (
 type lineRange struct {
 	Start int
 	End   int
+	Side  domain.LineSideEnum
 }
 
-var unifiedDiffHunkPattern = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
+var unifiedDiffHunkPattern = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,(\d+))? @@`)
 
 func reviewResponseSchema() map[string]any {
 	return map[string]any{
@@ -165,19 +167,26 @@ func parseChangedRangesFromDiff(diffSnippet string) ([]lineRange, error) {
 	}
 
 	lines := strings.Split(diffSnippet, "\n")
-	changedLines := make([]int, 0)
+	newLines := make([]int, 0)
+	oldLines := make([]int, 0)
 	inHunk := false
 	currentNewLine := 0
+	currentOldLine := 0
 	seenHunk := false
 
 	for _, rawLine := range lines {
 		line := strings.TrimSuffix(rawLine, "\r")
 		if matches := unifiedDiffHunkPattern.FindStringSubmatch(line); matches != nil {
-			newStart, err := strconv.Atoi(matches[1])
+			oldStart, err := strconv.Atoi(matches[1])
 			if err != nil {
-				return nil, fmt.Errorf("invalid hunk new start %q", matches[1])
+				return nil, fmt.Errorf("invalid hunk old start %q", matches[1])
+			}
+			newStart, err := strconv.Atoi(matches[2])
+			if err != nil {
+				return nil, fmt.Errorf("invalid hunk new start %q", matches[2])
 			}
 
+			currentOldLine = oldStart
 			currentNewLine = newStart
 			inHunk = true
 			seenHunk = true
@@ -193,14 +202,17 @@ func parseChangedRangesFromDiff(diffSnippet string) ([]lineRange, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			changedLines = append(changedLines, currentNewLine)
+			newLines = append(newLines, currentNewLine)
 			currentNewLine++
 			continue
 		}
 		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+			oldLines = append(oldLines, currentOldLine)
+			currentOldLine++
 			continue
 		}
 		if strings.HasPrefix(line, " ") {
+			currentOldLine++
 			currentNewLine++
 			continue
 		}
@@ -217,16 +229,24 @@ func parseChangedRangesFromDiff(diffSnippet string) ([]lineRange, error) {
 		return nil, fmt.Errorf("no unified diff hunk found")
 	}
 
-	return mergeLineNumbersToRanges(changedLines), nil
+	merged := mergeLineNumbersToRanges(newLines, domain.LineSideNew)
+	merged = append(merged, mergeLineNumbersToRanges(oldLines, domain.LineSideOld)...)
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].Start == merged[j].Start {
+			return merged[i].Side < merged[j].Side
+		}
+		return merged[i].Start < merged[j].Start
+	})
+	return merged, nil
 }
 
-func mergeLineNumbersToRanges(lines []int) []lineRange {
+func mergeLineNumbersToRanges(lines []int, side domain.LineSideEnum) []lineRange {
 	if len(lines) == 0 {
 		return nil
 	}
 
 	ranges := make([]lineRange, 0, len(lines))
-	current := lineRange{Start: lines[0], End: lines[0]}
+	current := lineRange{Start: lines[0], End: lines[0], Side: side}
 	for _, line := range lines[1:] {
 		if line <= 0 {
 			continue
@@ -239,7 +259,7 @@ func mergeLineNumbersToRanges(lines []int) []lineRange {
 			continue
 		}
 		ranges = append(ranges, current)
-		current = lineRange{Start: line, End: line}
+		current = lineRange{Start: line, End: line, Side: side}
 	}
 	ranges = append(ranges, current)
 	return ranges
@@ -251,7 +271,23 @@ func splitFindingsByChangedRanges(findings []domain.Finding, changedRangesByFile
 	for _, finding := range findings {
 		path := strings.TrimSpace(finding.FilePath)
 		changedRanges := changedRangesByFile[path]
-		segments := intersectRangeWithChangedLines(finding.StartLine, finding.EndLine, changedRanges)
+		lineSide := finding.LineSide
+		var segments []lineRange
+		if strings.TrimSpace(string(lineSide)) != "" {
+			segments = intersectRangeWithChangedLines(finding.StartLine, finding.EndLine, lineSide, changedRanges)
+		} else {
+			newSegments := intersectRangeWithChangedLines(finding.StartLine, finding.EndLine, domain.LineSideNew, changedRanges)
+			oldSegments := intersectRangeWithChangedLines(finding.StartLine, finding.EndLine, domain.LineSideOld, changedRanges)
+			newOverlap := overlapLength(newSegments)
+			oldOverlap := overlapLength(oldSegments)
+			if oldOverlap > newOverlap {
+				lineSide = domain.LineSideOld
+				segments = oldSegments
+			} else {
+				lineSide = domain.LineSideNew
+				segments = newSegments
+			}
+		}
 		if len(segments) == 0 {
 			logger.Warnf("Dropping finding because its range does not overlap changed lines file=%q startLine=%d endLine=%d title=%q.", finding.FilePath, finding.StartLine, finding.EndLine, finding.Title)
 			continue
@@ -274,6 +310,7 @@ func splitFindingsByChangedRanges(findings []domain.Finding, changedRangesByFile
 			derived := finding
 			derived.StartLine = segment.Start
 			derived.EndLine = segment.End
+			derived.LineSide = lineSide
 			filtered = append(filtered, derived)
 		}
 	}
@@ -281,13 +318,16 @@ func splitFindingsByChangedRanges(findings []domain.Finding, changedRangesByFile
 	return filtered
 }
 
-func intersectRangeWithChangedLines(startLine int, endLine int, changedRanges []lineRange) []lineRange {
+func intersectRangeWithChangedLines(startLine int, endLine int, side domain.LineSideEnum, changedRanges []lineRange) []lineRange {
 	if startLine <= 0 || endLine <= 0 || startLine > endLine || len(changedRanges) == 0 {
 		return nil
 	}
 
 	result := make([]lineRange, 0)
 	for _, changed := range changedRanges {
+		if changed.Side != side {
+			continue
+		}
 		if changed.End < startLine {
 			continue
 		}
@@ -303,8 +343,19 @@ func intersectRangeWithChangedLines(startLine int, endLine int, changedRanges []
 			overlapEnd = changed.End
 		}
 		if overlapStart <= overlapEnd {
-			result = append(result, lineRange{Start: overlapStart, End: overlapEnd})
+			result = append(result, lineRange{Start: overlapStart, End: overlapEnd, Side: side})
 		}
 	}
 	return result
+}
+
+func overlapLength(ranges []lineRange) int {
+	total := 0
+	for _, item := range ranges {
+		if item.End < item.Start {
+			continue
+		}
+		total += item.End - item.Start + 1
+	}
+	return total
 }

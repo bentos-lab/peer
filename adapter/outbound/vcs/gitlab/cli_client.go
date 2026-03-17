@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -316,13 +315,9 @@ func (c *CLIClient) CreateReviewComment(ctx context.Context, repository string, 
 
 	fields := []field{
 		{name: "body", value: input.Body, raw: true},
-		{name: "position[base_sha]", value: mrInfo.BaseRef, raw: true},
-		{name: "position[start_sha]", value: mrInfo.StartRef, raw: true},
-		{name: "position[head_sha]", value: mrInfo.HeadRef, raw: true},
-		{name: "position[new_path]", value: input.Path, raw: true},
-		{name: "position[old_path]", value: input.Path, raw: true},
-		{name: "position[new_line]", value: strconv.Itoa(input.EndLine), raw: true},
 	}
+	positionFields, _ := buildPositionFields(input, mrInfo)
+	fields = append(fields, positionFields...)
 
 	endpoint := fmt.Sprintf("projects/%s/merge_requests/%d/discussions", url.PathEscape(resolvedRepo), pullRequestNumber)
 	if _, err := c.apiWithFields(ctx, "POST", endpoint, fields); err != nil {

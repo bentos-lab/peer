@@ -5,9 +5,8 @@ LLM-based pull/merge request reviewer built with Clean Architecture.
 ## Supported Flows
 
 - GitHub webhook flow (`/webhook/github`) using GitHub App authentication.
+- GitLab webhook flow (`/webhook/gitlab`) using personal access token authentication.
 - CLI flow for local/GitHub/GitLab PR/MR review.
-
-Note: GitLab webhook support is not available in this version.
 
 ## Prerequisites
 
@@ -61,6 +60,15 @@ Feature: GitLab CLI
 
 - `GITLAB_HOST` (optional, default: `gitlab.com`)
 
+Feature: GitLab webhook
+
+- `GITLAB_TOKEN` (required)
+- `GITLAB_WEBHOOK_SECRET` (required)
+- `GITLAB_WEBHOOK_URL` (required; public URL for hook registration)
+- `GITLAB_API_BASE_URL` (optional, default: `https://{GITLAB_HOST}/api/v4`)
+- `GITLAB_SYNC_INTERVAL_MINUTES` (optional, default: `5`)
+- `GITLAB_SYNC_STATE_PATH` (optional, default: `~/.autogit/gitlab_sync.json`)
+
 Example: Inline PEM mode:
 
 `GITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----`
@@ -90,12 +98,41 @@ Example: File path mode:
 - `GITHUB_WEBHOOK_SECRET`
 8. Install the GitHub App on target org/repositories.
 
+## GitLab Webhook Setup
+
+1. Create a GitLab personal access token with scopes:
+- `api`
+- `read_repository`
+- `write_repository`
+2. Set webhook URL to your public endpoint:
+- `POST https://<your-host>/webhook/gitlab`
+3. Set a webhook secret token and use the same value for `GITLAB_WEBHOOK_SECRET`.
+4. Set env vars:
+- `GITLAB_TOKEN`
+- `GITLAB_WEBHOOK_SECRET`
+- `GITLAB_WEBHOOK_URL`
+- `GITLAB_API_BASE_URL` (optional; default derived from `GITLAB_HOST`)
+5. Ensure the PAT user has Maintainer or Owner access on target projects.
+6. Start the webhook server; it will auto-register hooks from recent user events.
+
 ## Run Autogit
 
 Webhook server:
 
 ```bash
 go run ./cmd/autogit webhook --vcs-provider github
+```
+
+GitLab webhook server:
+
+```bash
+go run ./cmd/autogit webhook --vcs-provider gitlab
+```
+
+GitHub + GitLab webhook server:
+
+```bash
+go run ./cmd/autogit webhook --vcs-provider github+gitlab
 ```
 
 Verbose logging (optional `-v`/`-vv`/`-vvv`):
@@ -107,8 +144,9 @@ go run ./cmd/autogit webhook --vcs-provider github -vv
 Webhook routes:
 
 - `POST /webhook/github`
+- `POST /webhook/gitlab`
 
-GitLab webhooks are not supported in this version.
+GitLab webhooks are supported at `POST /webhook/gitlab` when enabled via `--vcs-provider gitlab`.
 
 GitHub PR actions that trigger review:
 

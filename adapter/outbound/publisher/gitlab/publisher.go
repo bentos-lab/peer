@@ -87,11 +87,16 @@ func (p *Publisher) buildReviewCommentInput(finding domain.Finding) (domain.Revi
 		}
 	}
 
+	lineSide := finding.LineSide
+	if strings.TrimSpace(string(lineSide)) == "" {
+		lineSide = domain.LineSideNew
+	}
 	return domain.ReviewCommentInput{
 		Body:      buildFindingCommentBody(finding),
 		Path:      filePath,
 		StartLine: startLine,
 		EndLine:   endLine,
+		LineSide:  lineSide,
 	}, nil
 }
 
@@ -107,8 +112,12 @@ func buildFindingCommentBody(finding domain.Finding) string {
 }
 
 func (p *Publisher) logFindingPayload(state string, target domain.ChangeRequestTarget, finding domain.Finding, commentBody string) {
-	p.logger.Debugf("GitLab review comment metadata state=%q repo=%q mr=%d file=%q startLine=%d endLine=%d severity=%q title=%q.",
-		state, target.Repository, target.ChangeRequestNumber, finding.FilePath, finding.StartLine, finding.EndLine, finding.Severity, finding.Title)
+	lineSide := finding.LineSide
+	if strings.TrimSpace(string(lineSide)) == "" {
+		lineSide = domain.LineSideNew
+	}
+	p.logger.Debugf("GitLab review comment metadata state=%q repo=%q mr=%d file=%q startLine=%d endLine=%d lineSide=%q lineRange=%t severity=%q title=%q.",
+		state, target.Repository, target.ChangeRequestNumber, finding.FilePath, finding.StartLine, finding.EndLine, lineSide, finding.StartLine != finding.EndLine, finding.Severity, finding.Title)
 
 	suggestedChangeKind := ""
 	suggestedChangeReason := ""
@@ -149,4 +158,3 @@ func renderSuggestedChangeBlock(finding domain.Finding) (string, bool) {
 		return "", false
 	}
 }
-

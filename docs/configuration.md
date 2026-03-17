@@ -40,6 +40,16 @@ GitHub App webhook:
 - `GITHUB_APP_PRIVATE_KEY` (required for webhook server)
 - `GITHUB_API_BASE_URL` (default: `https://api.github.com`)
 
+GitLab webhook:
+
+- `GITLAB_TOKEN` (required for GitLab webhook server)
+- `GITLAB_WEBHOOK_SECRET` (required for GitLab webhook server)
+- `GITLAB_WEBHOOK_URL` (required for GitLab webhook sync)
+- `GITLAB_API_BASE_URL` (default: `https://{GITLAB_HOST}/api/v4`)
+- `GITLAB_SYNC_INTERVAL_MINUTES` (default: `5`)
+- `GITLAB_SYNC_STATE_PATH` (default: `~/.autogit/gitlab_sync.json`)
+- `GITLAB_HOST` (default: `gitlab.com`, only used when `GITLAB_API_BASE_URL` is empty)
+
 Review:
 
 - `REVIEW` (default: `true`)

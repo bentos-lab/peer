@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
+	gitlabinbound "bentos-backend/adapter/inbound/http/gitlab"
 	"bentos-backend/config"
 	"bentos-backend/domain"
 	"bentos-backend/usecase"
@@ -209,6 +210,9 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				buildGitHubHandler: func(config.Config) (http.Handler, error) {
 					return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
 				},
+				buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+					return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+				},
 				listenAndServe: func(string, http.Handler) error {
 					return nil
 				},
@@ -258,6 +262,9 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 		buildGitHubHandler: func(config.Config) (http.Handler, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
 		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
 		listenAndServe: func(string, http.Handler) error {
 			return nil
 		},
@@ -291,6 +298,9 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 		buildGitHubHandler: func(config.Config) (http.Handler, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
 		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
 		listenAndServe: func(string, http.Handler) error {
 			return nil
 		},
@@ -310,6 +320,9 @@ func TestWebhookRequiresProvider(t *testing.T) {
 		buildGitHubHandler: func(config.Config) (http.Handler, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
 		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
 		listenAndServe: func(string, http.Handler) error {
 			return nil
 		},
@@ -327,12 +340,15 @@ func TestWebhookRejectsUnsupportedProvider(t *testing.T) {
 		buildGitHubHandler: func(config.Config) (http.Handler, error) {
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
 		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
 		listenAndServe: func(string, http.Handler) error {
 			return nil
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"webhook", "--vcs-provider", "gitlab"}, deps)
+	err := runAutogit(context.Background(), []string{"webhook", "--vcs-provider", "bitbucket"}, deps)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported vcs provider")
 }
@@ -363,6 +379,9 @@ func TestWebhookOverridesConfig(t *testing.T) {
 		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
 			captured = cfg
 			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
 		},
 		listenAndServe: func(string, http.Handler) error {
 			return nil

@@ -74,18 +74,22 @@ func newWebhookSubcommand(
 			if err != nil {
 				return err
 			}
+			if len(providers) == 0 {
+				_ = cmd.Help()
+				return fmt.Errorf("at least one vcs provider is required")
+			}
+			providerSet := make(map[string]struct{}, len(providers))
 			for _, provider := range providers {
 				parsedProvider, _, err := sharedcli.ParseVCSProvider(provider)
 				if err != nil {
 					return err
 				}
-				if parsedProvider != "github" {
+				switch parsedProvider {
+				case "github", "gitlab":
+					providerSet[parsedProvider] = struct{}{}
+				default:
 					return fmt.Errorf("unsupported vcs provider: %s", parsedProvider)
 				}
-			}
-			if len(providers) == 0 {
-				_ = cmd.Help()
-				return fmt.Errorf("at least one vcs provider is required")
 			}
 
 			cfg, err := deps.loadConfig()
@@ -130,17 +134,33 @@ func newWebhookSubcommand(
 				)
 			}
 
-			startupLogger.Infof("webhook startup: wiring GitHub handler")
-			githubHandler, err := deps.buildGitHubHandler(cfg)
-			if err != nil {
-				startupLogger.Errorf("webhook startup failed: build GitHub handler: %v", err)
-				return fmt.Errorf("build GitHub handler: %w", err)
-			}
-			startupLogger.Infof("webhook startup: wired GitHub handler")
-
 			mux := http.NewServeMux()
-			mux.Handle("/webhook/github", githubHandler)
-			startupLogger.Infof("webhook startup: route registered path=%q", "/webhook/github")
+			if _, ok := providerSet["github"]; ok {
+				startupLogger.Infof("webhook startup: wiring GitHub handler")
+				githubHandler, err := deps.buildGitHubHandler(cfg)
+				if err != nil {
+					startupLogger.Errorf("webhook startup failed: build GitHub handler: %v", err)
+					return fmt.Errorf("build GitHub handler: %w", err)
+				}
+				startupLogger.Infof("webhook startup: wired GitHub handler")
+				mux.Handle("/webhook/github", githubHandler)
+				startupLogger.Infof("webhook startup: route registered path=%q", "/webhook/github")
+			}
+			if _, ok := providerSet["gitlab"]; ok {
+				startupLogger.Infof("webhook startup: wiring GitLab handler")
+				gitlabHandler, syncer, err := deps.buildGitLabHandler(cfg)
+				if err != nil {
+					startupLogger.Errorf("webhook startup failed: build GitLab handler: %v", err)
+					return fmt.Errorf("build GitLab handler: %w", err)
+				}
+				startupLogger.Infof("webhook startup: wired GitLab handler")
+				const gitlabWebhookPath = "/webhook/gitlab"
+				mux.Handle(gitlabWebhookPath, gitlabHandler)
+				startupLogger.Infof("webhook startup: route registered path=%q", gitlabWebhookPath)
+				if syncer != nil {
+					go syncer.Start(context.Background())
+				}
+			}
 
 			addr := ":" + cfg.Server.Port
 			startupLogger.Infof("webhook startup: listening on %q", addr)

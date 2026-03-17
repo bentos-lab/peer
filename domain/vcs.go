@@ -11,6 +11,7 @@ type ReviewCommentInput struct {
 	Path      string
 	StartLine int
 	EndLine   int
+	LineSide  LineSideEnum
 }
 
 // ChangeRequestInfo contains normalized change request metadata.
@@ -111,4 +112,3 @@ func IsInvalidAnchorError(err error) bool {
 	var invalidAnchorErr *InvalidAnchorError
 	return errors.As(err, &invalidAnchorErr)
 }
-

@@ -38,6 +38,7 @@ type Finding struct {
 	FilePath        string
 	StartLine       int
 	EndLine         int
+	LineSide        LineSideEnum
 	Severity        FindingSeverityEnum
 	Title           string
 	Detail          string

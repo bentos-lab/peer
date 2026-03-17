@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
+	gitlabinbound "bentos-backend/adapter/inbound/http/gitlab"
 	githubvcs "bentos-backend/adapter/outbound/vcs/github"
 	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
 	"bentos-backend/config"
@@ -43,6 +44,7 @@ type autogitDeps struct {
 	buildAutogenCommand      func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.AutogenCommand, error)
 	buildReplyCommentCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReplyCommentCommand, error)
 	buildGitHubHandler       func(config.Config) (http.Handler, error)
+	buildGitLabHandler       func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error)
 	listenAndServe           func(string, http.Handler) error
 }
 
@@ -107,6 +109,9 @@ func defaultAutogitDeps() autogitDeps {
 		},
 		buildGitHubHandler: func(cfg config.Config) (http.Handler, error) {
 			return wiring.BuildGitHubHandler(cfg)
+		},
+		buildGitLabHandler: func(cfg config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return wiring.BuildGitLabHandler(cfg)
 		},
 		listenAndServe: http.ListenAndServe,
 	}

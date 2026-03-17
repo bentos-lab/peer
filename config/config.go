@@ -71,6 +71,7 @@ type ServerConfig struct {
 	Port          string
 	MaxJobWorkers int
 	GitHub        GitHubConfig
+	GitLab        GitLabConfig
 }
 
 // GitHubConfig contains GitHub webhook/app integration settings.
@@ -79,6 +80,16 @@ type GitHubConfig struct {
 	AppID         string
 	AppPrivateKey string
 	APIBaseURL    string
+}
+
+// GitLabConfig contains GitLab webhook/pat integration settings.
+type GitLabConfig struct {
+	Token         string
+	WebhookSecret string
+	APIBaseURL    string
+	WebhookURL    string
+	SyncInterval  int
+	SyncStatePath string
 }
 
 // Load reads configuration from environment variables.
@@ -113,6 +124,14 @@ func Load() (Config, error) {
 				AppID:         os.Getenv("GITHUB_APP_ID"),
 				AppPrivateKey: os.Getenv("GITHUB_APP_PRIVATE_KEY"),
 				APIBaseURL:    envOrDefault("GITHUB_API_BASE_URL", "https://api.github.com"),
+			},
+			GitLab: GitLabConfig{
+				Token:         os.Getenv("GITLAB_TOKEN"),
+				WebhookSecret: os.Getenv("GITLAB_WEBHOOK_SECRET"),
+				APIBaseURL:    resolveGitLabAPIBaseURL(),
+				WebhookURL:    os.Getenv("GITLAB_WEBHOOK_URL"),
+				SyncInterval:  intEnvOrDefault("GITLAB_SYNC_INTERVAL_MINUTES", 5, 1),
+				SyncStatePath: envOrDefault("GITLAB_SYNC_STATE_PATH", "~/.autogit/gitlab_sync.json"),
 			},
 		},
 		Review: ReviewConfig{
@@ -242,4 +261,16 @@ func intEnvOrDefault(key string, fallback int, min int) int {
 		return fallback
 	}
 	return parsedValue
+}
+
+func resolveGitLabAPIBaseURL() string {
+	baseURL := strings.TrimSpace(os.Getenv("GITLAB_API_BASE_URL"))
+	if baseURL != "" {
+		return baseURL
+	}
+	host := strings.TrimSpace(os.Getenv("GITLAB_HOST"))
+	if host == "" {
+		host = "gitlab.com"
+	}
+	return "https://" + host + "/api/v4"
 }
