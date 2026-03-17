@@ -14,6 +14,7 @@ type ToolInstaller interface {
 	EnsureGlabInstalled(ctx context.Context) error
 	EnsureGlabAuthenticated(ctx context.Context) error
 	EnsureOpencodeInstalled(ctx context.Context) error
+	EnsureGitInstalled(ctx context.Context) error
 }
 
 // InstallCommand installs required CLI dependencies.
@@ -56,6 +57,12 @@ func (c *InstallCommand) InstallOpencode(ctx context.Context) error {
 	return installer.EnsureOpencodeInstalled(ctx)
 }
 
+// InstallGit installs Git.
+func (c *InstallCommand) InstallGit(ctx context.Context) error {
+	installer := c.resolveInstaller()
+	return installer.EnsureGitInstalled(ctx)
+}
+
 // InstallQuickstart installs gh (with login) and opencode.
 func (c *InstallCommand) InstallQuickstart(ctx context.Context) error {
 	if err := c.InstallGh(ctx, true); err != nil {
@@ -83,5 +90,9 @@ func (missingInstaller) EnsureGlabAuthenticated(context.Context) error {
 }
 
 func (missingInstaller) EnsureOpencodeInstalled(context.Context) error {
+	return errors.New("install command is not configured")
+}
+
+func (missingInstaller) EnsureGitInstalled(context.Context) error {
 	return errors.New("install command is not configured")
 }

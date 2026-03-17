@@ -1,11 +1,12 @@
-# CLI Install Command
+# Dependencies
 
 ## Overview
 
-The CLI provides `autogit install` subcommands to install required dependencies and guide authentication for GitHub CLI. Missing tools are installed on demand when invoked in interactive terminals.
+The CLI provides `autogit install` subcommands to install required dependencies.
 
 ## Behavior
 
+- `autogit install git` installs Git.
 - `autogit install gh --login` installs `gh` and prompts for `gh auth login` if needed.
 - `autogit install glab --login` installs `glab` and prompts for `glab auth login` if needed.
 - `autogit install opencode` installs OpenCode.
@@ -78,3 +79,24 @@ Windows:
 - WinGet: `winget install glab.glab`
 - Chocolatey: `choco install glab`
 - Scoop: `scoop install glab`
+
+## Git Install Options
+
+Official instructions: https://git-scm.com/downloads
+
+macOS:
+
+- Homebrew: `brew install git`
+
+Linux:
+
+- Debian/Ubuntu (apt-get):
+  - `sudo apt-get update && sudo apt-get install git -y`
+- DNF:
+  - `sudo dnf install -y git`
+- Yum:
+  - `sudo yum install -y git`
+
+Windows:
+
+- WinGet: `winget install --id Git.Git`

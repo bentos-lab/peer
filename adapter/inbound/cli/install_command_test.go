@@ -36,6 +36,11 @@ func (r *installCallRecorder) EnsureGlabAuthenticated(context.Context) error {
 	return nil
 }
 
+func (r *installCallRecorder) EnsureGitInstalled(context.Context) error {
+	r.calls = append(r.calls, "git-install")
+	return nil
+}
+
 func TestInstallCommandGhLogin(t *testing.T) {
 	recorder := &installCallRecorder{}
 	cmd := &InstallCommand{installer: recorder}
@@ -61,6 +66,15 @@ func TestInstallCommandGlabLogin(t *testing.T) {
 	err := cmd.InstallGlab(context.Background(), true)
 	require.NoError(t, err)
 	require.Equal(t, []string{"glab-install", "glab-auth"}, recorder.calls)
+}
+
+func TestInstallCommandGit(t *testing.T) {
+	recorder := &installCallRecorder{}
+	cmd := &InstallCommand{installer: recorder}
+
+	err := cmd.InstallGit(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"git-install"}, recorder.calls)
 }
 
 func TestInstallCommandQuickstart(t *testing.T) {

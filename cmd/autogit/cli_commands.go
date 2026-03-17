@@ -134,7 +134,7 @@ func defaultAutogitDeps() autogitDeps {
 	}
 }
 
-func newRootCommand(ctx context.Context, deps autogitDeps) *cobra.Command {
+func newRootCommand(ctx context.Context, deps autogitDeps, version string, commit string) *cobra.Command {
 	var llmOpenAIBaseURL string
 	var llmOpenAIModel string
 	var llmOpenAIAPIKey string
@@ -151,6 +151,8 @@ func newRootCommand(ctx context.Context, deps autogitDeps) *cobra.Command {
 			return cmd.Help()
 		},
 	}
+	cmd.Version = fmt.Sprintf("version: %s\ncommit: %s", version, commit)
+	cmd.SetVersionTemplate("{{.Version}}\n")
 
 	persistentFlags := cmd.PersistentFlags()
 	persistentFlags.StringVar(&llmOpenAIBaseURL, "llm-openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM, env: LLM_OPENAI_BASE_URL)")
@@ -541,6 +543,14 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 		},
 	}
 
+	gitCmd := &cobra.Command{
+		Use:   "git",
+		Short: "Install Git",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return command.InstallGit(ctx)
+		},
+	}
+
 	quickstartCmd := &cobra.Command{
 		Use:   "quickstart",
 		Short: "Install gh (with login) and opencode",
@@ -552,6 +562,7 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 	sub.AddCommand(ghCmd)
 	sub.AddCommand(glabCmd)
 	sub.AddCommand(opencodeCmd)
+	sub.AddCommand(gitCmd)
 	sub.AddCommand(quickstartCmd)
 	return sub
 }

@@ -15,6 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testVersion = "test-version"
+	testCommit  = "test-commit"
+)
+
 type mainTestReviewUseCase struct {
 	requests []usecase.ReviewRequest
 }
@@ -221,7 +226,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				},
 			}
 
-			err := runAutogit(context.Background(), args, deps)
+			err := runAutogit(context.Background(), args, deps, testVersion, testCommit)
 			require.NoError(t, err)
 			require.Len(t, reviewUseCase.requests, 1)
 			require.Equal(t, testCase.expectedSuggest, reviewUseCase.requests[0].Suggestions)
@@ -273,7 +278,7 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview", "--vcs-provider", "github"}, deps)
+	err := runAutogit(context.Background(), []string{"overview", "--vcs-provider", "github"}, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 }
@@ -319,7 +324,7 @@ func TestCLIAutoDetectVCSProviderFromRepo(t *testing.T) {
 	}
 
 	args := []string{"review", "--repo", "https://github.com/owner/repo.git"}
-	err := runAutogit(context.Background(), args, deps)
+	err := runAutogit(context.Background(), args, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, reviewUseCase.requests, 1)
 }
@@ -367,7 +372,7 @@ func TestCLIAutoDetectVCSProviderFromOriginURL(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview"}, deps)
+	err := runAutogit(context.Background(), []string{"overview"}, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 }
@@ -403,7 +408,7 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7", "--vcs-provider", "github"}, deps)
+	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7", "--vcs-provider", "github"}, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 	require.NotEmpty(t, overviewUseCase.requests[0].IssueAlignment.Candidates)
@@ -425,7 +430,7 @@ func TestWebhookRequiresProvider(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"webhook"}, deps)
+	err := runAutogit(context.Background(), []string{"webhook"}, deps, testVersion, testCommit)
 	require.Error(t, err)
 }
 
@@ -445,7 +450,7 @@ func TestWebhookRejectsUnsupportedProvider(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"webhook", "--vcs-provider", "bitbucket"}, deps)
+	err := runAutogit(context.Background(), []string{"webhook", "--vcs-provider", "bitbucket"}, deps, testVersion, testCommit)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported vcs provider")
 }
@@ -491,7 +496,7 @@ func TestWebhookOverridesConfig(t *testing.T) {
 		"--github-app-id", "999",
 		"--overview=false",
 	}
-	err := runAutogit(context.Background(), args, deps)
+	err := runAutogit(context.Background(), args, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Equal(t, "999", captured.Server.GitHub.AppID)
 	require.False(t, captured.Overview.Enabled)

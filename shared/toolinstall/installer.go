@@ -18,6 +18,7 @@ const (
 	opencodeInstallScript = "curl -fsSL https://opencode.ai/install | bash"
 	ghInstallHint         = "GitHub CLI can be installed from official releases if package managers are unavailable."
 	glabInstallHint       = "GitLab CLI can be installed from official releases if package managers are unavailable."
+	gitInstallHint        = "Git can be installed from official releases if package managers are unavailable."
 )
 
 var (
@@ -53,6 +54,13 @@ var (
 		"sudo apt install glab",
 	}, " && ")
 	glabDnfInstallCommand = "sudo dnf install -y glab"
+
+	gitAptInstallCommand = strings.Join([]string{
+		"sudo apt-get update",
+		"sudo apt-get install git -y",
+	}, " && ")
+	gitDnfInstallCommand = "sudo dnf install -y git"
+	gitYumInstallCommand = "sudo yum install -y git"
 )
 
 // Config configures the installer dependencies.
@@ -324,6 +332,62 @@ func (i *Installer) EnsureGlabInstalled(ctx context.Context) error {
 	}
 }
 
+// EnsureGitInstalled installs git when missing.
+func (i *Installer) EnsureGitInstalled(ctx context.Context) error {
+	if i.commandAvailable("git") {
+		return nil
+	}
+	if !i.isTerminal() {
+		i.printGitInstructions()
+		i.printManualActionHint("git", "install")
+		return errors.New("git installation requires an interactive terminal")
+	}
+	ok, err := i.promptYesNo("Git not found. Install now? [Y/n]: ")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		i.printGitInstructions()
+		i.printManualActionHint("git", "install")
+		return errors.New("git not installed")
+	}
+
+	switch i.goos {
+	case "darwin":
+		if i.commandAvailable("brew") {
+			if err := i.run(ctx, "brew", "install", "git"); err != nil {
+				i.printManualActionHint("git", "install")
+				return err
+			}
+			return nil
+		}
+		i.printGitInstructions()
+		i.printManualActionHint("git", "install")
+		return errors.New("homebrew not found for git install")
+	case "linux":
+		if err := i.installGitLinux(ctx); err != nil {
+			i.printManualActionHint("git", "install")
+			return err
+		}
+		return nil
+	case "windows":
+		if i.commandAvailable("winget") {
+			if err := i.run(ctx, "winget", "install", "--id", "Git.Git"); err != nil {
+				i.printManualActionHint("git", "install")
+				return err
+			}
+			return nil
+		}
+		i.printGitInstructions()
+		i.printManualActionHint("git", "install")
+		return errors.New("winget not found for git install")
+	default:
+		i.printGitInstructions()
+		i.printManualActionHint("git", "install")
+		return fmt.Errorf("unsupported platform %q for git install", i.goos)
+	}
+}
+
 // EnsureGlabAuthenticated checks glab auth and optionally prompts to login.
 func (i *Installer) EnsureGlabAuthenticated(ctx context.Context) error {
 	if !i.commandAvailable("glab") {
@@ -390,6 +454,20 @@ func (i *Installer) installGlabLinux(ctx context.Context) error {
 	default:
 		i.printGlabInstructions()
 		return errors.New("no supported package manager found for glab install")
+	}
+}
+
+func (i *Installer) installGitLinux(ctx context.Context) error {
+	switch {
+	case i.commandAvailable("apt-get"):
+		return i.runShell(ctx, gitAptInstallCommand)
+	case i.commandAvailable("dnf"):
+		return i.runShell(ctx, gitDnfInstallCommand)
+	case i.commandAvailable("yum"):
+		return i.runShell(ctx, gitYumInstallCommand)
+	default:
+		i.printGitInstructions()
+		return errors.New("no supported package manager found for git install")
 	}
 }
 
@@ -503,6 +581,20 @@ func (i *Installer) printGlabInstructions() {
 	_, _ = fmt.Fprintln(i.stderr, "- Windows (Scoop): scoop install glab")
 	_, _ = fmt.Fprintf(i.stderr, "- %s\n", glabInstallHint)
 	_, _ = fmt.Fprintln(i.stderr, "- Releases: https://gitlab.com/gitlab-org/cli/-/releases")
+}
+
+func (i *Installer) printGitInstructions() {
+	_, _ = fmt.Fprintln(i.stderr, "Git install options:")
+	_, _ = fmt.Fprintln(i.stderr, "- macOS Homebrew: brew install git")
+	_, _ = fmt.Fprintln(i.stderr, "- Linux (Debian/Ubuntu):")
+	_, _ = fmt.Fprintf(i.stderr, "  %s\n", gitAptInstallCommand)
+	_, _ = fmt.Fprintln(i.stderr, "- Linux (DNF):")
+	_, _ = fmt.Fprintf(i.stderr, "  %s\n", gitDnfInstallCommand)
+	_, _ = fmt.Fprintln(i.stderr, "- Linux (Yum):")
+	_, _ = fmt.Fprintf(i.stderr, "  %s\n", gitYumInstallCommand)
+	_, _ = fmt.Fprintln(i.stderr, "- Windows (WinGet): winget install --id Git.Git")
+	_, _ = fmt.Fprintf(i.stderr, "- %s\n", gitInstallHint)
+	_, _ = fmt.Fprintln(i.stderr, "- Releases: https://git-scm.com/downloads")
 }
 
 func (i *Installer) printManualActionHint(tool string, action string) {
