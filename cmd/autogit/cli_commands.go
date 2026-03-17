@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"strings"
 
 	cliinbound "bentos-backend/adapter/inbound/cli"
@@ -46,6 +47,7 @@ type autogitDeps struct {
 	buildGitHubHandler       func(config.Config) (http.Handler, error)
 	buildGitLabHandler       func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error)
 	listenAndServe           func(string, http.Handler) error
+	resolveOriginURL         func() (string, error)
 }
 
 func defaultAutogitDeps() autogitDeps {
@@ -114,6 +116,21 @@ func defaultAutogitDeps() autogitDeps {
 			return wiring.BuildGitLabHandler(cfg)
 		},
 		listenAndServe: http.ListenAndServe,
+		resolveOriginURL: func() (string, error) {
+			output, err := exec.Command("git", "config", "--get", "remote.origin.url").CombinedOutput()
+			if err != nil {
+				message := strings.TrimSpace(string(output))
+				if message == "" {
+					return "", fmt.Errorf("failed to resolve remote.origin.url: %w", err)
+				}
+				return "", fmt.Errorf("failed to resolve remote.origin.url: %w: %s", err, message)
+			}
+			originURL := strings.TrimSpace(string(output))
+			if originURL == "" {
+				return "", fmt.Errorf("missing remote.origin.url in local workspace")
+			}
+			return originURL, nil
+		},
 	}
 }
 
@@ -144,10 +161,10 @@ func newRootCommand(ctx context.Context, deps autogitDeps) *cobra.Command {
 	persistentFlags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
 	persistentFlags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
 
-	cmd.AddCommand(newReviewSubcommand(ctx, deps.loadConfig, deps.buildReviewCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
-	cmd.AddCommand(newOverviewSubcommand(ctx, deps.loadConfig, deps.buildOverviewCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
-	cmd.AddCommand(newAutogenSubcommand(ctx, deps.loadConfig, deps.buildAutogenCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
-	cmd.AddCommand(newReplyCommentSubcommand(ctx, deps.loadConfig, deps.buildReplyCommentCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity))
+	cmd.AddCommand(newReviewSubcommand(ctx, deps.loadConfig, deps.buildReviewCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity, deps.resolveOriginURL))
+	cmd.AddCommand(newOverviewSubcommand(ctx, deps.loadConfig, deps.buildOverviewCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity, deps.resolveOriginURL))
+	cmd.AddCommand(newAutogenSubcommand(ctx, deps.loadConfig, deps.buildAutogenCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity, deps.resolveOriginURL))
+	cmd.AddCommand(newReplyCommentSubcommand(ctx, deps.loadConfig, deps.buildReplyCommentCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity, deps.resolveOriginURL))
 	cmd.AddCommand(newInstallSubcommand(ctx))
 	cmd.AddCommand(newWebhookSubcommand(ctx, deps, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &verbosity, &codeAgent, &codeAgentProvider, &codeAgentModel))
 
@@ -165,6 +182,7 @@ func newReviewSubcommand(
 	codeAgentProvider *string,
 	codeAgentModel *string,
 	verbosity *int,
+	resolveOriginURL func() (string, error),
 ) *cobra.Command {
 	var vcsProvider string
 	var repo string
@@ -182,7 +200,7 @@ func newReviewSubcommand(
 			if err != nil {
 				return err
 			}
-			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			parsedProvider, vcsHost, err := resolveCLIProvider(cmd, vcsProvider, repo, resolveOriginURL)
 			if err != nil {
 				return err
 			}
@@ -225,7 +243,7 @@ func newReviewSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "", sharedcli.VCSProviderFlagHelp())
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -246,6 +264,7 @@ func newOverviewSubcommand(
 	codeAgentProvider *string,
 	codeAgentModel *string,
 	verbosity *int,
+	resolveOriginURL func() (string, error),
 ) *cobra.Command {
 	var vcsProvider string
 	var repo string
@@ -263,7 +282,7 @@ func newOverviewSubcommand(
 			if err != nil {
 				return err
 			}
-			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			parsedProvider, vcsHost, err := resolveCLIProvider(cmd, vcsProvider, repo, resolveOriginURL)
 			if err != nil {
 				return err
 			}
@@ -306,7 +325,7 @@ func newOverviewSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "", sharedcli.VCSProviderFlagHelp())
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -327,6 +346,7 @@ func newAutogenSubcommand(
 	codeAgentProvider *string,
 	codeAgentModel *string,
 	verbosity *int,
+	resolveOriginURL func() (string, error),
 ) *cobra.Command {
 	var vcsProvider string
 	var repo string
@@ -345,7 +365,7 @@ func newAutogenSubcommand(
 			if err != nil {
 				return err
 			}
-			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			parsedProvider, vcsHost, err := resolveCLIProvider(cmd, vcsProvider, repo, resolveOriginURL)
 			if err != nil {
 				return err
 			}
@@ -389,7 +409,7 @@ func newAutogenSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "", sharedcli.VCSProviderFlagHelp())
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&base, "base", "", "base ref")
@@ -411,6 +431,7 @@ func newReplyCommentSubcommand(
 	codeAgentProvider *string,
 	codeAgentModel *string,
 	verbosity *int,
+	resolveOriginURL func() (string, error),
 ) *cobra.Command {
 	var vcsProvider string
 	var repo string
@@ -427,7 +448,7 @@ func newReplyCommentSubcommand(
 			if err != nil {
 				return err
 			}
-			parsedProvider, vcsHost, err := sharedcli.ParseVCSProvider(vcsProvider)
+			parsedProvider, vcsHost, err := resolveCLIProvider(cmd, vcsProvider, repo, resolveOriginURL)
 			if err != nil {
 				return err
 			}
@@ -469,7 +490,7 @@ func newReplyCommentSubcommand(
 	}
 
 	flags := sub.Flags()
-	flags.StringVar(&vcsProvider, "vcs-provider", "github", "vcs provider name (github, gitlab, or gitlab:host)")
+	flags.StringVar(&vcsProvider, "vcs-provider", "", sharedcli.VCSProviderFlagHelp())
 	flags.StringVar(&repo, "repo", "", "repository (URL or owner/repo)")
 	flags.StringVar(&changeRequest, "change-request", "", "pull request number")
 	flags.StringVar(&commentID, "comment-id", "", "comment id to answer")
@@ -667,6 +688,37 @@ func validateNonEmptyOverrideFlag(value string) string {
 		return ""
 	}
 	return trimmed
+}
+
+func resolveCLIProvider(cmd *cobra.Command, rawProvider string, repo string, resolveOriginURL func() (string, error)) (string, string, error) {
+	if flagChanged(cmd, "vcs-provider") {
+		value := strings.TrimSpace(rawProvider)
+		if value == "" {
+			return "", "", fmt.Errorf("flag --vcs-provider requires a non-empty value (supported: %s)", sharedcli.SupportedVCSProviderValuesText())
+		}
+		return sharedcli.ParseVCSProvider(value)
+	}
+
+	if strings.TrimSpace(repo) != "" {
+		provider, host, err := sharedcli.ResolveVCSProviderFromRepo(repo)
+		if err != nil {
+			return "", "", fmt.Errorf("unable to auto-detect vcs provider from --repo: %w; please set --vcs-provider (supported: %s)", err, sharedcli.SupportedVCSProviderValuesText())
+		}
+		return provider, host, nil
+	}
+
+	if resolveOriginURL == nil {
+		return "", "", fmt.Errorf("unable to auto-detect vcs provider; please set --vcs-provider (supported: %s)", sharedcli.SupportedVCSProviderValuesText())
+	}
+	originURL, err := resolveOriginURL()
+	if err != nil {
+		return "", "", fmt.Errorf("unable to auto-detect vcs provider from local repository: %w; please set --vcs-provider (supported: %s)", err, sharedcli.SupportedVCSProviderValuesText())
+	}
+	provider, host, err := sharedcli.ResolveVCSProviderFromRepo(originURL)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to auto-detect vcs provider from local repository: %w; please set --vcs-provider (supported: %s)", err, sharedcli.SupportedVCSProviderValuesText())
+	}
+	return provider, host, nil
 }
 
 func logLLMSelection(logger usecase.Logger, cfg config.Config, opts wiring.CLILLMOptions) error {

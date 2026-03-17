@@ -68,7 +68,7 @@ func newWebhookSubcommand(
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !flagChanged(cmd, "vcs-provider") || strings.TrimSpace(vcsProvider) == "" {
 				_ = cmd.Help()
-				return fmt.Errorf("at least one vcs provider is required")
+				return fmt.Errorf("at least one vcs provider is required (supported: %s)", sharedcli.SupportedVCSProviderValuesText())
 			}
 			providers, err := parseVCSProviders(vcsProvider)
 			if err != nil {
@@ -76,7 +76,7 @@ func newWebhookSubcommand(
 			}
 			if len(providers) == 0 {
 				_ = cmd.Help()
-				return fmt.Errorf("at least one vcs provider is required")
+				return fmt.Errorf("at least one vcs provider is required (supported: %s)", sharedcli.SupportedVCSProviderValuesText())
 			}
 			providerSet := make(map[string]struct{}, len(providers))
 			for _, provider := range providers {
@@ -88,7 +88,7 @@ func newWebhookSubcommand(
 				case "github", "gitlab":
 					providerSet[parsedProvider] = struct{}{}
 				default:
-					return fmt.Errorf("unsupported vcs provider: %s", parsedProvider)
+					return fmt.Errorf("unsupported vcs provider: %s (supported: %s)", parsedProvider, sharedcli.SupportedVCSProviderValuesText())
 				}
 			}
 
@@ -173,7 +173,7 @@ func newWebhookSubcommand(
 		},
 	}
 
-	sub.Flags().StringVar(&vcsProvider, "vcs-provider", "", "vcs provider names joined by + (e.g. github or gitlab:host; currently only github is supported)")
+	sub.Flags().StringVar(&vcsProvider, "vcs-provider", "", sharedcli.VCSProviderListFlagHelp())
 	sub.Flags().StringVar(&flags.logLevel, "log-level", "", "log level override (empty to use config or verbosity, env: LOG_LEVEL)")
 	sub.Flags().BoolVar(&flags.overviewEnabled, "overview", false, "enable or disable overview generation (env: OVERVIEW)")
 	sub.Flags().BoolVar(&flags.reviewSuggestedChangesEnabled, "review-suggested-changes", false, "enable suggested code changes in review findings (env: REVIEW_SUGGESTED_CHANGES)")

@@ -83,6 +83,8 @@ func (c *mainTestGitHubClient) ListReviewComments(_ context.Context, _ string, _
 	return nil, nil
 }
 
+type mainTestGitLabClient = mainTestGitHubClient
+
 func boolPointer(value bool) *bool {
 	return &value
 }
@@ -178,6 +180,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 			}
 
 			args := append([]string{"review"}, testCase.args...)
+			args = append(args, "--vcs-provider", "github")
 
 			deps := autogitDeps{
 				loadConfig: func() (config.Config, error) {
@@ -270,6 +273,100 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 		},
 	}
 
+	err := runAutogit(context.Background(), []string{"overview", "--vcs-provider", "github"}, deps)
+	require.NoError(t, err)
+	require.Len(t, overviewUseCase.requests, 1)
+}
+
+func TestCLIAutoDetectVCSProviderFromRepo(t *testing.T) {
+	reviewUseCase := &mainTestReviewUseCase{}
+	githubClient := &mainTestGitHubClient{}
+
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{
+				LogLevel: "info",
+				CodingAgent: config.CodingAgentConfig{
+					Agent: "opencode",
+				},
+			}, nil
+		},
+		buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+			builder := func(_ string) (usecase.ReviewUseCase, error) {
+				return reviewUseCase, nil
+			}
+			resolver := cliinbound.StaticVCSClients{GitHub: githubClient}
+			return cliinbound.NewReviewCommand(builder, resolver, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
+		},
+		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+			return nil, nil
+		},
+		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+			return nil, nil
+		},
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
+
+	args := []string{"review", "--repo", "https://github.com/owner/repo.git"}
+	err := runAutogit(context.Background(), args, deps)
+	require.NoError(t, err)
+	require.Len(t, reviewUseCase.requests, 1)
+}
+
+func TestCLIAutoDetectVCSProviderFromOriginURL(t *testing.T) {
+	overviewUseCase := &mainTestOverviewUseCase{}
+	gitlabClient := &mainTestGitLabClient{}
+
+	deps := autogitDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{
+				LogLevel: "info",
+				CodingAgent: config.CodingAgentConfig{
+					Agent: "opencode",
+				},
+			}, nil
+		},
+		buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+			return nil, nil
+		},
+		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+			builder := func(_ string) (usecase.OverviewUseCase, error) {
+				return overviewUseCase, nil
+			}
+			resolver := cliinbound.StaticVCSClients{GitLab: gitlabClient}
+			return cliinbound.NewOverviewCommand(builder, resolver, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
+		},
+		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+			return nil, nil
+		},
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+		resolveOriginURL: func() (string, error) {
+			return "https://gitlab.example.com/group/project.git", nil
+		},
+	}
+
 	err := runAutogit(context.Background(), []string{"overview"}, deps)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
@@ -306,7 +403,7 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7"}, deps)
+	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7", "--vcs-provider", "github"}, deps)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 	require.NotEmpty(t, overviewUseCase.requests[0].IssueAlignment.Candidates)
