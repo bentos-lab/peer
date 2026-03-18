@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 func buildPositionFields(input domain.ReviewCommentInput, info domain.ChangeRequestInfo) ([]field, bool) {

@@ -1,6 +1,7 @@
 # peer
 
-LLM-assisted pull/merge request reviewer with clean architecture and a simple CLI.
+**Peer** is a CLI tool that analyzes your local changes or pull requests to generate concise overviews, review feedback, and actionable suggestions—helping you understand, document, and iterate on code faster.
+
 
 Docs: [Webhooks](/docs/webhooks.md) | [Configuration](/docs/configuration.md) | [Custom Recipe](/docs/custom-recipe.md) | [Architecture](/docs/architecture.md)
 
@@ -11,6 +12,7 @@ Docs: [Webhooks](/docs/webhooks.md) | [Configuration](/docs/configuration.md) | 
 | GitHub webhook (`/webhook/github`) | :white_check_mark: |
 | GitLab webhook (`/webhook/gitlab`) | :white_check_mark: |
 | Local CLI review                   | :white_check_mark: |
+| Integrated Agent Skill             | :white_check_mark: |
 
 ## Install
 
@@ -18,12 +20,12 @@ Docs: [Webhooks](/docs/webhooks.md) | [Configuration](/docs/configuration.md) | 
 
 Linux/macOS
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bentos-lab/peer/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/bentos-lab/peer/master/install.sh | bash
 ```
 
 Windows
 ```bash
-iwr https://raw.githubusercontent.com/bentos-lab/peer/main/install.ps1 -useb | iex
+iwr https://raw.githubusercontent.com/bentos-lab/peer/master/install.ps1 -useb | iex
 ```
 
 ### Latest
@@ -32,14 +34,13 @@ Prerequisites:
 - Go `1.26`
 
 ```bash
-go install ./cmd/peer
+go install https://github.com/bentos-lab/peer/cmd/peer
 ```
 
-## Update
+## Auto-update
 
 ```bash
 peer update self
-peer update skills --path ~/.agents/skills
 ```
 
 ## Quick Start
@@ -121,3 +122,25 @@ Repo-local configuration lives in `.peer/config.toml`.
 ## Environment
 
 See [Configuration](/docs/configuration.md).
+
+## Skill
+
+Use the following url to install `peer` skill into your coding agent
+
+```
+https://github.com/bentos-lab/peer/tree/master/skills/peer
+```
+
+> ***Important***: In coding agents which support **sandbox** mode, you should run with **full permission** instead.
+>
+> Our CLI requires to read credentials from filesystem to interact with git, github, gitlab, opencode.
+
+When you updated the tool, you should also update the skill in your coding agent, run this command to auto-discover common skill patterns:
+```bash
+peer update skills
+```
+
+Or specify which skill folder should be updated:
+```bash
+peer update skills --path ~/.agent/skills/peer
+```

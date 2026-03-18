@@ -1,6 +1,6 @@
 package cli
 
-import stdlogger "bentos-backend/shared/logger/stdlogger"
+import stdlogger "github.com/bentos-lab/peer/shared/logger/stdlogger"
 
 // LogLevelOverrideFromVerbosity maps a verbosity count to a log level override.
 func LogLevelOverrideFromVerbosity(verbosity int) string {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
 	"github.com/stretchr/testify/require"
 )
 

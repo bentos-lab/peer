@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // Publisher writes review messages to an output stream.

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 )
 
 // reviewUseCase is the concrete ReviewUseCase implementation.

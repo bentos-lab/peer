@@ -7,7 +7,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"bentos-backend/config"
+	"github.com/bentos-lab/peer/config"
 	"github.com/stretchr/testify/require"
 )
 

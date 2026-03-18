@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
+	gitlabvcs "github.com/bentos-lab/peer/adapter/outbound/vcs/gitlab"
 	"github.com/stretchr/testify/require"
 )
 

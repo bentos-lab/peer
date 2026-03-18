@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 //go:embed core_policy_v1.md

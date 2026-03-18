@@ -3,7 +3,7 @@ package contracts
 import (
 	"context"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 // CodingAgent runs coding tasks in a prepared environment.

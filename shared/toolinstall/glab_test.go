@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
 
 	"github.com/stretchr/testify/require"
 )
@@ -139,6 +139,7 @@ func TestEnsureGlabAuthenticatedSkipsLoginWithoutTTY(t *testing.T) {
 
 	err := installer.EnsureGlabAuthenticated(context.Background())
 	require.NoError(t, err)
+	require.Contains(t, stderr.String(), "Note: glab auth status reads credential files")
 	require.Contains(t, stderr.String(), "Skipping 'glab auth login' because no TTY is available")
 	require.NoError(t, runner.VerifyDone())
 }

@@ -1,13 +1,16 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"os"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/shared/toolinstall"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/toolinstall"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,6 +28,28 @@ func newTestCLIClient(runner commandrunner.Runner) *CLIClient {
 		IsTerminal: func() bool { return true },
 	})
 	return &CLIClient{runner: runner, installer: installer}
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	original := os.Stderr
+	os.Stderr = writer
+
+	done := make(chan string, 1)
+	go func() {
+		var buffer bytes.Buffer
+		_, _ = io.Copy(&buffer, reader)
+		_ = reader.Close()
+		done <- buffer.String()
+	}()
+
+	fn()
+
+	_ = writer.Close()
+	os.Stderr = original
+	return <-done
 }
 
 func TestClient_GetPullRequestChangedFiles(t *testing.T) {
@@ -81,9 +106,12 @@ func TestClient_GetPullRequestChangedFilesFailsWhenGitHubCLIUnauthorized(t *test
 	})
 	client := newTestCLIClient(runner)
 
-	_, err := client.GetPullRequestChangedFiles(context.Background(), "org/repo", 7)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "gh auth login")
+	stderr := captureStderr(t, func() {
+		_, err := client.GetPullRequestChangedFiles(context.Background(), "org/repo", 7)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "gh auth login")
+	})
+	require.Contains(t, stderr, "Note: gh auth status reads credential files")
 	require.NoError(t, runner.VerifyDone())
 }
 

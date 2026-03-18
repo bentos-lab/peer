@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 	"github.com/stretchr/testify/require"
 )
 

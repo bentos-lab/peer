@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"strings"
 
-	codeenv "bentos-backend/adapter/outbound/codeenv"
-	"bentos-backend/config"
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/shared/text"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/shared/text"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // ReplyCommentCommand runs the replycomment flow.

@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/shared/toolinstall"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/shared/toolinstall"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 func resolveHostDefaults(
@@ -691,7 +691,7 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 	parsedEvent := extractParsedOpencodeEvent(event)
 	action := strings.TrimSpace(parsedEvent.Action)
 	if action != "" && action != "agent started step" && !strings.HasPrefix(action, "agent finished step") {
-		p.logger.Tracef("coding-agent trace action=%q line=%d", parsedEvent.Action, p.lineNumber)
+		p.logger.Debugf("coding-agent debug action=%q line=%d", parsedEvent.Action, p.lineNumber)
 	}
 
 	candidate := parsedEvent.Text
@@ -702,8 +702,8 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 	if parsedEvent.Type == "assistant_delta" {
 		p.assistantDeltaCount++
 		p.assistantDelta.WriteString(candidate)
-		p.logger.Tracef(
-			"coding-agent trace action=%q line=%d index=%d chars=%d",
+		p.logger.Debugf(
+			"coding-agent debug action=%q line=%d index=%d chars=%d",
 			"agent streamed assistant delta",
 			p.lineNumber,
 			p.assistantDeltaCount,
@@ -714,8 +714,8 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 
 	p.assistantMessageCount++
 	p.finalText = candidate
-	p.logger.Tracef(
-		"coding-agent trace action=%q line=%d index=%d chars=%d",
+	p.logger.Debugf(
+		"coding-agent debug action=%q line=%d index=%d chars=%d",
 		"agent produced assistant message",
 		p.lineNumber,
 		p.assistantMessageCount,
@@ -858,7 +858,7 @@ func extractToolUseAction(event map[string]any) string {
 
 	filePath := extractFirstNonEmptyString(input, "filePath", "path", "filename", "file")
 	command := extractFirstNonEmptyString(input, "command", "cmd", "script")
-	command = truncateForTrace(command, 256)
+	command = truncateForDebug(command, 256)
 
 	switch strings.ToLower(toolName) {
 	case "read":
@@ -925,7 +925,7 @@ func extractTextFromValue(value any) string {
 	return ""
 }
 
-func truncateForTrace(value string, maxChars int) string {
+func truncateForDebug(value string, maxChars int) string {
 	if maxChars <= 0 {
 		return ""
 	}

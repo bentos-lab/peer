@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 //go:embed system.md

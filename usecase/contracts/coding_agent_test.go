@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 	"github.com/stretchr/testify/require"
 )
 

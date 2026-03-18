@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase/contracts"
 	"github.com/stretchr/testify/require"
 )
 

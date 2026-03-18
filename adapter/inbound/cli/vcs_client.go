@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 const (

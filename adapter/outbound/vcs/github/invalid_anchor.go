@@ -3,7 +3,7 @@ package github
 import (
 	"strings"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 // InvalidAnchorError means GitHub rejected the requested file/line anchor.

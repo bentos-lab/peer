@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	githubinbound "bentos-backend/adapter/inbound/http/github"
-	customrecipe "bentos-backend/adapter/outbound/customrecipe"
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
-	"bentos-backend/config"
-	"bentos-backend/shared/jobqueue"
-	"bentos-backend/usecase"
+	githubinbound "github.com/bentos-lab/peer/adapter/inbound/http/github"
+	customrecipe "github.com/bentos-lab/peer/adapter/outbound/customrecipe"
+	githubvcs "github.com/bentos-lab/peer/adapter/outbound/vcs/github"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/shared/jobqueue"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // BuildGitHubHandler wires dependencies for GitHub webhook flow.

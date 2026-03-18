@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 // BuildMessages groups findings by file and appends one short summary.

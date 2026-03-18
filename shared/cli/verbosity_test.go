@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	stdlogger "bentos-backend/shared/logger/stdlogger"
+	stdlogger "github.com/bentos-lab/peer/shared/logger/stdlogger"
 	"github.com/stretchr/testify/require"
 )
 

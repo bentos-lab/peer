@@ -3,7 +3,7 @@ package noop
 import (
 	"context"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 type overviewPublisher struct{}

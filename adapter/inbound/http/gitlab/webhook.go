@@ -12,16 +12,16 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/adapter/inbound/cli"
-	"bentos-backend/adapter/inbound/http/background"
-	codeenv "bentos-backend/adapter/outbound/codeenv"
-	"bentos-backend/domain"
-	"bentos-backend/shared/jobqueue"
-	"bentos-backend/shared/logger/stdlogger"
-	sharedlogging "bentos-backend/shared/logging"
-	"bentos-backend/shared/text"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/adapter/inbound/cli"
+	"github.com/bentos-lab/peer/adapter/inbound/http/background"
+	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/jobqueue"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	sharedlogging "github.com/bentos-lab/peer/shared/logging"
+	"github.com/bentos-lab/peer/shared/text"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
 const backgroundReviewTimeout = 10 * time.Minute

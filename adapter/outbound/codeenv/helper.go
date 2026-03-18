@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"bentos-backend/adapter/outbound/customrecipe"
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/adapter/outbound/customrecipe"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // NewEnvironment creates a code environment and returns a cleanup function.

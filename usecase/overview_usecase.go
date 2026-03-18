@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 )
 
 // overviewUseCase is the concrete OverviewUseCase implementation.

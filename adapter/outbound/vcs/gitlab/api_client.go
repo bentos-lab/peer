@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 const defaultGitLabTimeout = 30 * time.Second

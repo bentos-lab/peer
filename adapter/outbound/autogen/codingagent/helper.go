@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/domain"
-	uccontracts "bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
 func ensureDiffContentAvailable(ctx context.Context, environment uccontracts.CodeEnvironment, base string, head string) error {

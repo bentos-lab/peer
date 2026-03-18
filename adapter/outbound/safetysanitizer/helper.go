@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 func renderSystemPrompt(options Options) (string, error) {

@@ -3,10 +3,10 @@ package host
 import (
 	"context"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // FactoryConfig contains dependencies for creating prepared host environments.

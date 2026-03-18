@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 const (

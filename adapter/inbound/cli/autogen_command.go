@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	codeenv "bentos-backend/adapter/outbound/codeenv"
-	"bentos-backend/config"
-	"bentos-backend/shared/logger/stdlogger"
-	sharedlogging "bentos-backend/shared/logging"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	sharedlogging "github.com/bentos-lab/peer/shared/logging"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // AutogenCommand runs autogen flow with the shared autogen usecase.

@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/text"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/text"
 )
 
 func resolveWebhookIssueCandidates(

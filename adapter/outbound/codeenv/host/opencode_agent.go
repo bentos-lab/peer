@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/shared/toolinstall"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/shared/toolinstall"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // HostOpencodeAgent runs tasks through the opencode CLI on the host machine.
@@ -113,7 +113,7 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 	return domain.CodingAgentRunResult{Text: text, SessionID: parser.sessionID}, nil
 }
 
-const opencodeTraceTranscriptMaxChars = 16000
+const opencodeDebugTranscriptMaxChars = 512
 
 type parsedOpencodeEvent struct {
 	Type   string
@@ -151,9 +151,9 @@ func (p *opencodeJSONStreamParser) Finalize() (string, error) {
 
 	logTranscript := func(source string, text string) {
 		transcriptLineCount := strings.Count(text, "\n") + 1
-		truncated := truncateForTrace(text, opencodeTraceTranscriptMaxChars)
-		p.logger.Tracef(
-			"coding-agent trace action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
+		truncated := truncateForDebug(text, opencodeDebugTranscriptMaxChars)
+		p.logger.Debugf(
+			"coding-agent debug action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
 			"agent finalized assistant transcript",
 			source,
 			p.parsedLineCount,
@@ -193,13 +193,13 @@ func (b *lineBuffer) Append(chunk []byte) {
 
 	for {
 		content := b.buffer.Bytes()
-		newlineIndex := bytes.IndexByte(content, '\n')
-		if newlineIndex < 0 {
+		before, after, ok := bytes.Cut(content, []byte{'\n'})
+		if !ok {
 			return
 		}
 
-		line := string(content[:newlineIndex])
-		remaining := append([]byte(nil), content[newlineIndex+1:]...)
+		line := string(before)
+		remaining := append([]byte(nil), after...)
 		b.buffer.Reset()
 		_, _ = b.buffer.Write(remaining)
 		if b.consumeLine != nil {

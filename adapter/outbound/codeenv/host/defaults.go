@@ -1,8 +1,8 @@
 package host
 
 import (
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 type hostDefaults struct {

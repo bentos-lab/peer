@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // AutogenPublisher routes autogen output to comment or print publishers.

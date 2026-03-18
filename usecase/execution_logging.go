@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 func logExecution(logger Logger, flow string, target domain.ChangeRequestTarget, status string, startedAt time.Time, detailFormat string, detailArgs ...any) {

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/shared/toolinstall"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/toolinstall"
+	"github.com/bentos-lab/peer/usecase"
 	"github.com/stretchr/testify/require"
 )
 
@@ -432,7 +432,7 @@ func TestHostOpencodeAgentRunReturnsErrorWhenNoAssistantOutput(t *testing.T) {
 func TestHostOpencodeAgentRunTruncatesTranscriptTrace(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 	logger := &opencodeAgentTestLogger{}
-	longText := strings.Repeat("a", opencodeTraceTranscriptMaxChars+32)
+	longText := strings.Repeat("a", opencodeDebugTranscriptMaxChars+32)
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "opencode",

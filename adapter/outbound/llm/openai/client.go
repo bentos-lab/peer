@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // HTTPClient abstracts HTTP calls for testing.

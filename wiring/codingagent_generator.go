@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	codeenvhost "bentos-backend/adapter/outbound/codeenv/host"
-	codingagent "bentos-backend/adapter/outbound/llm/codingagent"
-	openai "bentos-backend/adapter/outbound/llm/openai"
-	"bentos-backend/config"
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	codeenvhost "github.com/bentos-lab/peer/adapter/outbound/codeenv/host"
+	codingagent "github.com/bentos-lab/peer/adapter/outbound/llm/codingagent"
+	openai "github.com/bentos-lab/peer/adapter/outbound/llm/openai"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 const llmTimeout = 600 * time.Second

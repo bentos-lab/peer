@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 func runTask(ctx context.Context, agent contracts.CodingAgent, cfg Config, task string) (string, error) {

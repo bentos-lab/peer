@@ -6,8 +6,8 @@ import (
 	"strings"
 	"text/template"
 
-	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
+	"github.com/bentos-lab/peer/domain"
+	sharedtext "github.com/bentos-lab/peer/shared/text"
 )
 
 func overviewResponseSchema() map[string]any {

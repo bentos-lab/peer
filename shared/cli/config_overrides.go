@@ -1,6 +1,6 @@
 package cli
 
-import "bentos-backend/config"
+import "github.com/bentos-lab/peer/config"
 
 // ConfigOverrides captures explicit CLI overrides for config.Config.
 type ConfigOverrides struct {

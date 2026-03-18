@@ -1,4 +1,4 @@
-module bentos-backend
+module github.com/bentos-lab/peer
 
 go 1.26
 

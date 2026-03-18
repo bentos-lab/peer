@@ -16,6 +16,11 @@ func NewGitInstaller(deps *Deps) *GitInstaller {
 	return &GitInstaller{base: newBaseInstaller(deps)}
 }
 
+// IsGitInstalled reports whether git is available on PATH.
+func (i *GitInstaller) IsGitInstalled() bool {
+	return i.base.commandAvailable("git")
+}
+
 // EnsureGitInstalled installs git when missing.
 func (i *GitInstaller) EnsureGitInstalled(ctx context.Context) error {
 	if i.base.commandAvailable("git") {

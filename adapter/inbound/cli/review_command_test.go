@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"bentos-backend/config"
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
 
 	"github.com/stretchr/testify/require"
 )

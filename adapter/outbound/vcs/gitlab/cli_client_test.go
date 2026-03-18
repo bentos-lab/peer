@@ -1,13 +1,16 @@
 package gitlab
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"os"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/shared/toolinstall"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/toolinstall"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,6 +32,28 @@ func newTestGitLabCLIClientWithHost(runner commandrunner.Runner, host string) *C
 		IsTerminal: func() bool { return true },
 	})
 	return &CLIClient{runner: runner, installer: installer, host: host}
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	original := os.Stderr
+	os.Stderr = writer
+
+	done := make(chan string, 1)
+	go func() {
+		var buffer bytes.Buffer
+		_, _ = io.Copy(&buffer, reader)
+		_ = reader.Close()
+		done <- buffer.String()
+	}()
+
+	fn()
+
+	_ = writer.Close()
+	os.Stderr = original
+	return <-done
 }
 
 func TestGitLabClient_GetPullRequestInfo(t *testing.T) {
@@ -57,6 +82,24 @@ func TestGitLabClient_GetPullRequestInfo(t *testing.T) {
 	require.Equal(t, "head123", info.HeadRef)
 	require.Equal(t, "start123", info.StartRef)
 	require.Equal(t, "feature", info.HeadRefName)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestGitLabClient_AuthFailurePrintsHint(t *testing.T) {
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "glab", Args: []string{"auth", "status"}},
+		Result:   commandrunner.Result{Stderr: []byte("not logged in")},
+		Err:      errors.New("exit status 1"),
+	})
+	client := newTestGitLabCLIClient(runner)
+
+	stderr := captureStderr(t, func() {
+		_, err := client.GetPullRequestInfo(context.Background(), "group/project", 7)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "glab auth login")
+	})
+	require.Contains(t, stderr, "Note: glab auth status reads credential files")
 	require.NoError(t, runner.VerifyDone())
 }
 

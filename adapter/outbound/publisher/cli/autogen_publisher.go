@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // AutogenPublisher writes autogen output to an output stream.
