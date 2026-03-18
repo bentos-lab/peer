@@ -6,8 +6,9 @@
 
 ## Pre-release Checklist
 
+* [ ] Checkout to release branch
 * [ ] Run tests and ensure all tests pass
-* [ ] Update `CHANGELOG.md` based on commit history since the previous version
+* [ ] Update `CHANGELOG.md` based on commit history since the previous release (release version is determined by the current CHANGELOG). If this is the first release, get all commit history since first commit (using `git log`).
 * [ ] Update version in `skills/peer/SKILL.md` to the current version
 * [ ] Ensure the working directory is clean
 
