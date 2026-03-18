@@ -858,7 +858,7 @@ func extractToolUseAction(event map[string]any) string {
 
 	filePath := extractFirstNonEmptyString(input, "filePath", "path", "filename", "file")
 	command := extractFirstNonEmptyString(input, "command", "cmd", "script")
-	command = truncateForTrace(command, 256)
+	command = truncateForDebug(command, 256)
 
 	switch strings.ToLower(toolName) {
 	case "read":
@@ -925,7 +925,7 @@ func extractTextFromValue(value any) string {
 	return ""
 }
 
-func truncateForTrace(value string, maxChars int) string {
+func truncateForDebug(value string, maxChars int) string {
 	if maxChars <= 0 {
 		return ""
 	}

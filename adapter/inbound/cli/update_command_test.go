@@ -68,3 +68,15 @@ func TestUpdateCommandSkipsWhenUpToDate(t *testing.T) {
 	require.True(t, result.UpToDate)
 	require.Equal(t, "v1.2.3", result.Result.Version)
 }
+
+func TestUpdateCommandIgnoresMetadataSuffix(t *testing.T) {
+	updater := &updateTestUpdater{latest: "v1.2.3+build.1"}
+	cmd := &UpdateCommand{updater: updater, currentVersion: "1.2.3"}
+
+	result, err := cmd.Run(context.Background())
+	require.NoError(t, err)
+	require.True(t, updater.latestCalled)
+	require.False(t, updater.updateCalled)
+	require.True(t, result.UpToDate)
+	require.Equal(t, "v1.2.3+build.1", result.Result.Version)
+}

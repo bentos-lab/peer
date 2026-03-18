@@ -75,5 +75,8 @@ func normalizeVersion(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.TrimPrefix(value, "v")
 	value = strings.TrimPrefix(value, "V")
+	if idx := strings.IndexAny(value, "-+"); idx != -1 {
+		value = value[:idx]
+	}
 	return value
 }

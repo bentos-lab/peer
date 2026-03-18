@@ -151,8 +151,8 @@ func (p *opencodeJSONStreamParser) Finalize() (string, error) {
 
 	logTranscript := func(source string, text string) {
 		transcriptLineCount := strings.Count(text, "\n") + 1
-		truncated := truncateForTrace(text, opencodeTraceTranscriptMaxChars)
-		p.logger.Tracef(
+		truncated := truncateForDebug(text, opencodeTraceTranscriptMaxChars)
+		p.logger.Debugf(
 			"coding-agent trace action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
 			"agent finalized assistant transcript",
 			source,
