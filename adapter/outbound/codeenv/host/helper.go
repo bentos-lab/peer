@@ -691,7 +691,7 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 	parsedEvent := extractParsedOpencodeEvent(event)
 	action := strings.TrimSpace(parsedEvent.Action)
 	if action != "" && action != "agent started step" && !strings.HasPrefix(action, "agent finished step") {
-		p.logger.Tracef("coding-agent trace action=%q line=%d", parsedEvent.Action, p.lineNumber)
+		p.logger.Debugf("coding-agent debug action=%q line=%d", parsedEvent.Action, p.lineNumber)
 	}
 
 	candidate := parsedEvent.Text
@@ -702,8 +702,8 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 	if parsedEvent.Type == "assistant_delta" {
 		p.assistantDeltaCount++
 		p.assistantDelta.WriteString(candidate)
-		p.logger.Tracef(
-			"coding-agent trace action=%q line=%d index=%d chars=%d",
+		p.logger.Debugf(
+			"coding-agent debug action=%q line=%d index=%d chars=%d",
 			"agent streamed assistant delta",
 			p.lineNumber,
 			p.assistantDeltaCount,
@@ -714,8 +714,8 @@ func (p *opencodeJSONStreamParser) consumeLine(rawLine string) {
 
 	p.assistantMessageCount++
 	p.finalText = candidate
-	p.logger.Tracef(
-		"coding-agent trace action=%q line=%d index=%d chars=%d",
+	p.logger.Debugf(
+		"coding-agent debug action=%q line=%d index=%d chars=%d",
 		"agent produced assistant message",
 		p.lineNumber,
 		p.assistantMessageCount,

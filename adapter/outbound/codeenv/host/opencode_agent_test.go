@@ -432,7 +432,7 @@ func TestHostOpencodeAgentRunReturnsErrorWhenNoAssistantOutput(t *testing.T) {
 func TestHostOpencodeAgentRunTruncatesTranscriptTrace(t *testing.T) {
 	runner := commandrunner.NewDummyCommandRunner()
 	logger := &opencodeAgentTestLogger{}
-	longText := strings.Repeat("a", opencodeTraceTranscriptMaxChars+32)
+	longText := strings.Repeat("a", opencodeDebugTranscriptMaxChars+32)
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "opencode",

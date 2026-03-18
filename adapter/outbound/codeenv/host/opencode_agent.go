@@ -113,7 +113,7 @@ func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.Co
 	return domain.CodingAgentRunResult{Text: text, SessionID: parser.sessionID}, nil
 }
 
-const opencodeTraceTranscriptMaxChars = 1024
+const opencodeDebugTranscriptMaxChars = 512
 
 type parsedOpencodeEvent struct {
 	Type   string
@@ -151,9 +151,9 @@ func (p *opencodeJSONStreamParser) Finalize() (string, error) {
 
 	logTranscript := func(source string, text string) {
 		transcriptLineCount := strings.Count(text, "\n") + 1
-		truncated := truncateForDebug(text, opencodeTraceTranscriptMaxChars)
+		truncated := truncateForDebug(text, opencodeDebugTranscriptMaxChars)
 		p.logger.Debugf(
-			"coding-agent trace action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
+			"coding-agent debug action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
 			"agent finalized assistant transcript",
 			source,
 			p.parsedLineCount,
