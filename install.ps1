@@ -15,13 +15,13 @@ switch ($env:PROCESSOR_ARCHITECTURE) {
     }
 }
 
-Write-Host "🔍 Detect: $OS/$Arch"
+Write-Host "Detect: $OS/$Arch"
 
 # Get latest version
 $Release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
 $Version = $Release.tag_name
 
-Write-Host "📦 Latest version: $Version"
+Write-Host "Latest version: $Version"
 
 $FileName = "$AppName-$Version-$OS-$Arch.zip"
 $Url = "https://github.com/$Repo/releases/download/$Version/$FileName"
@@ -30,10 +30,10 @@ $TempDir = New-Item -ItemType Directory -Path ([System.IO.Path]::GetTempPath()) 
 
 $ZipPath = Join-Path $TempDir $FileName
 
-Write-Host "⬇️ Downloading..."
+Write-Host "Downloading..."
 Invoke-WebRequest -Uri $Url -OutFile $ZipPath
 
-Write-Host "📂 Extracting..."
+Write-Host "Extracting..."
 Expand-Archive -Path $ZipPath -DestinationPath $TempDir
 
 # Install dir
@@ -50,11 +50,11 @@ $UserPath = [Environment]::GetEnvironmentVariable("PATH", "User")
 
 if ($UserPath -notlike "*$InstallDir*") {
     [Environment]::SetEnvironmentVariable("PATH", "$UserPath;$InstallDir", "User")
-    Write-Host "➕ Added $InstallDir to PATH (restart terminal to apply)"
+    Write-Host "Added $InstallDir to PATH (restart terminal to apply)"
 }
 
 Remove-Item $TempDir -Recurse -Force
 
 Write-Host ""
-Write-Host "✅ Installed!"
-Write-Host "👉 Run: $AppName --version"
+Write-Host "Installed!"
+Write-Host "Run: $AppName --version"
