@@ -13,7 +13,7 @@ case "$OS" in
   linux) OS="linux" ;;
   darwin) OS="darwin" ;;
   *)
-    echo "❌ Unsupported OS: $OS"
+    echo "Unsupported OS: $OS"
     exit 1
     ;;
 esac
@@ -25,30 +25,30 @@ case "$ARCH" in
   x86_64) ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
   *)
-    echo "❌ Unsupported ARCH: $ARCH"
+    echo "Unsupported ARCH: $ARCH"
     exit 1
     ;;
 esac
 
-echo "🔍 Detect: $OS/$ARCH"
+echo "Detect: $OS/$ARCH"
 
 # Get latest version from GitHub
 VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep tag_name | cut -d '"' -f4)
 
-echo "📦 Latest version: $VERSION"
+echo "Latest version: $VERSION"
 
 FILENAME="${APP_NAME}-${VERSION}-${OS}-${ARCH}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${VERSION}/${FILENAME}"
 
 TMP_DIR=$(mktemp -d)
 
-echo "⬇️ Downloading..."
+echo "⬇Downloading..."
 curl -fsSL "$URL" -o "${TMP_DIR}/${FILENAME}"
 
-echo "📂 Extracting..."
+echo "Extracting..."
 tar -xzf "${TMP_DIR}/${FILENAME}" -C "${TMP_DIR}"
 
-echo "🚀 Installing to ${INSTALL_DIR} (may need sudo)..."
+echo "Installing to ${INSTALL_DIR} (may need sudo)..."
 
 if [ -w "${INSTALL_DIR}" ]; then
   mv "${TMP_DIR}/${APP_NAME}" "${INSTALL_DIR}/${APP_NAME}"
@@ -61,5 +61,5 @@ chmod +x "${INSTALL_DIR}/${APP_NAME}"
 rm -rf "${TMP_DIR}"
 
 echo ""
-echo "✅ Installed!"
-echo "👉 Run: ${APP_NAME} --version"
+echo "Installed!"
+echo "Run: ${APP_NAME} --version"
