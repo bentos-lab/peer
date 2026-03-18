@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/refs"
-	sharedtext "bentos-backend/shared/text"
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/refs"
+	sharedtext "github.com/bentos-lab/peer/shared/text"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 type issueAlignmentTaskTemplateData struct {

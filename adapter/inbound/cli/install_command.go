@@ -4,29 +4,47 @@ import (
 	"context"
 	"errors"
 
-	"bentos-backend/shared/toolinstall"
+	"github.com/bentos-lab/peer/shared/toolinstall"
 )
 
 // GhInstaller installs GitHub CLI and handles auth.
 type GhInstaller interface {
+	IsGhInstalled() bool
+	IsGhAuthenticated(context.Context) (bool, error)
 	EnsureGhInstalled(context.Context) error
 	EnsureGhAuthenticated(context.Context) error
 }
 
 // GlabInstaller installs GitLab CLI and handles auth.
 type GlabInstaller interface {
+	IsGlabInstalled() bool
+	IsGlabAuthenticated(context.Context) (bool, error)
 	EnsureGlabInstalled(context.Context) error
 	EnsureGlabAuthenticated(context.Context) error
 }
 
 // OpencodeInstaller installs OpenCode.
 type OpencodeInstaller interface {
+	IsOpencodeInstalled() bool
 	EnsureOpencodeInstalled(context.Context) error
 }
 
 // GitInstaller installs Git.
 type GitInstaller interface {
+	IsGitInstalled() bool
 	EnsureGitInstalled(context.Context) error
+}
+
+// InstallOutcome reports the install status for a tool.
+type InstallOutcome struct {
+	Installed            bool
+	AlreadyAuthenticated bool
+}
+
+// QuickstartOutcome reports the install status for quickstart tools.
+type QuickstartOutcome struct {
+	Gh       InstallOutcome
+	Opencode InstallOutcome
 }
 
 // InstallCommand installs required CLI dependencies.
@@ -48,59 +66,106 @@ func NewInstallCommand() *InstallCommand {
 }
 
 // InstallGh installs GitHub CLI and optionally logs in.
-func (c *InstallCommand) InstallGh(ctx context.Context, login bool) error {
+func (c *InstallCommand) InstallGh(ctx context.Context, login bool) (InstallOutcome, error) {
 	installer, err := c.ghInstaller()
 	if err != nil {
-		return err
+		return InstallOutcome{}, err
 	}
-	if err := installer.EnsureGhInstalled(ctx); err != nil {
-		return err
+	alreadyInstalled := installer.IsGhInstalled()
+	if !alreadyInstalled {
+		if err := installer.EnsureGhInstalled(ctx); err != nil {
+			return InstallOutcome{}, err
+		}
 	}
+	outcome := InstallOutcome{Installed: !alreadyInstalled}
 	if !login {
-		return nil
+		return outcome, nil
 	}
-	return installer.EnsureGhAuthenticated(ctx)
+	authenticated, err := installer.IsGhAuthenticated(ctx)
+	if err != nil {
+		return outcome, err
+	}
+	if authenticated {
+		outcome.AlreadyAuthenticated = true
+		return outcome, nil
+	}
+	if err := installer.EnsureGhAuthenticated(ctx); err != nil {
+		return outcome, err
+	}
+	return outcome, nil
 }
 
 // InstallGlab installs GitLab CLI and optionally logs in.
-func (c *InstallCommand) InstallGlab(ctx context.Context, login bool) error {
+func (c *InstallCommand) InstallGlab(ctx context.Context, login bool) (InstallOutcome, error) {
 	installer, err := c.glabInstaller()
 	if err != nil {
-		return err
+		return InstallOutcome{}, err
 	}
-	if err := installer.EnsureGlabInstalled(ctx); err != nil {
-		return err
+	alreadyInstalled := installer.IsGlabInstalled()
+	if !alreadyInstalled {
+		if err := installer.EnsureGlabInstalled(ctx); err != nil {
+			return InstallOutcome{}, err
+		}
 	}
+	outcome := InstallOutcome{Installed: !alreadyInstalled}
 	if !login {
-		return nil
+		return outcome, nil
 	}
-	return installer.EnsureGlabAuthenticated(ctx)
+	authenticated, err := installer.IsGlabAuthenticated(ctx)
+	if err != nil {
+		return outcome, err
+	}
+	if authenticated {
+		outcome.AlreadyAuthenticated = true
+		return outcome, nil
+	}
+	if err := installer.EnsureGlabAuthenticated(ctx); err != nil {
+		return outcome, err
+	}
+	return outcome, nil
 }
 
 // InstallOpencode installs OpenCode (opencode).
-func (c *InstallCommand) InstallOpencode(ctx context.Context) error {
+func (c *InstallCommand) InstallOpencode(ctx context.Context) (InstallOutcome, error) {
 	installer, err := c.opencodeInstaller()
 	if err != nil {
-		return err
+		return InstallOutcome{}, err
 	}
-	return installer.EnsureOpencodeInstalled(ctx)
+	alreadyInstalled := installer.IsOpencodeInstalled()
+	if !alreadyInstalled {
+		if err := installer.EnsureOpencodeInstalled(ctx); err != nil {
+			return InstallOutcome{}, err
+		}
+	}
+	return InstallOutcome{Installed: !alreadyInstalled}, nil
 }
 
 // InstallGit installs Git.
-func (c *InstallCommand) InstallGit(ctx context.Context) error {
+func (c *InstallCommand) InstallGit(ctx context.Context) (InstallOutcome, error) {
 	installer, err := c.gitInstaller()
 	if err != nil {
-		return err
+		return InstallOutcome{}, err
 	}
-	return installer.EnsureGitInstalled(ctx)
+	alreadyInstalled := installer.IsGitInstalled()
+	if !alreadyInstalled {
+		if err := installer.EnsureGitInstalled(ctx); err != nil {
+			return InstallOutcome{}, err
+		}
+	}
+	return InstallOutcome{Installed: !alreadyInstalled}, nil
 }
 
 // InstallQuickstart installs gh (with login) and opencode.
-func (c *InstallCommand) InstallQuickstart(ctx context.Context) error {
-	if err := c.InstallGh(ctx, true); err != nil {
-		return err
+func (c *InstallCommand) InstallQuickstart(ctx context.Context) (QuickstartOutcome, error) {
+	ghOutcome, err := c.InstallGh(ctx, true)
+	if err != nil {
+		return QuickstartOutcome{}, err
 	}
-	return c.InstallOpencode(ctx)
+	opencodeOutcome, err := c.InstallOpencode(ctx)
+	if err != nil {
+		return QuickstartOutcome{}, err
+	}
+	return QuickstartOutcome{Gh: ghOutcome, Opencode: opencodeOutcome}, nil
 }
 
 var errInstallNotConfigured = errors.New("install command is not configured")

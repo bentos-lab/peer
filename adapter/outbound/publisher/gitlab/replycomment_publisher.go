@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // ReplyCommentClient posts replycomment outputs to GitLab.

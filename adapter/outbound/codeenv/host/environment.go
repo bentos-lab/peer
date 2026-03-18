@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // HostCodeEnvironmentConfig contains dependencies for host environment setup.

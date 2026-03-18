@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 //go:embed overview_system.md

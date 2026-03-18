@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"bentos-backend/config"
-	sharedcli "bentos-backend/shared/cli"
-	"bentos-backend/wiring"
+	"github.com/bentos-lab/peer/config"
+	sharedcli "github.com/bentos-lab/peer/shared/cli"
+	"github.com/bentos-lab/peer/wiring"
 
 	"github.com/spf13/cobra"
 )
@@ -51,23 +51,22 @@ type webhookFlagValues struct {
 func newWebhookSubcommand(
 	_ context.Context,
 	deps peerDeps,
-	llmOpenAIBaseURL *string,
-	llmOpenAIModel *string,
-	llmOpenAIAPIKey *string,
-	verbosity *int,
-	codeAgent *string,
-	codeAgentProvider *string,
-	codeAgentModel *string,
 ) *cobra.Command {
 	var vcsProvider string
 	flags := webhookFlagValues{}
+	var llmOpenAIBaseURL string
+	var llmOpenAIModel string
+	var llmOpenAIAPIKey string
+	var codeAgent string
+	var codeAgentProvider string
+	var codeAgentModel string
+	var verbosity int
 
 	sub := &cobra.Command{
 		Use:   "webhook",
 		Short: "Run webhook server",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !flagChanged(cmd, "vcs-provider") || strings.TrimSpace(vcsProvider) == "" {
-				_ = cmd.Help()
 				return fmt.Errorf("at least one vcs provider is required (supported: %s)", sharedcli.SupportedVCSProviderValuesText())
 			}
 			providers, err := parseVCSProviders(vcsProvider)
@@ -75,7 +74,6 @@ func newWebhookSubcommand(
 				return err
 			}
 			if len(providers) == 0 {
-				_ = cmd.Help()
 				return fmt.Errorf("at least one vcs provider is required (supported: %s)", sharedcli.SupportedVCSProviderValuesText())
 			}
 			providerSet := make(map[string]struct{}, len(providers))
@@ -97,7 +95,7 @@ func newWebhookSubcommand(
 				return webhookConfigLoadError{cause: err}
 			}
 
-			logLevelOverride, err := resolveWebhookLogLevel(cmd, flags.logLevel, *verbosity)
+			logLevelOverride, err := resolveWebhookLogLevel(cmd, flags.logLevel, verbosity)
 			if err != nil {
 				return err
 			}
@@ -105,7 +103,7 @@ func newWebhookSubcommand(
 				cfg.LogLevel = logLevelOverride
 			}
 
-			if err := applyWebhookOverrides(cmd, &cfg, flags, llmOpenAIBaseURL, llmOpenAIModel, llmOpenAIAPIKey, codeAgent, codeAgentProvider, codeAgentModel); err != nil {
+			if err := applyWebhookOverrides(cmd, &cfg, flags, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel); err != nil {
 				return err
 			}
 
@@ -186,6 +184,13 @@ func newWebhookSubcommand(
 	sub.Flags().StringVar(&flags.codingAgentName, "coding-agent-name", "", "coding agent name override (env: CODING_AGENT_NAME)")
 	sub.Flags().StringVar(&flags.codingAgentProvider, "coding-agent-provider", "", "coding agent provider override (env: CODING_AGENT_PROVIDER)")
 	sub.Flags().StringVar(&flags.codingAgentModel, "coding-agent-model", "", "coding agent model override (env: CODING_AGENT_MODEL)")
+	sub.Flags().StringVar(&llmOpenAIBaseURL, "llm-openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM, env: LLM_OPENAI_BASE_URL)")
+	sub.Flags().StringVar(&llmOpenAIModel, "llm-openai-model", "", "OpenAI compatible model override (env: LLM_OPENAI_MODEL)")
+	sub.Flags().StringVar(&llmOpenAIAPIKey, "llm-openai-api-key", "", "OpenAI compatible API key override (env: LLM_OPENAI_API_KEY)")
+	sub.Flags().StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
+	sub.Flags().StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
+	sub.Flags().StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
+	sub.Flags().CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
 
 	return sub
 }

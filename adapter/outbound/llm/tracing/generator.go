@@ -3,8 +3,8 @@ package tracing
 import (
 	"context"
 
-	"bentos-backend/usecase"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/usecase"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 // Generator wraps an LLM generator and emits trace logs for requests and outputs.

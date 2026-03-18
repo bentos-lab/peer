@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bentos-backend/skills"
+	"github.com/bentos-lab/peer/skills"
 )
 
 const peerSkillDirName = "peer"

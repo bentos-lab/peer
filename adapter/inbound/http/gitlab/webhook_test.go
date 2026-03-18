@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/jobqueue"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/jobqueue"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 	"github.com/stretchr/testify/require"
 )
 

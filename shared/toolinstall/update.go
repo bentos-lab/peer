@@ -127,6 +127,14 @@ func NewUpdater(deps *UpdateDeps) *Updater {
 	}
 }
 
+// LatestVersion returns the latest stable release tag.
+func (u *Updater) LatestVersion(ctx context.Context) (string, error) {
+	if u == nil {
+		return "", errors.New("update is not configured")
+	}
+	return u.resolveLatestVersion(ctx)
+}
+
 // Update downloads the latest stable release and replaces the current executable.
 func (u *Updater) Update(ctx context.Context) (UpdateResult, error) {
 	if u == nil {

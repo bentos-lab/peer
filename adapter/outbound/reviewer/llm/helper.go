@@ -9,9 +9,9 @@ import (
 	"strings"
 	"text/template"
 
-	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/domain"
+	sharedtext "github.com/bentos-lab/peer/shared/text"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 type lineRange struct {

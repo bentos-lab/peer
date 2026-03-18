@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
-	"bentos-backend/shared/toolinstall"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/toolinstall"
+	"github.com/bentos-lab/peer/usecase"
 	"github.com/stretchr/testify/require"
 )
 

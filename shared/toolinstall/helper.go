@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"strings"
 
-	"bentos-backend/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
 )
 
 const (

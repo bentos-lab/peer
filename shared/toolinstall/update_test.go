@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
 
 	"github.com/stretchr/testify/require"
 )

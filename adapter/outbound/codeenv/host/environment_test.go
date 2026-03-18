@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/domain"
 
 	"github.com/stretchr/testify/require"
 )

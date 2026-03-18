@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // ReplyCommentPublisher prints replycomment output for CLI.

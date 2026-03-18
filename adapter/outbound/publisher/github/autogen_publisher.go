@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // AutogenCommentClient posts autogen comments to GitHub PRs.

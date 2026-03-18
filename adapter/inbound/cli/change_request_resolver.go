@@ -1,6 +1,6 @@
 package cli
 
-import "bentos-backend/domain"
+import "github.com/bentos-lab/peer/domain"
 
 type ChangeRequestParams struct {
 	VCSProvider    string

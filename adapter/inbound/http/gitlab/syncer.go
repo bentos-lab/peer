@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
+	gitlabvcs "github.com/bentos-lab/peer/adapter/outbound/vcs/gitlab"
 )
 
 // HookSyncer periodically ensures project hooks are installed.

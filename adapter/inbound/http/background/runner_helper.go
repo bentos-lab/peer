@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 type requestInfoFunc[T any] func(T) (string, int)

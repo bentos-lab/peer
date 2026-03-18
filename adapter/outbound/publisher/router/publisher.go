@@ -3,8 +3,8 @@ package router
 import (
 	"context"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // ReviewPublisher routes review output to comment or print publishers.

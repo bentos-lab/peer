@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/template"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )

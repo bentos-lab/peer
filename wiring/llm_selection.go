@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/config"
-	sharedllm "bentos-backend/shared/llm"
+	"github.com/bentos-lab/peer/config"
+	sharedllm "github.com/bentos-lab/peer/shared/llm"
 )
 
 // CLILLMOptions contains CLI-only LLM overrides.

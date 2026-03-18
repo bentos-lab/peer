@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	githubvcs "bentos-backend/adapter/outbound/vcs/github"
-	"bentos-backend/domain"
-	"bentos-backend/shared/jobqueue"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	githubvcs "github.com/bentos-lab/peer/adapter/outbound/vcs/github"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/jobqueue"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 	"github.com/stretchr/testify/require"
 )
 

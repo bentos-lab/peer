@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bentos-backend/adapter/outbound/commandrunner"
-	"bentos-backend/shared/logger/stdlogger"
-	"bentos-backend/shared/toolinstall"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/shared/toolinstall"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 func resolveHostDefaults(

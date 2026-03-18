@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	sharedlogging "bentos-backend/shared/logging"
-	"bentos-backend/usecase"
+	sharedlogging "github.com/bentos-lab/peer/shared/logging"
+	"github.com/bentos-lab/peer/usecase"
 )
 
 // RunReplyCommentAsync executes one replycomment request in a background goroutine with standardized logging.

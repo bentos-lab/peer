@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"bentos-backend/shared/skillupdate"
+	"github.com/bentos-lab/peer/shared/skillupdate"
 
 	"github.com/stretchr/testify/require"
 )

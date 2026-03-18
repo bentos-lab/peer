@@ -3,7 +3,7 @@ package wiring
 import (
 	"strings"
 
-	"bentos-backend/config"
+	"github.com/bentos-lab/peer/config"
 )
 
 // ResolveCLICodingAgentConfig applies CLI overrides to the coding agent config.

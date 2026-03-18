@@ -1,17 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
+	"os"
 	"testing"
 
-	cliinbound "bentos-backend/adapter/inbound/cli"
-	gitlabinbound "bentos-backend/adapter/inbound/http/gitlab"
-	"bentos-backend/config"
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
-	"bentos-backend/wiring"
+	cliinbound "github.com/bentos-lab/peer/adapter/inbound/cli"
+	gitlabinbound "github.com/bentos-lab/peer/adapter/inbound/http/gitlab"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
+	"github.com/bentos-lab/peer/wiring"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,6 +97,28 @@ func boolPointer(value bool) *bool {
 	return &value
 }
 
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	original := os.Stderr
+	os.Stderr = writer
+
+	done := make(chan string, 1)
+	go func() {
+		var buffer bytes.Buffer
+		_, _ = io.Copy(&buffer, reader)
+		_ = reader.Close()
+		done <- buffer.String()
+	}()
+
+	fn()
+
+	_ = writer.Close()
+	os.Stderr = original
+	return <-done
+}
+
 type mainTestCodeEnvironment struct{}
 
 func (e *mainTestCodeEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (uccontracts.CodingAgent, error) {
@@ -133,6 +158,35 @@ type mainTestRecipeLoader struct {
 
 func (l *mainTestRecipeLoader) Load(_ context.Context, _ uccontracts.CodeEnvironment, _ string) (domain.CustomRecipe, error) {
 	return l.recipe, nil
+}
+
+func minimalPeerDeps() peerDeps {
+	return peerDeps{
+		loadConfig: func() (config.Config, error) {
+			return config.Config{}, nil
+		},
+		buildReviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReviewCommand, error) {
+			return nil, nil
+		},
+		buildOverviewCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.OverviewCommand, error) {
+			return nil, nil
+		},
+		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
+			return nil, nil
+		},
+		buildGitHubHandler: func(config.Config) (http.Handler, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil
+		},
+		buildGitLabHandler: func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error) {
+			return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), nil, nil
+		},
+		listenAndServe: func(string, http.Handler) error {
+			return nil
+		},
+	}
 }
 
 func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
@@ -500,4 +554,34 @@ func TestWebhookOverridesConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "999", captured.Server.GitHub.AppID)
 	require.False(t, captured.Overview.Enabled)
+}
+
+func TestCLIInvalidFlagDoesNotPrintUsage(t *testing.T) {
+	deps := minimalPeerDeps()
+	stderr := captureStderr(t, func() {
+		err := runPeer(context.Background(), []string{"overview", "--bad-flag"}, deps, testVersion, testCommit)
+		require.Error(t, err)
+	})
+	require.Contains(t, stderr, "Error: unknown flag")
+	require.NotContains(t, stderr, "Usage:")
+}
+
+func TestCLIMissingRequiredFlagsDoesNotPrintUsage(t *testing.T) {
+	deps := minimalPeerDeps()
+	stderr := captureStderr(t, func() {
+		err := runPeer(context.Background(), []string{"webhook"}, deps, testVersion, testCommit)
+		require.Error(t, err)
+	})
+	require.Contains(t, stderr, "Error: at least one vcs provider is required")
+	require.NotContains(t, stderr, "Usage:")
+}
+
+func TestCLIUnknownSubcommandDoesNotPrintUsage(t *testing.T) {
+	deps := minimalPeerDeps()
+	stderr := captureStderr(t, func() {
+		err := runPeer(context.Background(), []string{"unknown-subcommand"}, deps, testVersion, testCommit)
+		require.Error(t, err)
+	})
+	require.Contains(t, stderr, "Error: unknown command")
+	require.NotContains(t, stderr, "Usage:")
 }

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/domain"
-	"bentos-backend/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 )
 
 // replyCommentUseCase is the concrete ReplyCommentUseCase implementation.

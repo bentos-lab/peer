@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
-	uccontracts "bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
 func (l *Loader) readAndSanitize(ctx context.Context, env uccontracts.CodeEnvironment, headRef string, rawPath string, sanitizer usecase.SafetySanitizer) (string, string, error) {

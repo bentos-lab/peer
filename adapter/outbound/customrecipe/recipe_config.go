@@ -3,8 +3,8 @@ package customrecipe
 import (
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase"
 
 	"github.com/pelletier/go-toml/v2"
 )

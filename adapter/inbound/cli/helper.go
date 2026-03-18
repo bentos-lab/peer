@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/domain"
-	sharedtext "bentos-backend/shared/text"
+	"github.com/bentos-lab/peer/domain"
+	sharedtext "github.com/bentos-lab/peer/shared/text"
 )
 
 func domainChangeRequestInput(repository string, prNumber int, repoURL string, base string, head string, title string, description string, metadata map[string]string) domain.ChangeRequestInput {

@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"bentos-backend/domain"
+	"github.com/bentos-lab/peer/domain"
 )
 
 const githubAPIVersion = "2022-11-28"

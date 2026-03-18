@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/usecase/contracts"
 	"github.com/stretchr/testify/require"
 )
 

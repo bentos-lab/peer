@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"bentos-backend/domain"
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 func normalizeSuggestedChange(change *domain.SuggestedChange) *domain.SuggestedChange {

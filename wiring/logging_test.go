@@ -3,8 +3,8 @@ package wiring
 import (
 	"testing"
 
-	"bentos-backend/config"
-	"bentos-backend/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	"github.com/stretchr/testify/require"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"bentos-backend/shared/skillupdate"
+	"github.com/bentos-lab/peer/shared/skillupdate"
 )
 
 // SkillUpdater defines update behavior for peer skills.

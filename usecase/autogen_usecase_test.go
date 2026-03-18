@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"bentos-backend/domain"
-	uccontracts "bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/domain"
+	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 	"github.com/stretchr/testify/require"
 )
 

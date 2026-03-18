@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"bentos-backend/usecase/contracts"
+	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
 func (c *Client) buildRequestBody(params contracts.GenerateParams, responseFormat map[string]any) requestBody {

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"bentos-backend/adapter/outbound/commandrunner"
+	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
 
 	"github.com/stretchr/testify/require"
 )
@@ -125,6 +125,7 @@ func TestEnsureGhAuthenticatedSkipsLoginWithoutTTY(t *testing.T) {
 
 	err := installer.EnsureGhAuthenticated(context.Background())
 	require.NoError(t, err)
+	require.Contains(t, stderr.String(), "Note: gh auth status reads credential files")
 	require.Contains(t, stderr.String(), "Skipping 'gh auth login' because no TTY is available")
 	require.NoError(t, runner.VerifyDone())
 }

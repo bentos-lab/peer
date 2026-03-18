@@ -16,6 +16,11 @@ func NewOpencodeInstaller(deps *Deps) *OpencodeInstaller {
 	return &OpencodeInstaller{base: newBaseInstaller(deps)}
 }
 
+// IsOpencodeInstalled reports whether opencode is available on PATH.
+func (i *OpencodeInstaller) IsOpencodeInstalled() bool {
+	return i.base.commandAvailable("opencode")
+}
+
 // EnsureOpencodeInstalled installs opencode when missing.
 func (i *OpencodeInstaller) EnsureOpencodeInstalled(ctx context.Context) error {
 	if i.base.commandAvailable("opencode") {

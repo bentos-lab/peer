@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"bentos-backend/domain"
-	diffutil "bentos-backend/shared/diff"
-	"bentos-backend/shared/logger/stdlogger"
+	"github.com/bentos-lab/peer/domain"
+	diffutil "github.com/bentos-lab/peer/shared/diff"
+	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 )
 
 // autogenUseCase is the concrete AutogenUseCase implementation.
