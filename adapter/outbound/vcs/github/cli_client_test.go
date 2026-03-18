@@ -12,10 +12,10 @@ import (
 )
 
 func newTestCLIClient(runner commandrunner.Runner) *CLIClient {
-	installer := toolinstall.NewInstaller(toolinstall.Config{
+	preferTTY := false
+	installer := toolinstall.NewGhInstaller(&toolinstall.Deps{
 		StreamRunner: runner.(commandrunner.StreamRunner),
-		PreferTTY:    false,
-		PreferTTYSet: true,
+		PreferTTY:    &preferTTY,
 		LookPath: func(name string) (string, error) {
 			if name == "gh" {
 				return "/bin/gh", nil

@@ -75,7 +75,7 @@ func TestReplyCommentCommandRejectsQuestionWithPublishFlag(t *testing.T) {
 		return useCase, nil
 	}
 	resolver := StaticVCSClients{GitHub: client}
-	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "peerbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -105,7 +105,7 @@ func TestReplyCommentCommandQuestionBuildsInlineThread(t *testing.T) {
 		return useCase, nil
 	}
 	resolver := StaticVCSClients{GitHub: client}
-	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "peerbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -144,7 +144,7 @@ func TestReplyCommentCommandWithRepoSetsRepoURL(t *testing.T) {
 		return useCase, nil
 	}
 	resolver := StaticVCSClients{GitHub: client}
-	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "peerbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -172,7 +172,7 @@ func TestReplyCommentCommandUsesReviewThreadWhenReviewCommentResolved(t *testing
 		},
 		reviewComment: domain.ReviewComment{
 			ID:          123,
-			Body:        "@autogitbot Can you clarify this?",
+			Body:        "@peerbot Can you clarify this?",
 			InReplyToID: 111,
 			Path:        "main.go",
 			DiffHunk:    "diff",
@@ -192,7 +192,7 @@ func TestReplyCommentCommandUsesReviewThreadWhenReviewCommentResolved(t *testing
 			CreatedAt: time.Now().Add(-time.Hour),
 		}, {
 			ID:          123,
-			Body:        "@autogitbot Can you clarify this?",
+			Body:        "@peerbot Can you clarify this?",
 			InReplyToID: 111,
 			Path:        "main.go",
 			DiffHunk:    "diff",
@@ -212,7 +212,7 @@ func TestReplyCommentCommandUsesReviewThreadWhenReviewCommentResolved(t *testing
 		return useCase, nil
 	}
 	resolver := StaticVCSClients{GitHub: client}
-	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "peerbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",
@@ -242,7 +242,7 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 		},
 		issueComment: domain.IssueComment{
 			ID:        222,
-			Body:      "@autogitbot Please explain",
+			Body:      "@peerbot Please explain",
 			CreatedAt: time.Now().Add(-time.Minute),
 		},
 	}
@@ -250,7 +250,7 @@ func TestReplyCommentCommandParsesIssueCommentAnchor(t *testing.T) {
 		return useCase, nil
 	}
 	resolver := StaticVCSClients{GitHub: client}
-	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "autogitbot", nil)
+	command := NewReplyCommentCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, "peerbot", nil)
 
 	err := command.Run(context.Background(), config.Config{}, ReplyCommentRunParams{
 		VCSProvider:   "github",

@@ -1,4 +1,5 @@
 # Repository Guidelines
+
 - In chat replies, file references must be repo-root relative only (example: `extensions/bluebubbles/src/channel.ts:80`); never absolute paths or `~/...`.
 
 ## Project Structure & Module Organization
@@ -24,6 +25,7 @@
 - The domain layer is the core. All domain entities and logic can be used directly by both usecase and adapter layers.
 
 # Documentation
+
 - All documentation, design notes, and guidelines must be placed under the `docs` directory.
 - Docs content must be generic: no personal device names/hostnames/paths; use placeholders like `user@gateway-host` and "gateway host".
 - Exception: Keep `README.md`, `AGENTS.md` in root of this repo.
@@ -31,6 +33,7 @@
 - Always add new environments to `.env.example`.
 
 ## Prompt Authoring
+
 - System prompts and task prompts must be clear, explicit, and aligned with repository rules.
 - When a prompt needs detailed guidance, place that guidance in documentation under `docs/` and link to it from the prompt or AGENTS.
 - Follow the prompt authoring guidelines in [System Prompt Guidelines](/docs/system-prompt-guidelines.md).
@@ -70,7 +73,20 @@
 - Pure test additions or fixes generally do NOT require a changelog entry, unless they affect user-facing behavior or the user explicitly requests one.
 
 ## Planning new features
-- Aggressive refactor code if it should be. Rename objects for consistent.
+
+- Aggressive refactor code if it should be. Rename objects for consistent. Refer to [Refactor](#refactor-rules).
 
 ## Refactor rules
-- Reference to [refactor.md](./docs/refactor.md).
+
+- Refer to [refactor.md](./docs/refactor.md).
+
+## Release
+
+* When the user asks to release a new version:
+  * Refer to `RELEASE.md` for the full process
+  * Prepare required changes, including:
+    * Generating `CHANGELOG.md` based on commit history since the previous version
+    * Updating version in `skills/peer/SKILL.md`
+* Before performing any write or git operation (commit, tag, push):
+  * Ask for user confirmation
+* Do not execute the release automatically unless explicitly instructed by the user

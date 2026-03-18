@@ -16,10 +16,10 @@ func newTestGitLabCLIClient(runner commandrunner.Runner) *CLIClient {
 }
 
 func newTestGitLabCLIClientWithHost(runner commandrunner.Runner, host string) *CLIClient {
-	installer := toolinstall.NewInstaller(toolinstall.Config{
+	preferTTY := false
+	installer := toolinstall.NewGlabInstaller(&toolinstall.Deps{
 		StreamRunner: runner.(commandrunner.StreamRunner),
-		PreferTTY:    false,
-		PreferTTYSet: true,
+		PreferTTY:    &preferTTY,
 		LookPath: func(name string) (string, error) {
 			if name == "glab" {
 				return "/bin/glab", nil

@@ -26,7 +26,7 @@ func TestHostOpencodeAgentRunRequiresTask(t *testing.T) {
 
 func newTestHostOpencodeAgent(workspaceDir string, runner commandrunner.StreamRunner, logger usecase.Logger) *HostOpencodeAgent {
 	agent := NewHostOpencodeAgent(workspaceDir, runner, logger)
-	agent.installer = toolinstall.NewInstaller(toolinstall.Config{
+	agent.installer = toolinstall.NewOpencodeInstaller(&toolinstall.Deps{
 		LookPath: func(name string) (string, error) {
 			if name == "opencode" {
 				return "/bin/opencode", nil

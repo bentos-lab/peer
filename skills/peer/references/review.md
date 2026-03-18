@@ -1,4 +1,4 @@
-# autogit review
+# peer review
 
 Purpose: Run a repository review for a change request.
 
@@ -13,5 +13,5 @@ Arguments:
 
 Example:
 ```bash
-autogit review --change-request 123
+peer review --change-request 123
 ```

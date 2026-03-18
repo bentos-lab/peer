@@ -108,7 +108,7 @@ These environment variables control which webhook events trigger actions.
 | --- | --- | --- | --- |
 | Review | `REVIEW` | `REVIEW_EVENTS` | `REVIEW=true`, `REVIEW_EVENTS=opened,synchronize,reopened` |
 | Overview | `OVERVIEW` | `OVERVIEW_EVENTS` | `OVERVIEW=true`, `OVERVIEW_EVENTS=opened` |
-| Replycomment | `REPLYCOMMENT` | `REPLYCOMMENT_EVENTS`, `REPLYCOMMENT_ACTIONS`, `REPLYCOMMENT_TRIGGER_NAME` | `REPLYCOMMENT=true`, `REPLYCOMMENT_EVENTS=issue_comment,pull_request_review_comment`, `REPLYCOMMENT_ACTIONS=created`, `REPLYCOMMENT_TRIGGER_NAME=autogitbot` |
+| Replycomment | `REPLYCOMMENT` | `REPLYCOMMENT_EVENTS`, `REPLYCOMMENT_ACTIONS`, `REPLYCOMMENT_TRIGGER_NAME` | `REPLYCOMMENT=true`, `REPLYCOMMENT_EVENTS=issue_comment,pull_request_review_comment`, `REPLYCOMMENT_ACTIONS=created`, `REPLYCOMMENT_TRIGGER_NAME=peerbot` |
 | Autogen | `AUTOGEN` | `AUTOGEN_EVENTS`, `AUTOGEN_DOCS`, `AUTOGEN_TESTS` | `AUTOGEN=false`, `AUTOGEN_EVENTS=opened,reopened,synchronize`, `AUTOGEN_DOCS=false`, `AUTOGEN_TESTS=false` |
 
 ## Run The Webhook Server
@@ -116,19 +116,19 @@ These environment variables control which webhook events trigger actions.
 GitHub:
 
 ```bash
-autogit webhook --vcs-provider github
+peer webhook --vcs-provider github
 ```
 
 GitLab:
 
 ```bash
-autogit webhook --vcs-provider gitlab
+peer webhook --vcs-provider gitlab
 ```
 
 GitHub + GitLab:
 
 ```bash
-autogit webhook --vcs-provider github+gitlab
+peer webhook --vcs-provider github+gitlab
 ```
 
 Webhook endpoints:

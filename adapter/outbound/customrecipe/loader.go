@@ -11,7 +11,7 @@ import (
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
-const configPath = ".autogit/config.toml"
+const configPath = ".peer/config.toml"
 
 // Loader reads repo-scoped custom recipe configuration and guidance.
 type Loader struct {

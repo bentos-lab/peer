@@ -187,7 +187,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 			args := append([]string{"review"}, testCase.args...)
 			args = append(args, "--vcs-provider", "github")
 
-			deps := autogitDeps{
+			deps := peerDeps{
 				loadConfig: func() (config.Config, error) {
 					return config.Config{
 						LogLevel: "info",
@@ -226,7 +226,7 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				},
 			}
 
-			err := runAutogit(context.Background(), args, deps, testVersion, testCommit)
+			err := runPeer(context.Background(), args, deps, testVersion, testCommit)
 			require.NoError(t, err)
 			require.Len(t, reviewUseCase.requests, 1)
 			require.Equal(t, testCase.expectedSuggest, reviewUseCase.requests[0].Suggestions)
@@ -238,7 +238,7 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 	overviewUseCase := &mainTestOverviewUseCase{}
 	githubClient := &mainTestGitHubClient{}
 
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{
 				LogLevel: "info",
@@ -278,7 +278,7 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview", "--vcs-provider", "github"}, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), []string{"overview", "--vcs-provider", "github"}, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 }
@@ -287,7 +287,7 @@ func TestCLIAutoDetectVCSProviderFromRepo(t *testing.T) {
 	reviewUseCase := &mainTestReviewUseCase{}
 	githubClient := &mainTestGitHubClient{}
 
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{
 				LogLevel: "info",
@@ -324,7 +324,7 @@ func TestCLIAutoDetectVCSProviderFromRepo(t *testing.T) {
 	}
 
 	args := []string{"review", "--repo", "https://github.com/owner/repo.git"}
-	err := runAutogit(context.Background(), args, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), args, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, reviewUseCase.requests, 1)
 }
@@ -333,7 +333,7 @@ func TestCLIAutoDetectVCSProviderFromOriginURL(t *testing.T) {
 	overviewUseCase := &mainTestOverviewUseCase{}
 	gitlabClient := &mainTestGitLabClient{}
 
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{
 				LogLevel: "info",
@@ -372,7 +372,7 @@ func TestCLIAutoDetectVCSProviderFromOriginURL(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview"}, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), []string{"overview"}, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 }
@@ -381,7 +381,7 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 	overviewUseCase := &mainTestOverviewUseCase{}
 	githubClient := &mainTestGitHubClient{}
 
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{
 				LogLevel: "info",
@@ -408,14 +408,14 @@ func TestRunCLIOverviewIssueAlignmentFlag(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7", "--vcs-provider", "github"}, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), []string{"overview", "--issue-alignment", "--change-request", "7", "--vcs-provider", "github"}, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Len(t, overviewUseCase.requests, 1)
 	require.NotEmpty(t, overviewUseCase.requests[0].IssueAlignment.Candidates)
 }
 
 func TestWebhookRequiresProvider(t *testing.T) {
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{}, nil
 		},
@@ -430,12 +430,12 @@ func TestWebhookRequiresProvider(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"webhook"}, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), []string{"webhook"}, deps, testVersion, testCommit)
 	require.Error(t, err)
 }
 
 func TestWebhookRejectsUnsupportedProvider(t *testing.T) {
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{}, nil
 		},
@@ -450,14 +450,14 @@ func TestWebhookRejectsUnsupportedProvider(t *testing.T) {
 		},
 	}
 
-	err := runAutogit(context.Background(), []string{"webhook", "--vcs-provider", "bitbucket"}, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), []string{"webhook", "--vcs-provider", "bitbucket"}, deps, testVersion, testCommit)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported vcs provider")
 }
 
 func TestWebhookOverridesConfig(t *testing.T) {
 	var captured config.Config
-	deps := autogitDeps{
+	deps := peerDeps{
 		loadConfig: func() (config.Config, error) {
 			return config.Config{
 				LogLevel: "info",
@@ -474,7 +474,7 @@ func TestWebhookOverridesConfig(t *testing.T) {
 					},
 				},
 				ReplyComment: config.ReplyCommentConfig{
-					TriggerName: "autogitbot",
+					TriggerName: "peerbot",
 				},
 			}, nil
 		},
@@ -496,7 +496,7 @@ func TestWebhookOverridesConfig(t *testing.T) {
 		"--github-app-id", "999",
 		"--overview=false",
 	}
-	err := runAutogit(context.Background(), args, deps, testVersion, testCommit)
+	err := runPeer(context.Background(), args, deps, testVersion, testCommit)
 	require.NoError(t, err)
 	require.Equal(t, "999", captured.Server.GitHub.AppID)
 	require.False(t, captured.Overview.Enabled)

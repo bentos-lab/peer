@@ -15,7 +15,7 @@ func TestFactoryNewRemoteWorkspacePreparesClone(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"clone", "--depth", "1", "https://github.com/org/repo.git", "/home/test/.sisutmp/workspace-1"},
+			Args: []string{"clone", "--depth", "1", "https://github.com/org/repo.git", "/home/test/.bentos-labtmp/workspace-1"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("cloned")},
 	})
@@ -23,7 +23,7 @@ func TestFactoryNewRemoteWorkspacePreparesClone(t *testing.T) {
 	factory := NewFactory(FactoryConfig{
 		Runner: runner,
 		MakeTempDir: func() (string, error) {
-			return "/home/test/.sisutmp/workspace-1", nil
+			return "/home/test/.bentos-labtmp/workspace-1", nil
 		},
 	})
 

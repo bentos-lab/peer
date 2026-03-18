@@ -61,7 +61,7 @@ func TestLoaderReadsAndSanitizesRecipeFiles(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &recipeTestEnvironment{files: map[string]string{
-		".autogit/config.toml": `
+		".peer/config.toml": `
 [review]
 enabled = false
 ruleset = "rules.md"
@@ -90,11 +90,11 @@ events = ["opened"]
 docs = true
 tests = false
 `,
-		".autogit/rules.md":           "rules",
-		".autogit/overview.md":        "overview",
-		".autogit/issue_alignment.md": "alignment",
-		".autogit/reply.md":           "reply",
-		".autogit/autogen.md":         "autogen",
+		".peer/rules.md":           "rules",
+		".peer/overview.md":        "overview",
+		".peer/issue_alignment.md": "alignment",
+		".peer/reply.md":           "reply",
+		".peer/autogen.md":         "autogen",
 	}}
 
 	recipe, err := loader.Load(context.Background(), env, "HEAD")
@@ -132,7 +132,7 @@ func TestLoaderIgnoresInvalidRecipePath(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &recipeTestEnvironment{files: map[string]string{
-		".autogit/config.toml": `
+		".peer/config.toml": `
 [review]
 ruleset = "../rules.md"
 `,
@@ -148,7 +148,7 @@ func TestLoaderRecordsMissingRecipePaths(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &recipeTestEnvironment{files: map[string]string{
-		".autogit/config.toml": `
+		".peer/config.toml": `
 [review]
 ruleset = "rules.md"
 
@@ -160,7 +160,7 @@ extra_guidance = "overview.md"
 
 	recipe, err := loader.Load(context.Background(), env, "HEAD")
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{".autogit/rules.md", ".autogit/overview.md"}, recipe.MissingPaths)
+	require.ElementsMatch(t, []string{".peer/rules.md", ".peer/overview.md"}, recipe.MissingPaths)
 }
 
 func TestLoaderUsesEnvDefaultsWhenConfigMissing(t *testing.T) {
@@ -187,7 +187,7 @@ func TestLoaderConfigOverridesEnvWithExplicitEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	env := &recipeTestEnvironment{files: map[string]string{
-		".autogit/config.toml": `
+		".peer/config.toml": `
 [overview]
 events = []
 extra_guidance = ""

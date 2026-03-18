@@ -16,7 +16,7 @@ import (
 // CLIClient executes GitHub operations via the gh CLI.
 type CLIClient struct {
 	runner      commandrunner.Runner
-	installer   *toolinstall.Installer
+	installer   *toolinstall.GhInstaller
 	authChecked bool
 }
 
@@ -24,7 +24,7 @@ type CLIClient struct {
 func NewCLIClient() *CLIClient {
 	return &CLIClient{
 		runner:    commandrunner.NewOSCommandRunner(),
-		installer: toolinstall.NewInstaller(toolinstall.Config{}),
+		installer: toolinstall.NewGhInstaller(nil),
 	}
 }
 
@@ -499,7 +499,7 @@ func (c *CLIClient) resolveRepository(ctx context.Context, repository string) (s
 
 func (c *CLIClient) ensureGhInstalled(ctx context.Context) error {
 	if c.installer == nil {
-		c.installer = toolinstall.NewInstaller(toolinstall.Config{})
+		c.installer = toolinstall.NewGhInstaller(nil)
 	}
 	return c.installer.EnsureGhInstalled(ctx)
 }

@@ -1,4 +1,4 @@
-# autogit replycomment
+# peer replycomment
 
 Purpose: Reply to a specific PR comment with an LLM-generated response.
 
@@ -12,5 +12,5 @@ Arguments:
 
 Example:
 ```bash
-autogit replycomment --vcs-provider github --change-request 123 --comment-id issuecomment-1234567890
+peer replycomment --vcs-provider github --change-request 123 --comment-id issuecomment-1234567890
 ```

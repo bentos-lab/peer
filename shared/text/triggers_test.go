@@ -7,19 +7,19 @@ import (
 )
 
 func TestContainsTriggerMatchesAtOrSlash(t *testing.T) {
-	name := "AutoGitBot"
+	name := "PeerBot"
 
-	require.True(t, ContainsTrigger("please /autogitbot do", name))
-	require.True(t, ContainsTrigger("hi @AUTOGITBOT ok", name))
-	require.True(t, ContainsTrigger("(@autogitbot) thanks", name))
-	require.False(t, ContainsTrigger("just autogitbot", name))
-	require.False(t, ContainsTrigger("/autogitbotty", name))
-	require.False(t, ContainsTrigger("@autogitbotty", name))
+	require.True(t, ContainsTrigger("please /peerbot do", name))
+	require.True(t, ContainsTrigger("hi @PEERBOT ok", name))
+	require.True(t, ContainsTrigger("(@peerbot) thanks", name))
+	require.False(t, ContainsTrigger("just peerbot", name))
+	require.False(t, ContainsTrigger("/peerbotty", name))
+	require.False(t, ContainsTrigger("@peerbotty", name))
 }
 
 func TestStripTriggerRemovesAllOccurrences(t *testing.T) {
-	name := "autogitbot"
-	input := "  @autogitbot  please\n /autogitbot  do  \n"
+	name := "peerbot"
+	input := "  @peerbot  please\n /peerbot  do  \n"
 
 	require.Equal(t, "please\ndo", StripTrigger(input, name))
 }

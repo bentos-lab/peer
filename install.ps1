@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$Repo = "sisu/autogit"
-$AppName = "autogit"
+$Repo = "bentos-lab/peer"
+$AppName = "peer"
 
 # Detect OS + ARCH
 $OS = "windows"
@@ -26,7 +26,7 @@ Write-Host "📦 Latest version: $Version"
 $FileName = "$AppName-$Version-$OS-$Arch.zip"
 $Url = "https://github.com/$Repo/releases/download/$Version/$FileName"
 
-$TempDir = New-Item -ItemType Directory -Path ([System.IO.Path]::GetTempPath()) -Name ("autogit_" + [System.Guid]::NewGuid())
+$TempDir = New-Item -ItemType Directory -Path ([System.IO.Path]::GetTempPath()) -Name ("peer_" + [System.Guid]::NewGuid())
 
 $ZipPath = Join-Path $TempDir $FileName
 

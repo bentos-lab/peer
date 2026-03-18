@@ -113,12 +113,12 @@ func TestPublisher_PublishPrependsRecipeWarningToSummary(t *testing.T) {
 			ChangeRequestNumber: 11,
 		},
 		Summary:        "summary",
-		RecipeWarnings: []string{".autogit/rules.md"},
+		RecipeWarnings: []string{".peer/rules.md"},
 	})
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
 	require.True(t, strings.HasPrefix(client.bodies[0], "> [!WARNING]"))
-	require.Contains(t, client.bodies[0], ".autogit/rules.md")
+	require.Contains(t, client.bodies[0], ".peer/rules.md")
 	require.Contains(t, client.bodies[0], "Review summary")
 }
 

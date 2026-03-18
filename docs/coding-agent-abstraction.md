@@ -62,9 +62,9 @@ _ = result.Text
 
 - `Factory.New` with `RepoURL` empty:
   - uses current working directory as workspace for token refs (`@staged`, `@all`); empty ref defaults to `@all`,
-  - for non-token refs, reads `remote.origin.url`, clones into `~/.sisutmp`, and operates on that clone.
+  - for non-token refs, reads `remote.origin.url`, clones into `~/.bentos-labtmp`, and operates on that clone.
 - `Factory.New` with `RepoURL` non-empty:
-  - creates a random temporary workspace under `~/.sisutmp`,
+  - creates a random temporary workspace under `~/.bentos-labtmp`,
   - runs shallow clone (`git clone --depth 1`),
   - fetches refs (`git fetch --all --prune`).
 - `SetupAgent` with `Ref` non-empty:

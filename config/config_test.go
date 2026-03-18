@@ -79,8 +79,8 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	require.Equal(t, "https://gitlab.com/api/v4", cfg.Server.GitLab.APIBaseURL)
 	require.Equal(t, "", cfg.Server.GitLab.WebhookURL)
 	require.Equal(t, 5, cfg.Server.GitLab.SyncInterval)
-	require.Equal(t, "~/.autogit/gitlab_sync.json", cfg.Server.GitLab.SyncStatePath)
-	require.Equal(t, "autogitbot", cfg.ReplyComment.TriggerName)
+	require.Equal(t, "~/.peer/gitlab_sync.json", cfg.Server.GitLab.SyncStatePath)
+	require.Equal(t, "peerbot", cfg.ReplyComment.TriggerName)
 	require.True(t, cfg.Review.Enabled)
 	require.False(t, cfg.Review.SuggestedChangesEnabled)
 	require.Equal(t, []string{"opened", "synchronize", "reopened"}, cfg.Review.Events)
@@ -94,7 +94,7 @@ func TestLoadUsesDefaultsWhenNoEnv(t *testing.T) {
 	require.True(t, cfg.ReplyComment.Enabled)
 	require.Equal(t, []string{"issue_comment", "pull_request_review_comment"}, cfg.ReplyComment.Events)
 	require.Equal(t, []string{"created"}, cfg.ReplyComment.Actions)
-	require.Equal(t, "autogitbot", cfg.ReplyComment.TriggerName)
+	require.Equal(t, "peerbot", cfg.ReplyComment.TriggerName)
 }
 
 func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
@@ -149,7 +149,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	})
 
 	envPath := filepath.Join(tmp, ".env")
-	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=gpt-4.1\nLLM_OPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nGITLAB_TOKEN=gitlab-token\nGITLAB_WEBHOOK_SECRET=gitlab-secret\nGITLAB_API_BASE_URL=https://gitlab.example.com/api/v4\nGITLAB_WEBHOOK_URL=https://hook.example.com/webhook/gitlab\nGITLAB_SYNC_INTERVAL_MINUTES=7\nGITLAB_SYNC_STATE_PATH=~/state.json\nMAX_JOB_WORKERS=9\nREPLYCOMMENT_TRIGGER_NAME=autogit\nREVIEW=true\nREVIEW_SUGGESTED_CHANGES=true\nREVIEW_EVENTS=opened,reopened\nOVERVIEW=false\nOVERVIEW_EVENTS=opened\nOVERVIEW_ISSUE_ALIGNMENT=false\nREPLYCOMMENT=false\nREPLYCOMMENT_EVENTS=issue_comment\nREPLYCOMMENT_ACTIONS=created,edited\nAUTOGEN=true\nAUTOGEN_EVENTS=opened\nAUTOGEN_DOCS=true\nAUTOGEN_TESTS=false\n"), 0o644))
+	require.NoError(t, os.WriteFile(envPath, []byte("LLM_OPENAI_BASE_URL=openai\nLLM_OPENAI_MODEL=gpt-4.1\nLLM_OPENAI_API_KEY=env-key\nCODING_AGENT_NAME=opencode\nCODING_AGENT_PROVIDER=codingagent\nCODING_AGENT_MODEL=model-x\nPORT=9090\nLOG_LEVEL=warning\nGITHUB_WEBHOOK_SECRET=whsec\nGITHUB_APP_ID=12345\nGITHUB_APP_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----\nGITHUB_API_BASE_URL=https://github.example.com/api/v3\nGITLAB_TOKEN=gitlab-token\nGITLAB_WEBHOOK_SECRET=gitlab-secret\nGITLAB_API_BASE_URL=https://gitlab.example.com/api/v4\nGITLAB_WEBHOOK_URL=https://hook.example.com/webhook/gitlab\nGITLAB_SYNC_INTERVAL_MINUTES=7\nGITLAB_SYNC_STATE_PATH=~/state.json\nMAX_JOB_WORKERS=9\nREPLYCOMMENT_TRIGGER_NAME=peer\nREVIEW=true\nREVIEW_SUGGESTED_CHANGES=true\nREVIEW_EVENTS=opened,reopened\nOVERVIEW=false\nOVERVIEW_EVENTS=opened\nOVERVIEW_ISSUE_ALIGNMENT=false\nREPLYCOMMENT=false\nREPLYCOMMENT_EVENTS=issue_comment\nREPLYCOMMENT_ACTIONS=created,edited\nAUTOGEN=true\nAUTOGEN_EVENTS=opened\nAUTOGEN_DOCS=true\nAUTOGEN_TESTS=false\n"), 0o644))
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestLoadReadsDotEnvWhenEnvMissing(t *testing.T) {
 	require.Equal(t, "https://hook.example.com/webhook/gitlab", cfg.Server.GitLab.WebhookURL)
 	require.Equal(t, 7, cfg.Server.GitLab.SyncInterval)
 	require.Equal(t, "~/state.json", cfg.Server.GitLab.SyncStatePath)
-	require.Equal(t, "autogit", cfg.ReplyComment.TriggerName)
+	require.Equal(t, "peer", cfg.ReplyComment.TriggerName)
 	require.True(t, cfg.Review.Enabled)
 	require.True(t, cfg.Review.SuggestedChangesEnabled)
 	require.Equal(t, []string{"opened", "reopened"}, cfg.Review.Events)

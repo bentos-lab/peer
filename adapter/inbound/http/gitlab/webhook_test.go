@@ -124,7 +124,7 @@ func TestGitLabWebhookMergeRequestTriggersReview(t *testing.T) {
 		&testRecipeLoader{},
 		nil,
 		"secret",
-		"autogitbot",
+		"peerbot",
 		true,
 		[]string{"opened"},
 		false,
@@ -181,7 +181,7 @@ func TestGitLabWebhookNoteTriggersReplyComment(t *testing.T) {
 		&testRecipeLoader{},
 		nil,
 		"secret",
-		"autogitbot",
+		"peerbot",
 		false,
 		nil,
 		false,
@@ -198,7 +198,7 @@ func TestGitLabWebhookNoteTriggersReplyComment(t *testing.T) {
 		jobqueue.NewManager(1),
 	)
 
-	payload := []byte(`{"object_kind":"note","user":{"username":"alice"},"project":{"id":1,"path_with_namespace":"group/repo"},"object_attributes":{"id":99,"note":"@autogitbot please help","noteable_type":"MergeRequest","action":"created"},"merge_request":{"iid":7}}`)
+	payload := []byte(`{"object_kind":"note","user":{"username":"alice"},"project":{"id":1,"path_with_namespace":"group/repo"},"object_attributes":{"id":99,"note":"@peerbot please help","noteable_type":"MergeRequest","action":"created"},"merge_request":{"iid":7}}`)
 	req := httptest.NewRequest(http.MethodPost, "/webhook/gitlab", bytes.NewReader(payload))
 	req.Header.Set("X-Gitlab-Event", "Note Hook")
 	req.Header.Set("X-Gitlab-Token", "secret")

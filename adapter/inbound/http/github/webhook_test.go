@@ -348,7 +348,7 @@ func TestHandler_ServeHTTP_ValidPayloadReturnsAcceptedAndMapsRequest(t *testing.
 		requestCh: make(chan usecase.OverviewRequest, 1),
 	}
 	logger := &spyLogger{}
-	handler := newTestHandler(newReviewBuilder(reviewUC), newOverviewBuilder(overviewUC), nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(reviewUC), newOverviewBuilder(overviewUC), nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "peerbot", true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -419,7 +419,7 @@ func TestHandler_ServeHTTP_OverviewRunsBeforeReview(t *testing.T) {
 		&mockRecipeLoader{},
 		nil,
 		testWebhookSecret,
-		"autogitbot",
+		"peerbot",
 		true,
 		defaultTestReviewEvents,
 		true,
@@ -479,7 +479,7 @@ func TestHandler_ServeHTTP_ConfigDisablesReviewSkipsUsecase(t *testing.T) {
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{ReviewEnabled: boolPointer(false)},
 	}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -514,7 +514,7 @@ func TestHandler_ServeHTTP_ConfigDisablesIssueAlignmentSkipsCandidates(t *testin
 		},
 	}
 	tokenProvider := &issueAlignmentTokenProvider{token: "token-1"}
-	handler := newTestHandler(nil, newOverviewBuilder(overviewUC), nil, nil, tokenProvider, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(nil, newOverviewBuilder(overviewUC), nil, nil, tokenProvider, loader, nil, testWebhookSecret, "peerbot", true, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -545,7 +545,7 @@ func TestHandler_ServeHTTP_ConfigDisablesIssueAlignmentSkipsCandidates(t *testin
 
 func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", true, true)
 	payload := `{
 		"action":"synchronize",
 		"installation":{"id":321},
@@ -575,7 +575,7 @@ func TestHandler_ServeHTTP_SynchronizeActionTriggersReview(t *testing.T) {
 func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(t *testing.T) {
 	reviewUC := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
 	overviewUC := &mockOverviewUseCase{requestCh: make(chan usecase.OverviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(reviewUC), newOverviewBuilder(overviewUC), nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(reviewUC), newOverviewBuilder(overviewUC), nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
@@ -608,7 +608,7 @@ func TestHandler_ServeHTTP_OpenedActionDisablesOverviewWhenHandlerToggleIsFalse(
 
 func TestHandler_ServeHTTP_DisablesSuggestionsWhenHandlerToggleIsFalse(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, false)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", true, false)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
@@ -637,7 +637,7 @@ func TestHandler_ServeHTTP_DisablesSuggestionsWhenHandlerToggleIsFalse(t *testin
 
 func TestHandler_ServeHTTP_UnsupportedActionIsIgnored(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", true, true)
 	payload := `{
 		"action":"edited",
 		"installation":{"id":321},
@@ -664,7 +664,7 @@ func TestHandler_ServeHTTP_ConfigReviewEventsSkipsAction(t *testing.T) {
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{ReviewEvents: []string{"opened"}},
 	}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"synchronize",
 		"installation":{"id":321},
@@ -698,7 +698,7 @@ func TestHandler_ServeHTTP_AutogenEnabledEnqueuesAutogen(t *testing.T) {
 			AutogenTests:    boolPointer(false),
 		},
 	}
-	handler := newTestHandler(nil, nil, newAutogenBuilder(autogenUC), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(nil, nil, newAutogenBuilder(autogenUC), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
@@ -741,7 +741,7 @@ func TestHandler_ServeHTTP_AutogenDisabledWithoutDocsOrTests(t *testing.T) {
 			AutogenTests:    boolPointer(false),
 		},
 	}
-	handler := newTestHandler(nil, nil, newAutogenBuilder(autogenUC), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(nil, nil, newAutogenBuilder(autogenUC), nil, mockInstallationTokenProvider{token: "token-1"}, loader, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":321},
@@ -765,7 +765,7 @@ func TestHandler_ServeHTTP_AutogenDisabledWithoutDocsOrTests(t *testing.T) {
 
 func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	resp := httptest.NewRecorder()
@@ -778,7 +778,7 @@ func TestHandler_ServeHTTP_MissingSignatureReturnsUnauthorized(t *testing.T) {
 
 func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	req := httptest.NewRequest(http.MethodPost, "/github/webhook", strings.NewReader(`{}`))
 	req.Header.Set("X-GitHub-Event", "pull_request")
 	req.Header.Set("X-Hub-Signature-256", "sha256=deadbeef")
@@ -792,7 +792,7 @@ func TestHandler_ServeHTTP_InvalidSignatureReturnsUnauthorized(t *testing.T) {
 
 func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	req := signedRequest(t, `{`, "pull_request", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -804,7 +804,7 @@ func TestHandler_ServeHTTP_InvalidJSONReturnsBadRequest(t *testing.T) {
 
 func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -829,7 +829,7 @@ func TestHandler_ServeHTTP_MissingRequiredFieldsReturnsBadRequest(t *testing.T) 
 func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
 	logger := &spyLogger{}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"repository":{"full_name":"org/repo","clone_url":"https://github.com/org/repo.git"},
@@ -855,7 +855,7 @@ func TestHandler_ServeHTTP_MissingInstallationIDReturnsBadRequest(t *testing.T) 
 
 func TestHandler_ServeHTTP_NonPullRequestEventIsIgnored(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	req := signedRequest(t, `{"action":"opened"}`, "issues", testWebhookSecret)
 	resp := httptest.NewRecorder()
 
@@ -881,7 +881,7 @@ func TestHandler_ServeHTTP_ConfigDisablesReplyCommentSkipsUsecase(t *testing.T) 
 	loader := &mockRecipeConfigLoader{
 		recipe: domain.CustomRecipe{ReplyCommentEnabled: boolPointer(false)},
 	}
-	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "peerbot", true, true)
 	payload := `{
 		"action":"created",
 		"installation":{"id":123},
@@ -892,7 +892,7 @@ func TestHandler_ServeHTTP_ConfigDisablesReplyCommentSkipsUsecase(t *testing.T) 
 		},
 		"comment":{
 			"id": 55,
-			"body":"@autogitbot please help",
+			"body":"@peerbot please help",
 			"user":{"login":"dev","type":"User"}
 		}
 	}`
@@ -928,7 +928,7 @@ func TestHandler_ServeHTTP_ConfigReplyCommentEventsSkipsIssueComment(t *testing.
 			ReplyCommentActions: []string{"created"},
 		},
 	}
-	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "autogitbot", true, true)
+	handler := newTestHandler(nil, nil, nil, replyBuilder, &replyCommentTokenProvider{token: "token-1", prInfo: prInfo}, loader, nil, testWebhookSecret, "peerbot", true, true)
 	payload := `{
 		"action":"created",
 		"installation":{"id":123},
@@ -939,7 +939,7 @@ func TestHandler_ServeHTTP_ConfigReplyCommentEventsSkipsIssueComment(t *testing.
 		},
 		"comment":{
 			"id": 55,
-			"body":"@autogitbot please help",
+			"body":"@peerbot please help",
 			"user":{"login":"dev","type":"User"}
 		}
 	}`
@@ -961,7 +961,7 @@ func TestHandler_ServeHTTP_ResponseDoesNotWaitForUsecase(t *testing.T) {
 		requestCh: make(chan usecase.ReviewRequest, 1),
 		proceedCh: make(chan struct{}),
 	}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -1004,7 +1004,7 @@ func TestHandler_ServeHTTP_UsecaseErrorStillReturnsAccepted(t *testing.T) {
 		err:       errors.New("review failed"),
 	}
 	logger := &spyLogger{}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -1039,7 +1039,7 @@ func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 		panicVal:  "boom",
 	}
 	logger := &spyLogger{}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{token: "token-1"}, nil, logger, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},
@@ -1065,7 +1065,7 @@ func TestHandler_ServeHTTP_UsecasePanicStillReturnsAccepted(t *testing.T) {
 
 func TestHandler_ServeHTTP_TokenResolutionFailureReturnsBadGateway(t *testing.T) {
 	uc := &mockReviewUseCase{requestCh: make(chan usecase.ReviewRequest, 1)}
-	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{err: errors.New("boom")}, nil, nil, testWebhookSecret, "autogitbot", false, true)
+	handler := newTestHandler(newReviewBuilder(uc), nil, nil, nil, mockInstallationTokenProvider{err: errors.New("boom")}, nil, nil, testWebhookSecret, "peerbot", false, true)
 	payload := `{
 		"action":"opened",
 		"installation":{"id":123},

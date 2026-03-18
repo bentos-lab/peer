@@ -131,7 +131,7 @@ func Load() (Config, error) {
 				APIBaseURL:    resolveGitLabAPIBaseURL(),
 				WebhookURL:    os.Getenv("GITLAB_WEBHOOK_URL"),
 				SyncInterval:  intEnvOrDefault("GITLAB_SYNC_INTERVAL_MINUTES", 5, 1),
-				SyncStatePath: envOrDefault("GITLAB_SYNC_STATE_PATH", "~/.autogit/gitlab_sync.json"),
+				SyncStatePath: envOrDefault("GITLAB_SYNC_STATE_PATH", "~/.peer/gitlab_sync.json"),
 			},
 		},
 		Review: ReviewConfig{
@@ -154,7 +154,7 @@ func Load() (Config, error) {
 			Enabled:     boolEnvOrDefault("REPLYCOMMENT", true),
 			Events:      stringListEnvOrDefault("REPLYCOMMENT_EVENTS", defaultReplyCommentEvents()),
 			Actions:     stringListEnvOrDefault("REPLYCOMMENT_ACTIONS", defaultReplyCommentActions()),
-			TriggerName: envOrDefault("REPLYCOMMENT_TRIGGER_NAME", "autogitbot"),
+			TriggerName: envOrDefault("REPLYCOMMENT_TRIGGER_NAME", "peerbot"),
 		},
 	}
 	return cfg, nil

@@ -1,4 +1,4 @@
-# autogit autogen
+# peer autogen
 
 Purpose: Run autogen to generate tests/docs/comments for a change request.
 
@@ -14,5 +14,5 @@ Arguments:
 
 Example:
 ```bash
-autogit autogen --vcs-provider github --change-request 123 --docs --tests
+peer autogen --vcs-provider github --change-request 123 --docs --tests
 ```

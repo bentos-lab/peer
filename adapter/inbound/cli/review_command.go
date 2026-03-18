@@ -16,7 +16,7 @@ import (
 // ReviewUseCaseBuilder builds a review usecase for a specific repo.
 type ReviewUseCaseBuilder func(repoURL string) (usecase.ReviewUseCase, error)
 
-// ReviewCommand runs autogit review flow with the shared review usecase.
+// ReviewCommand runs peer review flow with the shared review usecase.
 type ReviewCommand struct {
 	reviewUseCaseBuilder ReviewUseCaseBuilder
 	vcsResolver          VCSClientResolver
@@ -25,7 +25,7 @@ type ReviewCommand struct {
 	logger               usecase.Logger
 }
 
-// ReviewParams contains already-parsed CLI autogit parameters.
+// ReviewParams contains already-parsed CLI peer parameters.
 type ReviewParams struct {
 	VCSProvider   string
 	VCSHost       string
@@ -37,7 +37,7 @@ type ReviewParams struct {
 	Suggest       *bool
 }
 
-// NewReviewCommand creates a new CLI command for autogit reviews.
+// NewReviewCommand creates a new CLI command for peer reviews.
 func NewReviewCommand(reviewUseCaseBuilder ReviewUseCaseBuilder, vcsResolver VCSClientResolver, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *ReviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()

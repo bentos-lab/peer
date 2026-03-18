@@ -18,7 +18,7 @@ import (
 // CLIClient executes GitLab operations via the glab CLI.
 type CLIClient struct {
 	runner      commandrunner.Runner
-	installer   *toolinstall.Installer
+	installer   *toolinstall.GlabInstaller
 	authChecked bool
 	host        string
 }
@@ -37,7 +37,7 @@ func NewCLIClient() *CLIClient {
 func NewCLIClientWithConfig(cfg CLIClientConfig) *CLIClient {
 	return &CLIClient{
 		runner:    commandrunner.NewOSCommandRunner(),
-		installer: toolinstall.NewInstaller(toolinstall.Config{}),
+		installer: toolinstall.NewGlabInstaller(nil),
 		host:      strings.TrimSpace(cfg.Host),
 	}
 }
@@ -395,7 +395,7 @@ func (c *CLIClient) ensureAuth(ctx context.Context) error {
 
 func (c *CLIClient) ensureGlabInstalled(ctx context.Context) error {
 	if c.installer == nil {
-		c.installer = toolinstall.NewInstaller(toolinstall.Config{})
+		c.installer = toolinstall.NewGlabInstaller(nil)
 	}
 	return c.installer.EnsureGlabInstalled(ctx)
 }

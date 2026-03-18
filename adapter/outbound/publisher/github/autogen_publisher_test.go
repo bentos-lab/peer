@@ -60,7 +60,7 @@ func TestAutogenPublisherPushesWithEnvironment(t *testing.T) {
 		Changes:        []domain.AutogenChange{{FilePath: "foo.go", StartLine: 1, EndLine: 1, Content: "// add"}},
 		Summary:        domain.AutogenSummary{},
 		AgentOutput:    "Autogen agent report",
-		RecipeWarnings: []string{".autogit/autogen.md"},
+		RecipeWarnings: []string{".peer/autogen.md"},
 		Environment:    env,
 		PushOptions: domain.CodeEnvironmentPushOptions{
 			TargetBranch:  "feature",

@@ -7,7 +7,7 @@ This document describes runtime configuration, environment variables, and defaul
 Highest to lowest precedence:
 
 1. CLI flags
-2. `.autogit/config.toml`
+2. `.peer/config.toml`
 3. Environment variables
 4. Hard defaults
 
@@ -47,7 +47,7 @@ GitLab webhook:
 - `GITLAB_WEBHOOK_URL` (required for GitLab webhook sync)
 - `GITLAB_API_BASE_URL` (default: `https://{GITLAB_HOST}/api/v4`)
 - `GITLAB_SYNC_INTERVAL_MINUTES` (default: `5`)
-- `GITLAB_SYNC_STATE_PATH` (default: `~/.autogit/gitlab_sync.json`)
+- `GITLAB_SYNC_STATE_PATH` (default: `~/.peer/gitlab_sync.json`)
 - `GITLAB_HOST` (default: `gitlab.com`, only used when `GITLAB_API_BASE_URL` is empty)
 
 Review:
@@ -67,7 +67,7 @@ Replycomment:
 - `REPLYCOMMENT` (default: `true`)
 - `REPLYCOMMENT_EVENTS` (default: `issue_comment,pull_request_review_comment`)
 - `REPLYCOMMENT_ACTIONS` (default: `created`)
-- `REPLYCOMMENT_TRIGGER_NAME` (default: `autogitbot`)
+- `REPLYCOMMENT_TRIGGER_NAME` (default: `peerbot`)
 
 Autogen:
 

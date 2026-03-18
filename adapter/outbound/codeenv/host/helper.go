@@ -647,7 +647,7 @@ var defaultOpencodeModels = map[string]string{
 
 func (a *HostOpencodeAgent) ensureOpencodeInstalled(ctx context.Context) error {
 	if a.installer == nil {
-		a.installer = toolinstall.NewInstaller(toolinstall.Config{})
+		a.installer = toolinstall.NewOpencodeInstaller(nil)
 	}
 	return a.installer.EnsureOpencodeInstalled(ctx)
 }

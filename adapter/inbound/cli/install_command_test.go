@@ -43,7 +43,7 @@ func (r *installCallRecorder) EnsureGitInstalled(context.Context) error {
 
 func TestInstallCommandGhLogin(t *testing.T) {
 	recorder := &installCallRecorder{}
-	cmd := &InstallCommand{installer: recorder}
+	cmd := &InstallCommand{gh: recorder}
 
 	err := cmd.InstallGh(context.Background(), true)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestInstallCommandGhLogin(t *testing.T) {
 
 func TestInstallCommandOpencode(t *testing.T) {
 	recorder := &installCallRecorder{}
-	cmd := &InstallCommand{installer: recorder}
+	cmd := &InstallCommand{opencode: recorder}
 
 	err := cmd.InstallOpencode(context.Background())
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestInstallCommandOpencode(t *testing.T) {
 
 func TestInstallCommandGlabLogin(t *testing.T) {
 	recorder := &installCallRecorder{}
-	cmd := &InstallCommand{installer: recorder}
+	cmd := &InstallCommand{glab: recorder}
 
 	err := cmd.InstallGlab(context.Background(), true)
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestInstallCommandGlabLogin(t *testing.T) {
 
 func TestInstallCommandGit(t *testing.T) {
 	recorder := &installCallRecorder{}
-	cmd := &InstallCommand{installer: recorder}
+	cmd := &InstallCommand{git: recorder}
 
 	err := cmd.InstallGit(context.Background())
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestInstallCommandGit(t *testing.T) {
 
 func TestInstallCommandQuickstart(t *testing.T) {
 	recorder := &installCallRecorder{}
-	cmd := &InstallCommand{installer: recorder}
+	cmd := &InstallCommand{gh: recorder, opencode: recorder}
 
 	err := cmd.InstallQuickstart(context.Background())
 	require.NoError(t, err)

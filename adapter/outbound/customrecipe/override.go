@@ -16,7 +16,7 @@ func LoadDefaultsFromEnv(logger usecase.Logger) domain.CustomRecipe {
 	return buildRecipeFromDefaults(loadRecipeEnvDefaults(logger))
 }
 
-// OverrideFromCodeEnv overrides recipe values using .autogit/config.toml if present.
+// OverrideFromCodeEnv overrides recipe values using .peer/config.toml if present.
 func OverrideFromCodeEnv(
 	ctx context.Context,
 	env uccontracts.CodeEnvironment,

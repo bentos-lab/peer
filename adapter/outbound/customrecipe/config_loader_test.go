@@ -28,7 +28,7 @@ func TestConfigLoaderReturnsEmptyWhenConfigMissing(t *testing.T) {
 
 func TestConfigLoaderReadsEnabledFlags(t *testing.T) {
 	loader, err := NewConfigLoader(&recipeTestFactory{env: &recipeTestEnvironment{files: map[string]string{
-		".autogit/config.toml": `
+		".peer/config.toml": `
 [review]
 enabled = false
 events = ["opened", "reopened"]

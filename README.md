@@ -1,4 +1,4 @@
-# autogit
+# peer
 
 LLM-assisted pull/merge request reviewer with clean architecture and a simple CLI.
 
@@ -18,12 +18,12 @@ Docs: [Webhooks](/docs/webhooks.md) | [Configuration](/docs/configuration.md) | 
 
 Linux/macOS
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sisu/autogit/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/bentos-lab/peer/main/install.sh | bash
 ```
 
 Windows
 ```bash
-iwr https://raw.githubusercontent.com/sisu/autogit/main/install.ps1 -useb | iex
+iwr https://raw.githubusercontent.com/bentos-lab/peer/main/install.ps1 -useb | iex
 ```
 
 ### Latest
@@ -32,7 +32,14 @@ Prerequisites:
 - Go `1.26`
 
 ```bash
-go install ./cmd/autogit
+go install ./cmd/peer
+```
+
+## Update
+
+```bash
+peer update self
+peer update skills --path ~/.agents/skills
 ```
 
 ## Quick Start
@@ -43,8 +50,8 @@ Refer to [Dependencies Setup Guide](./docs/dependencies.md) for more details.
 
 #### Required tools:
 ```bash
-autogit install git
-autogit install opencode
+peer install git
+peer install opencode
 ```
 
 ***Notes***
@@ -56,12 +63,12 @@ autogit install opencode
 
 - GitHub
 ```bash
-autogit install gh --login
+peer install gh --login
 ```
 
 - GitLab
 ```bash
-autogit install glab --login
+peer install glab --login
 ```
 
 ### Webhook
@@ -71,9 +78,9 @@ autogit install glab --login
 2. Run the webhook server:
 
 ```bash
-autogit webhook --vcs-provider github
-autogit webhook --vcs-provider gitlab
-autogit webhook --vcs-provider github+gitlab
+peer webhook --vcs-provider github
+peer webhook --vcs-provider gitlab
+peer webhook --vcs-provider github+gitlab
 ```
 
 Webhook endpoints:
@@ -85,29 +92,29 @@ Webhook endpoints:
 
 Review change request 123 in the current repository and print the result to the console:
 ```bash
-autogit review --change-request 123
+peer review --change-request 123
 ```
 
 If the repository uses a self-managed remote, specify the VCS provider and publish the result as a comment on the Pull Request:
 ```bash
-autogit overview --vcs-provider github --change-request 123
+peer overview --vcs-provider github --change-request 123
 ```
 
 Reply to a specific comment (issuecomment-1234567890) in change request 123 and print the result to the console:
 ```bash
-autogit replycomment --vcs-provider github --change-request 123 --comment-id issuecomment-1234567890
+peer replycomment --vcs-provider github --change-request 123 --comment-id issuecomment-1234567890
 ```
 
 Generate an overview for a specific repository and publish the result
 ```bash
-autogit overview --repo https://github.com/user/repo.git --change-request 123 --publish
+peer overview --repo https://github.com/user/repo.git --change-request 123 --publish
 ```
 
-See `autogit --help` for full CLI usage.
+See `peer --help` for full CLI usage.
 
 ## Custom Recipe
 
-Repo-local configuration lives in `.autogit/config.toml`.
+Repo-local configuration lives in `.peer/config.toml`.
 
 - Example config and keys: [Custom Recipe](/docs/custom-recipe.md).
 

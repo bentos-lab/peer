@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-REPO="sisu/autogit"
-APP_NAME="autogit"
+REPO="bentos-lab/peer"
+APP_NAME="peer"
 INSTALL_DIR="/usr/local/bin"
 
 # Detect OS

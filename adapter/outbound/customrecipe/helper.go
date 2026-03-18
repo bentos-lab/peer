@@ -21,7 +21,7 @@ func (l *Loader) readAndSanitize(ctx context.Context, env uccontracts.CodeEnviro
 		return "", "", nil
 	}
 
-	fullPath := filepath.Join(".autogit", path)
+	fullPath := filepath.Join(".peer", path)
 	content, found, err := env.ReadFile(ctx, fullPath, headRef)
 	if err != nil {
 		return "", "", err
@@ -52,14 +52,14 @@ func resolveRecipePath(value string) (string, error) {
 		return "", nil
 	}
 	if filepath.IsAbs(trimmed) {
-		return "", fmt.Errorf("path must be relative to .autogit")
+		return "", fmt.Errorf("path must be relative to .peer")
 	}
 	cleaned := filepath.Clean(trimmed)
 	if cleaned == "." {
 		return "", fmt.Errorf("path must be a file")
 	}
 	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path must remain within .autogit")
+		return "", fmt.Errorf("path must remain within .peer")
 	}
 	return cleaned, nil
 }

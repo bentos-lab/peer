@@ -1,4 +1,4 @@
-# autogit overview
+# peer overview
 
 Purpose: Generate a high-level summary for a change request.
 
@@ -13,8 +13,8 @@ Arguments:
 
 Examples:
 ```bash
-autogit overview --vcs-provider github --change-request 123
+peer overview --vcs-provider github --change-request 123
 ```
 ```bash
-autogit overview --repo https://github.com/user/repo.git --change-request 123 --publish
+peer overview --repo https://github.com/user/repo.git --change-request 123 --publish
 ```

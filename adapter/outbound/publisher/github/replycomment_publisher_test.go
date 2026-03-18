@@ -36,9 +36,9 @@ func TestReplyCommentPublisherPrependsRecipeWarning(t *testing.T) {
 		Kind:           domain.CommentKindIssue,
 		Body:           "Answer body",
 		ShouldPost:     true,
-		RecipeWarnings: []string{".autogit/reply.md"},
+		RecipeWarnings: []string{".peer/reply.md"},
 	})
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
-	require.Contains(t, client.bodies[0], ".autogit/reply.md")
+	require.Contains(t, client.bodies[0], ".peer/reply.md")
 }

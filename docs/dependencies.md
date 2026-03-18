@@ -2,15 +2,18 @@
 
 ## Overview
 
-The CLI provides `autogit install` subcommands to install required dependencies.
+The CLI provides `peer install` subcommands to install required dependencies.
 
 ## Behavior
 
-- `autogit install git` installs Git.
-- `autogit install gh --login` installs `gh` and prompts for `gh auth login` if needed.
-- `autogit install glab --login` installs `glab` and prompts for `glab auth login` if needed.
-- `autogit install opencode` installs OpenCode.
-- `autogit install quickstart` runs `gh --login` then `opencode`.
+- `peer install git` installs Git.
+- `peer install gh --login` installs `gh` and prompts for `gh auth login` if needed.
+- `peer install glab --login` installs `glab` and prompts for `glab auth login` if needed.
+- `peer install opencode` installs OpenCode.
+- `peer install quickstart` runs `gh --login` then `opencode`.
+- `peer update self` updates the CLI to the latest stable release.
+- `peer update skills --path <path>` updates installed peer skills at explicit paths (repeatable).
+- If no `--path` is provided, `peer update skills` auto-discovers skills under project, user, and XDG config locations for `.agents/skills`, `.claude/skills`, `.codex/skills`, `.cursor/skills`, and `.windsurf/skills`.
 - In non-interactive terminals, the CLI prints platform-specific instructions and exits with an error.
 
 ## OpenCode (opencode) Install Options

@@ -18,7 +18,7 @@ type HostOpencodeAgent struct {
 	workspaceDir string
 	runner       commandrunner.StreamRunner
 	logger       usecase.Logger
-	installer    *toolinstall.Installer
+	installer    *toolinstall.OpencodeInstaller
 }
 
 // NewHostOpencodeAgent creates a host opencode coding agent.
@@ -33,7 +33,7 @@ func NewHostOpencodeAgent(workspaceDir string, runner commandrunner.StreamRunner
 		workspaceDir: workspaceDir,
 		runner:       runner,
 		logger:       logger,
-		installer:    toolinstall.NewInstaller(toolinstall.Config{}),
+		installer:    toolinstall.NewOpencodeInstaller(nil),
 	}
 }
 

@@ -30,7 +30,7 @@ func NewEnvironment(
 	return env, cleanup, nil
 }
 
-// OverrideConfig overrides a base recipe using .autogit/config.toml in the code environment.
+// OverrideConfig overrides a base recipe using .peer/config.toml in the code environment.
 func OverrideConfig(
 	ctx context.Context,
 	env uccontracts.CodeEnvironment,

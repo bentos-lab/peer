@@ -50,7 +50,7 @@ type webhookFlagValues struct {
 
 func newWebhookSubcommand(
 	_ context.Context,
-	deps autogitDeps,
+	deps peerDeps,
 	llmOpenAIBaseURL *string,
 	llmOpenAIModel *string,
 	llmOpenAIAPIKey *string,

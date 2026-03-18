@@ -72,12 +72,12 @@ func TestOverviewPublisher_PublishOverviewPrependsRecipeWarning(t *testing.T) {
 		},
 		Overview:       usecase.LLMOverviewResult{},
 		Metadata:       map[string]string{"action": "opened"},
-		RecipeWarnings: []string{".autogit/overview.md"},
+		RecipeWarnings: []string{".peer/overview.md"},
 	})
 	require.NoError(t, err)
 	require.Len(t, client.bodies, 1)
 	require.True(t, strings.HasPrefix(client.bodies[0], "> [!WARNING]"))
-	require.Contains(t, client.bodies[0], ".autogit/overview.md")
+	require.Contains(t, client.bodies[0], ".peer/overview.md")
 }
 
 func TestOverviewPublisher_PublishOverview_SkipsNonOpenedAction(t *testing.T) {

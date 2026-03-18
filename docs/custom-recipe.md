@@ -2,9 +2,9 @@
 
 Custom recipes let a repository provide extra guidance for review, overview, reply, and autogen flows.
 
-Precedence (highest to lowest): CLI flags > `.autogit/config.toml` > environment defaults. See [Configuration](/docs/configuration.md#precedence). When a key is present in `config.toml`, it overrides env defaults even if empty or false.
+Precedence (highest to lowest): CLI flags > `.peer/config.toml` > environment defaults. See [Configuration](/docs/configuration.md#precedence). When a key is present in `config.toml`, it overrides env defaults even if empty or false.
 
-## Example `.autogit/config.toml`
+## Example `.peer/config.toml`
 
 ```toml
 [review]
@@ -36,4 +36,4 @@ docs = true
 tests = true
 ```
 
-All file paths are resolved relative to `.autogit/`.
+All file paths are resolved relative to `.peer/`.

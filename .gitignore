@@ -23,13 +23,13 @@ dist
 go.work
 go.work.sum
 
-# env file
-.env
-
 # Test data
 test_data
 
 # Python
 __pycache__
+.peer
+
+# Credentials
 *.pem
-.autogit
+.env

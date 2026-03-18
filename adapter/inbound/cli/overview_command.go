@@ -13,7 +13,7 @@ import (
 	uccontracts "bentos-backend/usecase/contracts"
 )
 
-// OverviewCommand runs autogit overview flow with the shared overview usecase.
+// OverviewCommand runs peer overview flow with the shared overview usecase.
 type OverviewCommand struct {
 	overviewUseCaseBuilder OverviewUseCaseBuilder
 	vcsResolver            VCSClientResolver
@@ -22,7 +22,7 @@ type OverviewCommand struct {
 	logger                 usecase.Logger
 }
 
-// OverviewParams contains already-parsed CLI autogit parameters for overviews.
+// OverviewParams contains already-parsed CLI peer parameters for overviews.
 type OverviewParams struct {
 	VCSProvider    string
 	VCSHost        string
@@ -37,7 +37,7 @@ type OverviewParams struct {
 // OverviewUseCaseBuilder builds an overview usecase for a specific repo.
 type OverviewUseCaseBuilder func(repoURL string) (usecase.OverviewUseCase, error)
 
-// NewOverviewCommand creates a new CLI command for autogit overviews.
+// NewOverviewCommand creates a new CLI command for peer overviews.
 func NewOverviewCommand(overviewUseCaseBuilder OverviewUseCaseBuilder, vcsResolver VCSClientResolver, envFactory uccontracts.CodeEnvironmentFactory, recipeLoader usecase.CustomRecipeLoader, logger usecase.Logger) *OverviewCommand {
 	if logger == nil {
 		logger = stdlogger.Nop()

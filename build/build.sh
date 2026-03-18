@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-APP_NAME="autogit"
-ENTRYPOINT="./cmd/autogit"
+APP_NAME="peer"
+ENTRYPOINT="./cmd/peer"
 DIST_DIR="dist"
 
 PLATFORMS=(

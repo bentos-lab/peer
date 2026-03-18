@@ -79,7 +79,7 @@ func (s *HookSyncer) Start(ctx context.Context) {
 		s.syncInterval = 5 * time.Minute
 	}
 	if s.statePath == "" {
-		s.statePath = "~/.autogit/gitlab_sync.json"
+		s.statePath = "~/.peer/gitlab_sync.json"
 	}
 
 	s.runOnce(ctx)

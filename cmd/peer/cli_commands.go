@@ -14,6 +14,7 @@ import (
 	gitlabvcs "bentos-backend/adapter/outbound/vcs/gitlab"
 	"bentos-backend/config"
 	sharedcli "bentos-backend/shared/cli"
+	"bentos-backend/shared/skillupdate"
 	"bentos-backend/usecase"
 	"bentos-backend/wiring"
 
@@ -38,7 +39,7 @@ func (e cliConfigLoadError) Is(target error) bool {
 	return target == errCLIConfigLoad
 }
 
-type autogitDeps struct {
+type peerDeps struct {
 	loadConfig               func() (config.Config, error)
 	buildReviewCommand       func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReviewCommand, error)
 	buildOverviewCommand     func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.OverviewCommand, error)
@@ -50,8 +51,8 @@ type autogitDeps struct {
 	resolveOriginURL         func() (string, error)
 }
 
-func defaultAutogitDeps() autogitDeps {
-	return autogitDeps{
+func defaultPeerDeps() peerDeps {
+	return peerDeps{
 		loadConfig: config.Load,
 		buildReviewCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReviewCommand, error) {
 			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
@@ -134,7 +135,7 @@ func defaultAutogitDeps() autogitDeps {
 	}
 }
 
-func newRootCommand(ctx context.Context, deps autogitDeps, version string, commit string) *cobra.Command {
+func newRootCommand(ctx context.Context, deps peerDeps, version string, commit string) *cobra.Command {
 	var llmOpenAIBaseURL string
 	var llmOpenAIModel string
 	var llmOpenAIAPIKey string
@@ -145,7 +146,7 @@ func newRootCommand(ctx context.Context, deps autogitDeps, version string, commi
 
 	var cmd *cobra.Command
 	cmd = &cobra.Command{
-		Use:   "autogit",
+		Use:   "peer",
 		Short: "Run repository review via GitHub context",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -168,6 +169,7 @@ func newRootCommand(ctx context.Context, deps autogitDeps, version string, commi
 	cmd.AddCommand(newAutogenSubcommand(ctx, deps.loadConfig, deps.buildAutogenCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity, deps.resolveOriginURL))
 	cmd.AddCommand(newReplyCommentSubcommand(ctx, deps.loadConfig, deps.buildReplyCommentCommand, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &codeAgent, &codeAgentProvider, &codeAgentModel, &verbosity, deps.resolveOriginURL))
 	cmd.AddCommand(newInstallSubcommand(ctx))
+	cmd.AddCommand(newUpdateSubcommand(ctx))
 	cmd.AddCommand(newWebhookSubcommand(ctx, deps, &llmOpenAIBaseURL, &llmOpenAIModel, &llmOpenAIAPIKey, &verbosity, &codeAgent, &codeAgentProvider, &codeAgentModel))
 
 	return cmd
@@ -564,6 +566,60 @@ func newInstallSubcommand(ctx context.Context) *cobra.Command {
 	sub.AddCommand(opencodeCmd)
 	sub.AddCommand(gitCmd)
 	sub.AddCommand(quickstartCmd)
+	return sub
+}
+
+func newUpdateSubcommand(ctx context.Context) *cobra.Command {
+	sub := &cobra.Command{
+		Use:   "update",
+		Short: "Update peer components",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
+		},
+	}
+	sub.AddCommand(newUpdateSelfSubcommand(ctx, cliinbound.NewUpdateCommand()))
+	sub.AddCommand(newUpdateSkillsSubcommand(ctx, cliinbound.NewSkillUpdateCommand()))
+	return sub
+}
+
+type skillUpdateRunner interface {
+	Run(context.Context, []string) ([]skillupdate.Result, error)
+}
+
+func newUpdateSelfSubcommand(ctx context.Context, command *cliinbound.UpdateCommand) *cobra.Command {
+	sub := &cobra.Command{
+		Use:   "self",
+		Short: "Update peer to the latest stable release",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			result, err := command.Run(ctx)
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated peer to %s\n", result.Version)
+			return nil
+		},
+	}
+	return sub
+}
+
+func newUpdateSkillsSubcommand(ctx context.Context, command skillUpdateRunner) *cobra.Command {
+	var paths []string
+	sub := &cobra.Command{
+		Use:   "skills",
+		Short: "Update peer skills in agent directories",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			results, err := command.Run(ctx, paths)
+			for _, result := range results {
+				if result.Err != nil {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s error: %v\n", result.Path, result.Err)
+					continue
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s ok\n", result.Path)
+			}
+			return err
+		},
+	}
+	sub.Flags().StringArrayVar(&paths, "path", nil, "path to a skills root or peer skill directory (repeatable)")
 	return sub
 }
 

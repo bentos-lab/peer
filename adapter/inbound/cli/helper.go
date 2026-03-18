@@ -13,7 +13,6 @@ import (
 
 	"bentos-backend/domain"
 	sharedtext "bentos-backend/shared/text"
-	"bentos-backend/shared/toolinstall"
 )
 
 func domainChangeRequestInput(repository string, prNumber int, repoURL string, base string, head string, title string, description string, metadata map[string]string) domain.ChangeRequestInput {
@@ -635,14 +634,4 @@ func formatReviewSummary(summary domain.ReviewSummary) string {
 		return fmt.Sprintf("%s:\n%s", prefix, body)
 	}
 	return body
-}
-
-func (c *InstallCommand) resolveInstaller() ToolInstaller {
-	if c == nil {
-		return &missingInstaller{}
-	}
-	if c.installer == nil {
-		c.installer = toolinstall.NewInstaller(toolinstall.Config{})
-	}
-	return c.installer
 }
