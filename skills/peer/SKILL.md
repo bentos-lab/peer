@@ -15,7 +15,6 @@ description: >
 ---
 
 ## Overview
-* Skill version: dev
 
 `peer` is a CLI that reviews and summarizes pull/merge requests, replies to PR comments, and can generate docs/tests/comments. It works both on PR/MR contexts and on local changes or diffs in a repository.
 

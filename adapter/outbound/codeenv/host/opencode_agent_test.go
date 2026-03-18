@@ -93,13 +93,13 @@ func TestHostOpencodeAgentRunBuildsCommandAndParsesFinalAssistantText(t *testing
 	require.NoError(t, err)
 	require.Equal(t, "Final output", result.Text)
 	require.NoError(t, runner.VerifyDone())
-	require.NotEmpty(t, logger.traceLogs)
-	traceContent := strings.Join(logger.traceLogs, "\n")
-	require.Contains(t, traceContent, `action="agent produced assistant message"`)
-	require.Contains(t, traceContent, `action="agent finalized assistant transcript"`)
-	require.Contains(t, traceContent, `source=assistant_message`)
-	require.Contains(t, traceContent, `content="Final output"`)
-	require.NotContains(t, traceContent, "{\"type\":")
+	require.NotEmpty(t, logger.debugLogs)
+	debugContent := strings.Join(logger.debugLogs, "\n")
+	require.Contains(t, debugContent, `action="agent produced assistant message"`)
+	require.Contains(t, debugContent, `action="agent finalized assistant transcript"`)
+	require.Contains(t, debugContent, `source=assistant_message`)
+	require.Contains(t, debugContent, `content="Final output"`)
+	require.NotContains(t, debugContent, "{\"type\":")
 }
 
 func TestHostOpencodeAgentRunWarnsWhenModelWithoutProvider(t *testing.T) {
@@ -304,9 +304,9 @@ func TestHostOpencodeAgentRunParsesDeltaFallback(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "Hello world", result.Text)
-	traceContent := strings.Join(logger.traceLogs, "\n")
-	require.Contains(t, traceContent, `action="agent streamed assistant delta"`)
-	require.Contains(t, traceContent, `source=assistant_delta`)
+	debugContent := strings.Join(logger.debugLogs, "\n")
+	require.Contains(t, debugContent, `action="agent streamed assistant delta"`)
+	require.Contains(t, debugContent, `source=assistant_delta`)
 }
 
 func TestHostOpencodeAgentRunParsesOpencodeTextPartEvents(t *testing.T) {
@@ -341,9 +341,9 @@ func TestHostOpencodeAgentRunParsesOpencodeTextPartEvents(t *testing.T) {
 	require.Equal(t, "Hello! How can I help you today?", result.Text)
 	require.Equal(t, "ses_1", result.SessionID)
 	require.NoError(t, runner.VerifyDone())
-	traceContent := strings.Join(logger.traceLogs, "\n")
-	require.Contains(t, traceContent, `action="agent produced assistant message"`)
-	require.Contains(t, traceContent, `action="agent finalized assistant transcript"`)
+	debugContent := strings.Join(logger.debugLogs, "\n")
+	require.Contains(t, debugContent, `action="agent produced assistant message"`)
+	require.Contains(t, debugContent, `action="agent finalized assistant transcript"`)
 }
 
 func TestHostOpencodeAgentRunPassesSessionID(t *testing.T) {
@@ -458,7 +458,7 @@ func TestHostOpencodeAgentRunTruncatesTranscriptTrace(t *testing.T) {
 	require.Equal(t, longText, result.Text)
 
 	foundTranscript := false
-	for _, logLine := range logger.traceLogs {
+	for _, logLine := range logger.debugLogs {
 		if !strings.Contains(logLine, `action="agent finalized assistant transcript"`) {
 			continue
 		}
@@ -562,9 +562,9 @@ func TestHostOpencodeAgentRunTracesToolUseActionWithoutOutputPayload(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, "Done", result.Text)
 
-	traceContent := strings.Join(logger.traceLogs, "\n")
-	require.Contains(t, traceContent, `action="agent read file /workspace/current/README.md"`)
-	require.NotContains(t, traceContent, "VERY_LONG_TOOL_RESULT_BODY")
+	debugContent := strings.Join(logger.debugLogs, "\n")
+	require.Contains(t, debugContent, `action="agent read file /workspace/current/README.md"`)
+	require.NotContains(t, debugContent, "VERY_LONG_TOOL_RESULT_BODY")
 }
 
 type opencodeAgentTestLogger struct {
