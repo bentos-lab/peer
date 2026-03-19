@@ -8,7 +8,7 @@
 
 * [ ] Checkout to the release branch
 * [ ] Run tests and ensure all tests pass
-* [ ] Update `CHANGELOG.md` based on commit history since the previous release (release version is determined by the current CHANGELOG). If this is the first release, get all commit history since first commit (using `git log`).
+* [ ] Update `CHANGELOG.md` based on commit history since the previous release (release version is determined by the current CHANGELOG). If this is the first release, get all commit history since first commit (using `git log --oneline <prev_version>..HEAD`).
 * [ ] Ensure the working directory is clean
 
 ---
@@ -22,7 +22,7 @@ git checkout -b release/vX.Y.Z
 ```
 
 2. Update `CHANGELOG.md`
-   
+
 3. Commit
 
 ```bash
