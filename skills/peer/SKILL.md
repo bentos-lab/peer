@@ -1,5 +1,6 @@
 ---
 name: peer
+version: 0.2.0
 description: >
   CLI tool for working with code changes in Git repositories.
 
