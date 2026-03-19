@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.0] - 2026-03-19
+### Added
+- AI-powered commit command with conventional message generation.
+- GitHub Actions Go test workflow.
+- Apache License 2.0.
+### Changed
+- Removed auth hint stderr message and added verbosity levels.
+- Updated peer skill text for readability.
+- Clarified CLI README instructions.
+- Updated release note content.
+### Fixed
+- Install scripts.
+
 ## [0.1.0] - 2026-03-18
 ### Added
 - CLI install workflow with safety prompt and GitHub CLI integration to streamline setup.
