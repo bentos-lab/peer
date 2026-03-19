@@ -49,7 +49,7 @@ description: >
 
 ## Execution Notes
 - The tool is available as a global CLI: `peer`.
-- Always use `-v` if the subcommand supports to log more values.
+- Always use `-vv` if the subcommand supports to log more values (`-v`=info, `-vv`=debug, `-vvv`=trace).
 
 ## Troubleshooting
 1. If `gh` or `glab` has not authenticated yet or invalid token, follow guidance in [references/dependencies.md](references/dependencies.md):

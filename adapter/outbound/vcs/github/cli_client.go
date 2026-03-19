@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -16,10 +15,9 @@ import (
 
 // CLIClient executes GitHub operations via the gh CLI.
 type CLIClient struct {
-	runner          commandrunner.Runner
-	installer       *toolinstall.GhInstaller
-	authChecked     bool
-	authHintPrinted bool
+	runner      commandrunner.Runner
+	installer   *toolinstall.GhInstaller
+	authChecked bool
 }
 
 // NewCLIClient creates a GitHub CLI API client.
@@ -466,19 +464,10 @@ func (c *CLIClient) ensureAuth(ctx context.Context) error {
 	}
 	result, err := c.runner.Run(ctx, "gh", "auth", "status")
 	if err != nil {
-		c.printAuthStatusHintOnce()
 		return fmt.Errorf("github CLI is not authenticated; run `gh auth login` first: %w", formatCommandError(err, result))
 	}
 	c.authChecked = true
 	return nil
-}
-
-func (c *CLIClient) printAuthStatusHintOnce() {
-	if c.authHintPrinted {
-		return
-	}
-	c.authHintPrinted = true
-	_, _ = fmt.Fprintln(os.Stderr, "Note: gh auth status reads credential files; in sandboxed runs you may need to grant read permission to those files.")
 }
 
 func (c *CLIClient) resolveRepository(ctx context.Context, repository string) (string, error) {

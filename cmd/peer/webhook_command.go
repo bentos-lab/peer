@@ -190,7 +190,7 @@ func newWebhookSubcommand(
 	sub.Flags().StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	sub.Flags().StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	sub.Flags().StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
-	sub.Flags().CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	sub.Flags().CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace, default=warning)")
 
 	return sub
 }

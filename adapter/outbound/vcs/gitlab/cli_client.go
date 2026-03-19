@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -18,11 +17,10 @@ import (
 
 // CLIClient executes GitLab operations via the glab CLI.
 type CLIClient struct {
-	runner          commandrunner.Runner
-	installer       *toolinstall.GlabInstaller
-	authChecked     bool
-	authHintPrinted bool
-	host            string
+	runner      commandrunner.Runner
+	installer   *toolinstall.GlabInstaller
+	authChecked bool
+	host        string
 }
 
 // CLIClientConfig configures the GitLab CLI client.
@@ -389,19 +387,10 @@ func (c *CLIClient) ensureAuth(ctx context.Context) error {
 	}
 	result, err := c.runGlab(ctx, "auth", "status")
 	if err != nil {
-		c.printAuthStatusHintOnce()
 		return fmt.Errorf("gitlab CLI is not authenticated; run `glab auth login` first: %w", formatCommandError(err, result))
 	}
 	c.authChecked = true
 	return nil
-}
-
-func (c *CLIClient) printAuthStatusHintOnce() {
-	if c.authHintPrinted {
-		return
-	}
-	c.authHintPrinted = true
-	_, _ = fmt.Fprintln(os.Stderr, "Note: glab auth status reads credential files; in sandboxed runs you may need to grant read permission to those files.")
 }
 
 func (c *CLIClient) ensureGlabInstalled(ctx context.Context) error {

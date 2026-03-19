@@ -8,8 +8,7 @@ import (
 
 // GlabInstaller installs the GitLab CLI.
 type GlabInstaller struct {
-	base            baseInstaller
-	authHintPrinted bool
+	base baseInstaller
 }
 
 // NewGlabInstaller creates a GitLab CLI installer with optional deps.
@@ -30,7 +29,6 @@ func (i *GlabInstaller) IsGlabAuthenticated(ctx context.Context) (bool, error) {
 	if err := i.base.run(ctx, "glab", "auth", "status"); err == nil {
 		return true, nil
 	}
-	i.printAuthStatusHintOnce()
 	return false, nil
 }
 
@@ -112,7 +110,6 @@ func (i *GlabInstaller) EnsureGlabAuthenticated(ctx context.Context) error {
 	if err := i.base.run(ctx, "glab", "auth", "status"); err == nil {
 		return nil
 	}
-	i.printAuthStatusHintOnce()
 	if !i.base.isTerminal() {
 		_, _ = fmt.Fprintln(i.base.stderr, "glab is not authenticated. Skipping 'glab auth login' because no TTY is available.")
 		return nil
@@ -130,14 +127,6 @@ func (i *GlabInstaller) EnsureGlabAuthenticated(ctx context.Context) error {
 		return err
 	}
 	return nil
-}
-
-func (i *GlabInstaller) printAuthStatusHintOnce() {
-	if i.authHintPrinted {
-		return
-	}
-	i.authHintPrinted = true
-	_, _ = fmt.Fprintln(i.base.stderr, "Note: glab auth status reads credential files; in sandboxed runs you may need to grant read permission to those files.")
 }
 
 func (i *GlabInstaller) installGlabLinux(ctx context.Context) error {

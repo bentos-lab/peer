@@ -257,7 +257,7 @@ func newReviewSubcommand(
 	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
-	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace, default=warning)")
 	return sub
 }
 
@@ -346,7 +346,7 @@ func newOverviewSubcommand(
 	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
-	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace, default=warning)")
 	return sub
 }
 
@@ -438,7 +438,7 @@ func newAutogenSubcommand(
 	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
-	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace, default=warning)")
 	return sub
 }
 
@@ -502,7 +502,7 @@ func newCommitSubcommand(
 	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
-	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace, default=warning)")
 	return sub
 }
 
@@ -588,7 +588,7 @@ func newReplyCommentSubcommand(
 	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
-	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=info, -vv=debug, -vvv=trace, default=warning)")
 	return sub
 }
 
