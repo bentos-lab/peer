@@ -26,13 +26,13 @@ description: >
 4. Interpret output and summarize results for the user. No need to inspect any more files. Note that only focus on [INFO] or above log message, ignore [DEBUG] or [TRACE].
 
 ## Reference Guide
-[references/installation.md](references/installation.md): Installation steps.
-[references/update.md](references/update.md): Self update and override skill guidance.
-[references/dependencies.md](references/dependencies.md): Install dependencies guidance.
-[references/review.md](references/review.md): Review a change request or local diff.
-[references/overview.md](references/overview.md): Summarize a change request or local diff.
-[references/replycomment.md](references/replycomment.md): Reply to a PR comment or a specific question.
-[references/autogen.md](references/autogen.md): Generate docs/tests/comments for a change request or local diff.
+- [references/installation.md](references/installation.md): Installation steps.
+- [references/update.md](references/update.md): Self update and override skill guidance.
+- [references/dependencies.md](references/dependencies.md): Install dependencies guidance.
+- [references/review.md](references/review.md): Review a change request or local diff.
+- [references/overview.md](references/overview.md): Summarize a change request or local diff.
+- [references/replycomment.md](references/replycomment.md): Reply to a PR comment or a specific question.
+- [references/autogen.md](references/autogen.md): Generate docs/tests/comments for a change request or local diff.
 
 ## Note
 - Before executing any command related to remote VCS, ask whether the result should be published (e.g., as PR/MR comments) or printed to the console. If this is a local command, no need to ask.
