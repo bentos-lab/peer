@@ -131,3 +131,46 @@ func TestAutogenCommandUsesPullRequestInfo(t *testing.T) {
 	require.Equal(t, "feature-branch", useCase.requests[0].HeadBranch)
 	require.True(t, useCase.requests[0].Publish)
 }
+
+func TestAutogenCommandSkipsResolveRepositoryWhenChangeRequestEmptyWithRepo(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "org/repo"}
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
+		VCSProvider: "github",
+		Repo:        "org/repo",
+		Docs:        new(true),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, githubClient.resolveRepositoryCalls)
+	require.Len(t, useCase.requests, 1)
+	require.Equal(t, "org/repo", useCase.requests[0].Input.Target.Repository)
+	require.NotEmpty(t, useCase.requests[0].Input.RepoURL)
+}
+
+func TestAutogenCommandSkipsResolveRepositoryWhenChangeRequestEmptyNoRepo(t *testing.T) {
+	useCase := &fakeAutogenUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "org/repo"}
+	builder := func(_ string) (usecase.AutogenUseCase, error) {
+		return useCase, nil
+	}
+	resolver := StaticVCSClients{GitHub: githubClient}
+	cmd := NewAutogenCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+
+	err := cmd.Run(context.Background(), config.Config{}, AutogenRunParams{
+		VCSProvider: "github",
+		Docs:        new(true),
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, githubClient.resolveRepositoryCalls)
+	require.Len(t, useCase.requests, 1)
+	require.Equal(t, "local", useCase.requests[0].Input.Target.Repository)
+	require.Empty(t, useCase.requests[0].Input.RepoURL)
+}

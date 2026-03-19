@@ -163,9 +163,14 @@ func (e *HostCodeEnvironment) ReadFile(ctx context.Context, path string, ref str
 		return content, found, nil
 	}
 
-	content, found, err := e.readRefFile(ctx, workspaceDir, path, ref)
+	normalizedRef, err := e.normalizeRef(ctx, workspaceDir, ref)
 	if err != nil {
-		e.logger.Warnf("ReadFile failed for path %q at ref %q: %v", path, ref, err)
+		return "", false, err
+	}
+
+	content, found, err := e.readRefFile(ctx, workspaceDir, path, normalizedRef)
+	if err != nil {
+		e.logger.Warnf("ReadFile failed for path %q at ref %q: %v", path, normalizedRef, err)
 		return "", false, nil
 	}
 	return content, found, nil

@@ -76,6 +76,44 @@ func TestReviewCommandRespectsBaseWhenHeadEmpty(t *testing.T) {
 	require.Equal(t, "@all", reviewUC.requests[0].Input.Head)
 }
 
+func TestReviewCommandSkipsResolveRepositoryWhenChangeRequestEmptyWithRepo(t *testing.T) {
+	reviewUC := &fakeReviewUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "owner/repo"}
+	builder := func(_ string) (usecase.ReviewUseCase, error) {
+		return reviewUC, nil
+	}
+	resolver := StaticVCSClients{GitHub: githubClient}
+	command := NewReviewCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+
+	err := command.Run(context.Background(), config.Config{}, ReviewParams{
+		Repo: "owner/repo",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, githubClient.resolveRepositoryCalls)
+	require.Len(t, reviewUC.requests, 1)
+	require.Equal(t, "owner/repo", reviewUC.requests[0].Input.Target.Repository)
+	require.NotEmpty(t, reviewUC.requests[0].Input.RepoURL)
+}
+
+func TestReviewCommandSkipsResolveRepositoryWhenChangeRequestEmptyNoRepo(t *testing.T) {
+	reviewUC := &fakeReviewUseCase{}
+	githubClient := &fakeGitHubClient{resolvedRepository: "owner/repo"}
+	builder := func(_ string) (usecase.ReviewUseCase, error) {
+		return reviewUC, nil
+	}
+	resolver := StaticVCSClients{GitHub: githubClient}
+	command := NewReviewCommand(builder, resolver, &testCodeEnvironmentFactory{}, &testRecipeLoader{}, nil)
+
+	err := command.Run(context.Background(), config.Config{}, ReviewParams{})
+
+	require.NoError(t, err)
+	require.Equal(t, 0, githubClient.resolveRepositoryCalls)
+	require.Len(t, reviewUC.requests, 1)
+	require.Equal(t, "local", reviewUC.requests[0].Input.Target.Repository)
+	require.Empty(t, reviewUC.requests[0].Input.RepoURL)
+}
+
 type fakeReviewUseCase struct {
 	requests []usecase.ReviewRequest
 }
