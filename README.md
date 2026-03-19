@@ -39,6 +39,7 @@ go install https://github.com/bentos-lab/peer/cmd/peer
 
 ### Auto-update
 
+Auto update `peer` to the latest stable version:
 ```bash
 peer update self
 ```
