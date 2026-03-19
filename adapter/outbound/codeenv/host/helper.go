@@ -126,6 +126,18 @@ func (e *HostCodeEnvironment) workspaceDirForRef(ctx context.Context, ref string
 	}
 	e.mu.Unlock()
 
+	// Prefer the local workspace when the ref already exists there,
+	// avoiding an unnecessary remote clone.
+	if err := e.verifyLocalRefExists(ctx, localWorkspace, ref); err == nil {
+		e.logger.Debugf("Ref found locally for workspace selection: ref=%s workspace=%s", ref, localWorkspace)
+		e.mu.Lock()
+		e.workspaceDir = localWorkspace
+		e.isRemote = false
+		e.mu.Unlock()
+		return localWorkspace, nil
+	}
+	e.logger.Debugf("Ref not found locally, will attempt remote workspace: ref=%s", ref)
+
 	originURL, err := e.resolveOriginURL(ctx, localWorkspace)
 	if err != nil {
 		return "", err
@@ -176,7 +188,7 @@ func (e *HostCodeEnvironment) syncRef(ctx context.Context, workspaceDir string, 
 		e.logger.Debugf("Current HEAD before sync: %s", currentHead)
 	}
 
-	resolvedHeadRef, err := e.resolveRef(ctx, workspaceDir, headRef)
+	resolvedHeadRef, err := e.normalizeRef(ctx, workspaceDir, headRef)
 	if err != nil {
 		return err
 	}
@@ -197,17 +209,25 @@ func (e *HostCodeEnvironment) syncRef(ctx context.Context, workspaceDir string, 
 	return nil
 }
 
-func (e *HostCodeEnvironment) resolveRef(ctx context.Context, workspaceDir string, requestedRef string) (string, error) {
-	requestedRef = strings.TrimSpace(requestedRef)
-	if requestedRef == "" {
-		return "", fmt.Errorf("ref is required")
+func (e *HostCodeEnvironment) normalizeRef(ctx context.Context, workspaceDir string, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if isWorkspaceTokenRef(ref) {
+		return ref, nil
 	}
-	e.logger.Debugf("Resolving ref: %s (isRemote=%v)", requestedRef, e.isRemote)
-	if err := e.verifyLocalRefExists(ctx, workspaceDir, requestedRef); err == nil {
-		e.logger.Debugf("Ref found locally: requested=%s", requestedRef)
-		return requestedRef, nil
+	if err := e.verifyLocalRefExists(ctx, workspaceDir, ref); err == nil {
+		return ref, nil
 	}
+	resolvedRef, err := e.resolveRefFromMissing(ctx, workspaceDir, ref)
+	if err != nil {
+		return "", err
+	}
+	if resolvedRef != ref {
+		e.logger.Debugf("Normalized ref: requested=%s resolved=%s", ref, resolvedRef)
+	}
+	return resolvedRef, nil
+}
 
+func (e *HostCodeEnvironment) resolveRefFromMissing(ctx context.Context, workspaceDir string, requestedRef string) (string, error) {
 	fetchedRef := localFetchedRefName(requestedRef)
 	if err := e.verifyLocalRefExists(ctx, workspaceDir, fetchedRef); err == nil {
 		e.logger.Debugf("Ref found in fetched cache: requested=%s, resolved=%s", requestedRef, fetchedRef)
@@ -464,11 +484,11 @@ func (e *HostCodeEnvironment) resolveDiffRefs(ctx context.Context, workspaceDir 
 		resolvedBase = "HEAD"
 	}
 	var resolveErr error
-	resolvedBase, resolveErr = e.resolveRef(ctx, workspaceDir, resolvedBase)
+	resolvedBase, resolveErr = e.normalizeRef(ctx, workspaceDir, resolvedBase)
 	if resolveErr != nil {
 		return "", "", "", resolveErr
 	}
-	resolvedHead, resolveErr = e.resolveRef(ctx, workspaceDir, resolvedHead)
+	resolvedHead, resolveErr = e.normalizeRef(ctx, workspaceDir, resolvedHead)
 	if resolveErr != nil {
 		return "", "", "", resolveErr
 	}

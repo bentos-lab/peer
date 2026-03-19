@@ -53,9 +53,20 @@ func resolveChangeRequestParams(ctx context.Context, vcsClient VCSClient, params
 		return ChangeRequestResolution{}, err
 	}
 	repoProvided := strings.TrimSpace(params.Repo) != ""
-	repository, err = vcsClient.ResolveRepository(ctx, repository)
-	if err != nil {
-		return ChangeRequestResolution{}, err
+	changeRequestProvided := strings.TrimSpace(params.ChangeRequest) != ""
+	if changeRequestProvided {
+		repository, err = vcsClient.ResolveRepository(ctx, repository)
+		if err != nil {
+			return ChangeRequestResolution{}, err
+		}
+	} else {
+		// No change request provided: skip VCS resolution.
+		// Keep normalized repo URL when supplied to allow cloning into tmp.
+		if !repoProvided {
+			repository = "local"
+			repoURL = ""
+			buildRepoURL = nil
+		}
 	}
 
 	base, head := resolveBaseHeadDefaults(params.Base, params.Head, repoProvided)
@@ -65,7 +76,7 @@ func resolveChangeRequestParams(ctx context.Context, vcsClient VCSClient, params
 	description := ""
 	headRefName := ""
 	var issueCandidates []domain.IssueContext
-	if strings.TrimSpace(params.ChangeRequest) != "" {
+	if changeRequestProvided {
 		parsed, parseErr := strconv.Atoi(strings.TrimSpace(params.ChangeRequest))
 		if parseErr != nil || parsed <= 0 {
 			return ChangeRequestResolution{}, fmt.Errorf("--change-request must be a positive integer")

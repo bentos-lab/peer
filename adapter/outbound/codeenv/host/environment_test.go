@@ -122,42 +122,35 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRef(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/workspace/current", "config", "--get", "remote.origin.url"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("https://github.com/example/repo.git")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"clone", "--depth", "1", "https://github.com/example/repo.git", "/home/test/.bentos-labtmp/workspace-1"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("cloned")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "HEAD"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("head123")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "--verify", "feature/ref^{commit}"},
+			Args: []string{"-C", "/workspace/current", "rev-parse", "--verify", "feature/ref^{commit}"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("abc123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "checkout", "feature/ref"},
+			Args: []string{"-C", "/workspace/current", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/workspace/current", "rev-parse", "--verify", "feature/ref^{commit}"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("abc123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/workspace/current", "checkout", "feature/ref"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("checked out")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "HEAD"},
+			Args: []string{"-C", "/workspace/current", "rev-parse", "HEAD"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("head456")},
 	})
@@ -166,9 +159,6 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRef(t *testing.T) {
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
-		},
-		MakeTempDir: func() (string, error) {
-			return "/home/test/.bentos-labtmp/workspace-1", nil
 		},
 	})
 
@@ -180,7 +170,7 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRef(t *testing.T) {
 
 	hostAgent, ok := agent.(*HostOpencodeAgent)
 	require.True(t, ok)
-	require.Equal(t, "/home/test/.bentos-labtmp/workspace-1", hostAgent.workspaceDir)
+	require.Equal(t, "/workspace/current", hostAgent.workspaceDir)
 	require.NoError(t, runner.VerifyDone())
 }
 
@@ -267,27 +257,27 @@ func TestHostCodeEnvironment_ReadFileRef(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", workspaceDir, "config", "--get", "remote.origin.url"},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "HEAD^{commit}"},
 		},
-		Result: commandrunner.Result{Stdout: []byte("https://github.com/example/repo.git")},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"clone", "--depth", "1", "https://github.com/example/repo.git", "/home/test/.bentos-labtmp/workspace-1"},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "HEAD^{commit}"},
 		},
-		Result: commandrunner.Result{Stdout: []byte("cloned")},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "cat-file", "-e", "HEAD:README.md"},
+			Args: []string{"-C", workspaceDir, "cat-file", "-e", "HEAD:README.md"},
 		},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "show", "HEAD:README.md"},
+			Args: []string{"-C", workspaceDir, "show", "HEAD:README.md"},
 		},
 		Result: commandrunner.Result{
 			Stdout: []byte("from-ref"),
@@ -298,9 +288,6 @@ func TestHostCodeEnvironment_ReadFileRef(t *testing.T) {
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return workspaceDir, nil
-		},
-		MakeTempDir: func() (string, error) {
-			return "/home/test/.bentos-labtmp/workspace-1", nil
 		},
 	})
 
@@ -318,21 +305,21 @@ func TestHostCodeEnvironment_ReadFileRefMissing(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", workspaceDir, "config", "--get", "remote.origin.url"},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "HEAD^{commit}"},
 		},
-		Result: commandrunner.Result{Stdout: []byte("https://github.com/example/repo.git")},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"clone", "--depth", "1", "https://github.com/example/repo.git", "/home/test/.bentos-labtmp/workspace-1"},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "HEAD^{commit}"},
 		},
-		Result: commandrunner.Result{Stdout: []byte("cloned")},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "cat-file", "-e", "HEAD:missing.txt"},
+			Args: []string{"-C", workspaceDir, "cat-file", "-e", "HEAD:missing.txt"},
 		},
 		Result: commandrunner.Result{
 			Stderr: []byte("fatal: Path 'missing.txt' does not exist in 'HEAD'"),
@@ -345,9 +332,6 @@ func TestHostCodeEnvironment_ReadFileRefMissing(t *testing.T) {
 		Getwd: func() (string, error) {
 			return workspaceDir, nil
 		},
-		MakeTempDir: func() (string, error) {
-			return "/home/test/.bentos-labtmp/workspace-1", nil
-		},
 	})
 
 	content, found, err := env.ReadFile(context.Background(), "missing.txt", "HEAD")
@@ -359,8 +343,17 @@ func TestHostCodeEnvironment_ReadFileRefMissing(t *testing.T) {
 
 func TestHostCodeEnvironment_ReadFileRefInvalid(t *testing.T) {
 	workspaceDir := t.TempDir()
+	fetchedRef := localFetchedRefName("nope")
 
 	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "nope^{commit}"},
+		},
+		Result: commandrunner.Result{Stderr: []byte("fatal: Needed a single revision")},
+		Err:    errors.New("exit status 128"),
+	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
@@ -378,12 +371,34 @@ func TestHostCodeEnvironment_ReadFileRefInvalid(t *testing.T) {
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "cat-file", "-e", "nope:README.md"},
+			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "--verify", "nope^{commit}"},
 		},
 		Result: commandrunner.Result{
-			Stderr: []byte("fatal: Not a valid object name nope"),
+			Stderr: []byte("fatal: Needed a single revision"),
 		},
 		Err: errors.New("exit status 128"),
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "--verify", fetchedRef + "^{commit}"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("abc123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "cat-file", "-e", fetchedRef + ":README.md"},
+		},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "show", fetchedRef + ":README.md"},
+		},
+		Result: commandrunner.Result{
+			Stdout: []byte("from-ref"),
+		},
 	})
 
 	logger := &hostTestLogger{}
@@ -400,10 +415,9 @@ func TestHostCodeEnvironment_ReadFileRefInvalid(t *testing.T) {
 
 	content, found, err := env.ReadFile(context.Background(), "README.md", "nope")
 	require.NoError(t, err)
-	require.False(t, found)
-	require.Equal(t, "", content)
-	require.Len(t, logger.warnLogs, 1)
-	require.Contains(t, logger.warnLogs[0], `ReadFile failed for path "README.md" at ref "nope"`)
+	require.True(t, found)
+	require.Equal(t, "from-ref", content)
+	require.Empty(t, logger.warnLogs)
 	require.NoError(t, runner.VerifyDone())
 }
 
@@ -445,35 +459,28 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefReturnsErrorWhenCheckout
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/workspace/current", "config", "--get", "remote.origin.url"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("https://github.com/example/repo.git")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"clone", "--depth", "1", "https://github.com/example/repo.git", "/home/test/.bentos-labtmp/workspace-1"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("cloned")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "HEAD"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("head123")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "--verify", "feature/ref^{commit}"},
+			Args: []string{"-C", "/workspace/current", "rev-parse", "--verify", "feature/ref^{commit}"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("abc123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "checkout", "feature/ref"},
+			Args: []string{"-C", "/workspace/current", "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/workspace/current", "rev-parse", "--verify", "feature/ref^{commit}"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("abc123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", "/workspace/current", "checkout", "feature/ref"},
 		},
 		Result: commandrunner.Result{Stderr: []byte("fatal: reference is not a tree")},
 		Err:    errors.New("exit status 128"),
@@ -483,9 +490,6 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefReturnsErrorWhenCheckout
 		Runner: runner,
 		Getwd: func() (string, error) {
 			return "/workspace/current", nil
-		},
-		MakeTempDir: func() (string, error) {
-			return "/home/test/.bentos-labtmp/workspace-1", nil
 		},
 	})
 
@@ -502,6 +506,14 @@ func TestHostCodeEnvironment_SetupAgentLocalWorkspaceRefFetchesMissingRef(t *tes
 	workspaceDir := "/workspace/current"
 	fetchedRef := localFetchedRefName("feature/ref")
 	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "feature/ref^{commit}"},
+		},
+		Result: commandrunner.Result{Stderr: []byte("fatal: Needed a single revision")},
+		Err:    errors.New("exit status 128"),
+	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
@@ -653,63 +665,56 @@ func TestHostCodeEnvironment_LoadChangedFilesRefsExistWithoutFetchRecovery(t *te
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", workspaceDir, "config", "--get", "remote.origin.url"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("https://github.com/example/repo.git")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"clone", "--depth", "1", "https://github.com/example/repo.git", "/home/test/.bentos-labtmp/workspace-1"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("cloned")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "HEAD"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("head123")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "--verify", "origin/main^{commit}"},
-		},
-		Result: commandrunner.Result{Stdout: []byte("abc123")},
-	})
-	runner.Enqueue(commandrunner.CommandStep{
-		Expected: commandrunner.CommandCall{
-			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "rev-parse", "--verify", "feature/ref^{commit}"},
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "feature/ref^{commit}"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("def456")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "merge-base", "origin/main", "feature/ref"},
+			Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("head123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "origin/main^{commit}"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("abc123")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "feature/ref^{commit}"},
+		},
+		Result: commandrunner.Result{Stdout: []byte("def456")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "merge-base", "origin/main", "feature/ref"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("merge123")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "diff", "--name-only", "--diff-filter=ACMRTUXB", "merge123..feature/ref"},
+			Args: []string{"-C", workspaceDir, "diff", "--name-only", "--diff-filter=ACMRTUXB", "merge123..feature/ref"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("main.go\n")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "show", "feature/ref:main.go"},
+			Args: []string{"-C", workspaceDir, "show", "feature/ref:main.go"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("package main\n")},
 	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
-			Args: []string{"-C", "/home/test/.bentos-labtmp/workspace-1", "diff", "merge123..feature/ref", "--", "main.go"},
+			Args: []string{"-C", workspaceDir, "diff", "merge123..feature/ref", "--", "main.go"},
 		},
 		Result: commandrunner.Result{Stdout: []byte("diff --git a/main.go b/main.go")},
 	})
@@ -740,6 +745,14 @@ func TestHostCodeEnvironment_LoadChangedFilesFetchesWhenRefMissing(t *testing.T)
 	fetchedRef := localFetchedRefName("feature/ref")
 
 	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "feature/ref^{commit}"},
+		},
+		Result: commandrunner.Result{Stderr: []byte("fatal: Needed a single revision")},
+		Err:    errors.New("exit status 128"),
+	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",
@@ -857,6 +870,14 @@ func TestHostCodeEnvironment_LoadChangedFilesReturnsErrorWhenRefStillMissingAfte
 	workspaceDir := t.TempDir()
 	fetchedRef := localFetchedRefName("feature/ref")
 	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{
+			Name: "git",
+			Args: []string{"-C", workspaceDir, "rev-parse", "--verify", "feature/ref^{commit}"},
+		},
+		Result: commandrunner.Result{Stderr: []byte("fatal: Needed a single revision")},
+		Err:    errors.New("exit status 128"),
+	})
 	runner.Enqueue(commandrunner.CommandStep{
 		Expected: commandrunner.CommandCall{
 			Name: "git",

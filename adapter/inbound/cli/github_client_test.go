@@ -11,9 +11,11 @@ type fakeGitHubClient struct {
 	pullRequestInfo    domain.ChangeRequestInfo
 	issue              domain.Issue
 	issueComments      []domain.IssueComment
+	resolveRepositoryCalls int
 }
 
 func (f *fakeGitHubClient) ResolveRepository(_ context.Context, _ string) (string, error) {
+	f.resolveRepositoryCalls++
 	return f.resolvedRepository, nil
 }
 
@@ -48,4 +50,3 @@ func (f *fakeGitHubClient) GetReviewComment(_ context.Context, _ string, _ int, 
 func (f *fakeGitHubClient) ListReviewComments(_ context.Context, _ string, _ int) ([]domain.ReviewComment, error) {
 	return nil, nil
 }
-
