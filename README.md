@@ -68,7 +68,7 @@ peer install glab --login
 ```
 
 ***Notes***
-- Configure **Git** credentials to access private repositories.
+- Configure Git credentials to enable access to private repositories.
 - Authenticate with **Opencode** to use higher-performance coding models.
 - You can install above tools manually without using `peer install`. Refer to [Dependencies installation](docs/dependencies.md).
 
@@ -91,12 +91,12 @@ peer webhook --vcs-provider github+gitlab
 peer review --head @staged
 ```
 
-- Review the local code changes (including staged and unstaged) in the current repository against master:
+- Review the local code changes (including staged and unstaged) in the current repository against `master`:
 ```bash
 peer review --base master --head @all
 ```
 
-- Generate overview of the change request 123 in the current repository:
+- Generate overview of the change request [123]() in the current repository:
 ```bash
 peer overview --change-request 123
 ```
@@ -111,7 +111,7 @@ peer overview --vcs-provider github --change-request 123
 peer overview --change-request 123 --publish
 ```
 
-- Answer to a specific comment (issuecomment-1234567890) in change request 123:
+- Answer to a specific comment ([issuecomment-1234567890]()) in change request [123]():
 ```bash
 peer replycomment --change-request 123 --comment-id issuecomment-1234567890
 ```
