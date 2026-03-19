@@ -91,6 +91,18 @@ type AutogenGenerator interface {
 	Generate(ctx context.Context, payload AutogenPayload) (string, error)
 }
 
+// CommitMessagePayload is the complete commit message prompt payload.
+type CommitMessagePayload struct {
+	Input       domain.ChangeRequestInput
+	Staged      bool
+	Environment uccontracts.CodeEnvironment
+}
+
+// CommitMessageGenerator creates commit messages from changed content.
+type CommitMessageGenerator interface {
+	GenerateCommitMessage(ctx context.Context, payload CommitMessagePayload) (string, error)
+}
+
 // ReviewPublishResult is output passed to a concrete publisher.
 type ReviewPublishResult struct {
 	Target         domain.ChangeRequestTarget
@@ -198,4 +210,24 @@ type AutogenExecutionResult struct {
 // AutogenUseCase defines autogen execution behavior.
 type AutogenUseCase interface {
 	Execute(ctx context.Context, request AutogenRequest) (AutogenExecutionResult, error)
+}
+
+// CommitRequest is the commit-usecase input.
+type CommitRequest struct {
+	Input         domain.ChangeRequestInput
+	CommitMessage string
+	Commit        bool
+	StageAll      bool
+	Environment   uccontracts.CodeEnvironment
+}
+
+// CommitExecutionResult is the commit-usecase output.
+type CommitExecutionResult struct {
+	CommitMessage string
+	Committed     bool
+}
+
+// CommitUseCase defines commit execution behavior.
+type CommitUseCase interface {
+	Execute(ctx context.Context, request CommitRequest) (CommitExecutionResult, error)
 }

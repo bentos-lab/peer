@@ -12,15 +12,16 @@ description: >
   - create an overview of code changes
   - generate documentation or tests from code changes
   - reply to comments in a PR/MR
+  - generate commit messages and commit local changes
 ---
 
 ## Overview
 
-`peer` is a CLI that reviews and summarizes pull/merge requests, replies to PR comments, and can generate docs/tests/comments. It works both on PR/MR contexts and on local changes or diffs in a repository.
+`peer` is a CLI that reviews and summarizes pull/merge requests, replies to PR comments, and can generate docs/tests/comments and commit messages for local changes. It works both on PR/MR contexts and on local changes or diffs in a repository.
 
 ## Workflow
 
-1. Choose the suitable action (review, overview, replycomment, autogen) and execution mode (PR/MR or local change/diff).
+1. Choose the suitable action (review, overview, replycomment, autogen, commit) and execution mode (PR/MR or local change/diff).
 2. Must read the guidance in [reference guide](#reference-guide) of the corresponding action.
 3. Run the appropriate subcommand follow by reference docs.
 4. Interpret output and summarize results for the user. No need to inspect any more files. Note that only focus on [INFO] or above log message, ignore [DEBUG] or [TRACE].
@@ -33,6 +34,7 @@ description: >
 - [references/overview.md](references/overview.md): Summarize a change request or local diff.
 - [references/replycomment.md](references/replycomment.md): Reply to a PR comment or a specific question.
 - [references/autogen.md](references/autogen.md): Generate docs/tests/comments for a change request or local diff.
+- [references/commit.md](references/commit.md): Generate commit message and commit local changes.
 
 ## Note
 - Before executing any command related to remote VCS, ask whether the result should be published (e.g., as PR/MR comments) or printed to the console. If this is a local command, no need to ask.

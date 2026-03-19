@@ -37,6 +37,10 @@ func (e *autogenTestEnvironment) ReadFile(_ context.Context, _ string, _ string)
 	return "", false, nil
 }
 
+func (e *autogenTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *autogenTestEnvironment) PushChanges(_ context.Context, opts domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	e.pushCalls++
 	e.lastOptions = opts

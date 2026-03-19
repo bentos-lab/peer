@@ -62,6 +62,10 @@ func (e *autogenUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _ 
 	return "", false, nil
 }
 
+func (e *autogenUseCaseTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *autogenUseCaseTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }

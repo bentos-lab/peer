@@ -15,6 +15,7 @@ import (
 	"github.com/bentos-lab/peer/usecase"
 	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 	"github.com/bentos-lab/peer/wiring"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
@@ -133,6 +134,10 @@ func (e *mainTestCodeEnvironment) ReadFile(_ context.Context, _ string, _ string
 	return "", false, nil
 }
 
+func (e *mainTestCodeEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *mainTestCodeEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }
@@ -172,6 +177,9 @@ func minimalPeerDeps() peerDeps {
 			return nil, nil
 		},
 		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		buildCommitCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.CommitCommand, error) {
 			return nil, nil
 		},
 		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
@@ -266,6 +274,9 @@ func TestRunCLIResolvesSuggestFlagPrecedence(t *testing.T) {
 				buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 					return nil, nil
 				},
+				buildCommitCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.CommitCommand, error) {
+					return nil, nil
+				},
 				buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
 					return nil, nil
 				},
@@ -318,6 +329,9 @@ func TestRunCLIOverviewSubcommandForcesOverviewOnly(t *testing.T) {
 		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
 			return nil, nil
 		},
+		buildCommitCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.CommitCommand, error) {
+			return nil, nil
+		},
 		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
 			return nil, nil
 		},
@@ -361,6 +375,9 @@ func TestCLIAutoDetectVCSProviderFromRepo(t *testing.T) {
 			return nil, nil
 		},
 		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		buildCommitCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.CommitCommand, error) {
 			return nil, nil
 		},
 		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
@@ -407,6 +424,9 @@ func TestCLIAutoDetectVCSProviderFromOriginURL(t *testing.T) {
 			return cliinbound.NewOverviewCommand(builder, resolver, &mainTestCodeEnvironmentFactory{}, &mainTestRecipeLoader{}, nil), nil
 		},
 		buildAutogenCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.AutogenCommand, error) {
+			return nil, nil
+		},
+		buildCommitCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.CommitCommand, error) {
 			return nil, nil
 		},
 		buildReplyCommentCommand: func(_ config.Config, _ wiring.CLILLMOptions, _ string) (*cliinbound.ReplyCommentCommand, error) {
@@ -584,4 +604,74 @@ func TestCLIUnknownSubcommandDoesNotPrintUsage(t *testing.T) {
 	})
 	require.Contains(t, stderr, "Error: unknown command")
 	require.NotContains(t, stderr, "Usage:")
+}
+
+func TestParseConfirmFlag(t *testing.T) {
+	testCases := []struct {
+		name      string
+		value     string
+		set       bool
+		want      *bool
+		expectErr bool
+	}{
+		{
+			name:  "unset",
+			value: "",
+			set:   false,
+		},
+		{
+			name:  "true",
+			value: "true",
+			set:   true,
+			want:  boolPointer(true),
+		},
+		{
+			name:  "yes mixed case",
+			value: " YeS ",
+			set:   true,
+			want:  boolPointer(true),
+		},
+		{
+			name:  "false",
+			value: "false",
+			set:   true,
+			want:  boolPointer(false),
+		},
+		{
+			name:  "no mixed case",
+			value: " No ",
+			set:   true,
+			want:  boolPointer(false),
+		},
+		{
+			name:      "invalid",
+			value:     "maybe",
+			set:       true,
+			expectErr: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			var confirm string
+			cmd.Flags().StringVar(&confirm, "confirm", "", "confirm commit message")
+			if testCase.set {
+				require.NoError(t, cmd.Flags().Set("confirm", testCase.value))
+			}
+
+			confirmPtr, err := parseConfirmFlag(cmd, confirm)
+			if testCase.expectErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if testCase.want == nil {
+				require.Nil(t, confirmPtr)
+				return
+			}
+			require.NotNil(t, confirmPtr)
+			require.Equal(t, *testCase.want, *confirmPtr)
+		})
+	}
 }

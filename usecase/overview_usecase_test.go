@@ -70,6 +70,10 @@ func (e *overviewUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _
 	return "", false, errors.New("not implemented")
 }
 
+func (e *overviewUseCaseTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *overviewUseCaseTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, errors.New("not implemented")
 }

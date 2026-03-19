@@ -188,6 +188,38 @@ func (e *HostCodeEnvironment) WorkspaceDir() string {
 	return strings.TrimSpace(e.workspaceDir)
 }
 
+// CommitChanges commits workspace changes.
+func (e *HostCodeEnvironment) CommitChanges(ctx context.Context, opts domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	workspaceDir, err := e.workspaceDirForRun()
+	if err != nil {
+		return domain.CodeEnvironmentCommitResult{}, err
+	}
+
+	commitMessage := strings.TrimSpace(opts.CommitMessage)
+	if commitMessage == "" {
+		return domain.CodeEnvironmentCommitResult{}, fmt.Errorf("commit message is required")
+	}
+
+	if opts.StageAll {
+		if _, err := e.git(ctx, workspaceDir, "add", "-A"); err != nil {
+			return domain.CodeEnvironmentCommitResult{}, err
+		}
+	}
+
+	staged, err := e.git(ctx, workspaceDir, "diff", "--cached", "--name-only")
+	if err != nil {
+		return domain.CodeEnvironmentCommitResult{}, err
+	}
+	if strings.TrimSpace(string(staged.Stdout)) == "" {
+		return domain.CodeEnvironmentCommitResult{}, domain.ErrNoCodeChanges
+	}
+
+	if _, err := e.git(ctx, workspaceDir, "commit", "-m", commitMessage); err != nil {
+		return domain.CodeEnvironmentCommitResult{}, err
+	}
+	return domain.CodeEnvironmentCommitResult{Committed: true}, nil
+}
+
 // PushChanges commits and pushes workspace changes to the target branch.
 func (e *HostCodeEnvironment) PushChanges(ctx context.Context, opts domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	workspaceDir, err := e.workspaceDirForRun()

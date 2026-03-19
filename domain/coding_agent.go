@@ -30,6 +30,17 @@ type CodeEnvironmentPushResult struct {
 	Pushed bool
 }
 
+// CodeEnvironmentCommitOptions contains inputs for committing code changes.
+type CodeEnvironmentCommitOptions struct {
+	CommitMessage string
+	StageAll      bool
+}
+
+// CodeEnvironmentCommitResult captures commit results for a code environment.
+type CodeEnvironmentCommitResult struct {
+	Committed bool
+}
+
 // CodingAgentRunOptions contains run-time inputs for one coding task execution.
 type CodingAgentRunOptions struct {
 	Provider string
