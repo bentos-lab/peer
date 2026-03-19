@@ -2,17 +2,18 @@
 
 **Peer** is a CLI tool that analyzes your local changes or pull requests to generate concise overviews, review feedback, and actionable suggestions—helping you understand, document, and iterate on code faster.
 
+## Supported Features
 
-Docs: [Webhooks](/docs/webhooks.md) | [Configuration](/docs/configuration.md) | [Custom Recipe](/docs/custom-recipe.md) | [Architecture](/docs/architecture.md)
-
-## Supported Flows
-
-| Flow                               | Supported          |
-| ---------------------------------- | ------------------ |
-| GitHub webhook (`/webhook/github`) | :white_check_mark: |
-| GitLab webhook (`/webhook/gitlab`) | :white_check_mark: |
-| Local CLI review                   | :white_check_mark: |
-| Integrated Agent Skill             | :white_check_mark: |
+| Flow                         | Supported          |
+| ---------------------------- | ------------------ |
+| Review                       | :white_check_mark: |
+| Generate overview            | :white_check_mark: |
+| Auto-generate docs and tests | :white_check_mark: |
+| Auto reply comment           | :white_check_mark: |
+| Per-repo custom recipe       | :white_check_mark: |
+| Local CLI                    | :white_check_mark: |
+| GitHub/Gitlab webhook        | :white_check_mark: |
+| Integrated Agent Skill       | :white_check_mark: |
 
 ## Install
 
@@ -37,8 +38,9 @@ Prerequisites:
 go install https://github.com/bentos-lab/peer/cmd/peer
 ```
 
-## Auto-update
+### Auto-update
 
+Auto update `peer` to the latest stable version:
 ```bash
 peer update self
 ```
@@ -55,13 +57,7 @@ peer install git
 peer install opencode
 ```
 
-***Notes***
-- Configure **Git** credentials to access private repositories.
-- Authenticate with **Opencode** to use higher-performance coding models.
-
-
-#### (Optional) Integration with remote VCS
-
+Based on your remote VCS, install and authenticate with these following tools:
 - GitHub
 ```bash
 peer install gh --login
@@ -72,11 +68,16 @@ peer install gh --login
 peer install glab --login
 ```
 
+***Notes***
+- Configure Git credentials to enable access to private repositories.
+- Authenticate with **Opencode** to use higher-performance coding models.
+- You can install above tools manually without using `peer install`. Refer to [Dependencies installation](docs/dependencies.md).
+
 ### Webhook
 
 1. Configure webhook environments and triggers. Refer to [Webhook setup guide](/docs/webhooks.md).
 
-2. Run the webhook server:
+2. Run the webhook server to listen and handle events:
 
 ```bash
 peer webhook --vcs-provider github
@@ -84,34 +85,44 @@ peer webhook --vcs-provider gitlab
 peer webhook --vcs-provider github+gitlab
 ```
 
-Webhook endpoints:
-
-- `POST /webhook/github`
-- `POST /webhook/gitlab`
-
 ### Local
 
-Review change request 123 in the current repository and print the result to the console:
+- Review the local staged code changes in the current repository:
 ```bash
-peer review --change-request 123
+peer review --head @staged
 ```
 
-If the repository uses a self-managed remote, specify the VCS provider and publish the result as a comment on the Pull Request:
+- Review the local code changes (including staged and unstaged) in the current repository against `master`:
+```bash
+peer review --base master --head @all
+```
+
+- Generate overview of the change request #123 in the current repository:
+```bash
+peer overview --change-request 123
+```
+
+- If the repository uses a self-managed remote, explicitly specify the VCS provider:
 ```bash
 peer overview --vcs-provider github --change-request 123
 ```
 
-Reply to a specific comment (issuecomment-1234567890) in change request 123 and print the result to the console:
+- Publish the overview as a comment on the change request:
 ```bash
-peer replycomment --vcs-provider github --change-request 123 --comment-id issuecomment-1234567890
+peer overview --change-request 123 --publish
 ```
 
-Generate an overview for a specific repository and publish the result
+- Answer to a specific comment (#issuecomment-1234567890) in change request #123:
 ```bash
-peer overview --repo https://github.com/user/repo.git --change-request 123 --publish
+peer replycomment --change-request 123 --comment-id issuecomment-1234567890
 ```
 
-See `peer --help` for full CLI usage.
+- Publish the answer as a reply.
+```bash
+peer replycomment --change-request 123 --comment-id issuecomment-1234567890 --publish
+```
+
+*See `peer --help` for full CLI usage.*
 
 ## Custom Recipe
 
@@ -127,20 +138,18 @@ See [Configuration](/docs/configuration.md).
 
 Use the following url to install `peer` skill into your coding agent
 
-```
-https://github.com/bentos-lab/peer/tree/master/skills/peer
-```
+[https://github.com/bentos-lab/peer/tree/master/skills/peer](https://github.com/bentos-lab/peer/tree/master/skills/peer)
 
-> ***Important***: In coding agents which support **sandbox** mode, you should run with **full permission** instead.
+> ***Important***: In coding agents which support **sandbox** mode, you should run in **full permission** instead.
 >
-> Our CLI requires to read credentials from filesystem to interact with git, github, gitlab, opencode.
+> Our CLI requires to read credentials from filesystem to interact with `git`, `gh`, `glab`, and `opencode`. Sandbox mode can prevent to use those tools correctly.
 
-When you updated the tool, you should also update the skill in your coding agent, run this command to auto-discover common skill patterns:
+When you updated `peer`, you should also update the skill in your coding agent. Run this command to auto discover common skill directories and update them:
 ```bash
 peer update skills
 ```
 
-Or specify which skill folder should be updated:
+Or you can specify which skill directories should be updated:
 ```bash
-peer update skills --path ~/.agent/skills/peer
+peer update skills --path ~/.agent/skills/peer --path ./.agent/skills/peer
 ```
