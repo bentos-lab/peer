@@ -36,8 +36,8 @@ type HostCodeEnvironment struct {
 	mu           sync.Mutex
 }
 
-const hostCodeEnvironmentTempBaseDirName = ".bentos-labtmp"
-const hostCodeEnvironmentFetchedRefPrefix = "refs/bentos/fetched/"
+const hostCodeEnvironmentTempBaseDirName = ".peertmp"
+const hostCodeEnvironmentFetchedRefPrefix = "refs/peer/fetched/"
 
 // NewHostCodeEnvironment creates a host environment with injected dependencies.
 func NewHostCodeEnvironment(cfg HostCodeEnvironmentConfig) *HostCodeEnvironment {
