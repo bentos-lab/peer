@@ -6,8 +6,10 @@ import stdlogger "github.com/bentos-lab/peer/shared/logger/stdlogger"
 func LogLevelOverrideFromVerbosity(verbosity int) string {
 	switch {
 	case verbosity <= 0:
-		return string(stdlogger.LevelInfo)
+		return string(stdlogger.LevelWarning)
 	case verbosity == 1:
+		return string(stdlogger.LevelInfo)
+	case verbosity == 2:
 		return string(stdlogger.LevelDebug)
 	default:
 		return string(stdlogger.LevelTrace)

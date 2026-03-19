@@ -26,4 +26,4 @@ peer commit --confirm=false -vv
 - `--code-agent`: override coding agent name
 - `--code-agent-provider`: override coding agent provider
 - `--code-agent-model`: override coding agent model
-- `--verbose`, `-v`: increase log verbosity
+- `--verbose`, `-v`: increase log verbosity (`-v`=info, `-vv`=debug, `-vvv`=trace, default=warning)

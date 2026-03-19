@@ -8,8 +8,7 @@ import (
 
 // GhInstaller installs the GitHub CLI.
 type GhInstaller struct {
-	base            baseInstaller
-	authHintPrinted bool
+	base baseInstaller
 }
 
 // NewGhInstaller creates a GitHub CLI installer with optional deps.
@@ -30,7 +29,6 @@ func (i *GhInstaller) IsGhAuthenticated(ctx context.Context) (bool, error) {
 	if err := i.base.run(ctx, "gh", "auth", "status"); err == nil {
 		return true, nil
 	}
-	i.printAuthStatusHintOnce()
 	return false, nil
 }
 
@@ -98,7 +96,6 @@ func (i *GhInstaller) EnsureGhAuthenticated(ctx context.Context) error {
 	if err := i.base.run(ctx, "gh", "auth", "status"); err == nil {
 		return nil
 	}
-	i.printAuthStatusHintOnce()
 	if !i.base.isTerminal() {
 		_, _ = fmt.Fprintln(i.base.stderr, "gh is not authenticated. Skipping 'gh auth login' because no TTY is available.")
 		return nil
@@ -116,14 +113,6 @@ func (i *GhInstaller) EnsureGhAuthenticated(ctx context.Context) error {
 		return err
 	}
 	return nil
-}
-
-func (i *GhInstaller) printAuthStatusHintOnce() {
-	if i.authHintPrinted {
-		return
-	}
-	i.authHintPrinted = true
-	_, _ = fmt.Fprintln(i.base.stderr, "Note: gh auth status reads credential files; in sandboxed runs you may need to grant read permission to those files.")
 }
 
 func (i *GhInstaller) installGhLinux(ctx context.Context) error {

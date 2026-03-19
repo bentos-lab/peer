@@ -24,7 +24,7 @@ LLM selection (applies only to this subcommand):
 - `--code-agent-model` (default: from config/env) coding agent model override. Allowed values: any non-empty string (provider-specific).
 
 Verbosity:
-- `-v, --verbose` (default: info) increase log verbosity. `-v` = debug, `-vv` = trace.
+- `-v, --verbose` (default: warning) increase log verbosity. `-v` = info, `-vv` = debug, `-vvv` = trace.
 
 ## Defaults and behavior
 - If `--vcs-provider` is not set, peer auto-detects it from `--repo` or `git config remote.origin.url`.
