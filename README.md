@@ -4,12 +4,15 @@
 
 ## Supported Features
 
-| Flow                               | Supported          |
-| ---------------------------------- | ------------------ |
-| GitHub webhook (`/webhook/github`) | :white_check_mark: |
-| GitLab webhook (`/webhook/gitlab`) | :white_check_mark: |
-| Local CLI review                   | :white_check_mark: |
-| Integrated Agent Skill             | :white_check_mark: |
+| Flow                         | Supported          |
+| ---------------------------- | ------------------ |
+| Review                       | :white_check_mark: |
+| Generate overview            | :white_check_mark: |
+| Auto-generate docs and tests | :white_check_mark: |
+| Auto reply comment           | :white_check_mark: |
+| Local CLI                    | :white_check_mark: |
+| GitHub/Gitlab webhook        | :white_check_mark: |
+| Integrated Agent Skill       | :white_check_mark: |
 
 ## Install
 
