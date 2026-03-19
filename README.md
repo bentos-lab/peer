@@ -10,6 +10,7 @@
 | Generate overview            | :white_check_mark: |
 | Auto-generate docs and tests | :white_check_mark: |
 | Auto reply comment           | :white_check_mark: |
+| Auto commit                  | :white_check_mark: |
 | Per-repo custom recipe       | :white_check_mark: |
 | Local CLI                    | :white_check_mark: |
 | GitHub/Gitlab webhook        | :white_check_mark: |
@@ -120,6 +121,16 @@ peer replycomment --change-request 123 --comment-id issuecomment-1234567890
 - Publish the answer as a reply.
 ```bash
 peer replycomment --change-request 123 --comment-id issuecomment-1234567890 --publish
+```
+
+- Generate a commit message and commit all local changes:
+```bash
+peer commit
+```
+
+- Commit staged changes only:
+```bash
+peer commit --staged
 ```
 
 *See `peer --help` for full CLI usage.*

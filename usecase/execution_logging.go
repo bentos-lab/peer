@@ -80,6 +80,8 @@ func title(flow string) string {
 		return "Overview"
 	case "autogen":
 		return "Autogen"
+	case "commit":
+		return "Commit"
 	case "change request":
 		return "Change request"
 	case "replycomment":

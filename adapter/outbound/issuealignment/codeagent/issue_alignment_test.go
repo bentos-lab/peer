@@ -43,6 +43,10 @@ func (e *issueAlignmentTestEnvironment) ReadFile(_ context.Context, _ string, _ 
 	return "", false, nil
 }
 
+func (e *issueAlignmentTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *issueAlignmentTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }

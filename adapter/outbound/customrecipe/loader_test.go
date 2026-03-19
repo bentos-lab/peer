@@ -28,6 +28,10 @@ func (e *recipeTestEnvironment) ReadFile(_ context.Context, path string, _ strin
 	return content, ok, nil
 }
 
+func (e *recipeTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *recipeTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }

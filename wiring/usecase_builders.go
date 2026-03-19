@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	autocommitcodingagent "github.com/bentos-lab/peer/adapter/outbound/autocommit/codingagent"
 	autogencodingagent "github.com/bentos-lab/peer/adapter/outbound/autogen/codingagent"
 	codeenvhost "github.com/bentos-lab/peer/adapter/outbound/codeenv/host"
 	customrecipe "github.com/bentos-lab/peer/adapter/outbound/customrecipe"
@@ -126,6 +127,25 @@ func BuildAutogenUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride
 		publisher,
 		deps.Logger,
 	)
+}
+
+// BuildCommitUseCase builds a commit usecase.
+func BuildCommitUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride string) (usecase.CommitUseCase, error) {
+	deps, err := BuildCommonDependencies(cfg, opts, logLevelOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	generator, err := autocommitcodingagent.NewGenerator(autocommitcodingagent.Config{
+		Agent:    deps.CodingAgentConfig.Agent,
+		Provider: deps.CodingAgentConfig.Provider,
+		Model:    deps.CodingAgentConfig.Model,
+	}, deps.Logger)
+	if err != nil {
+		return nil, err
+	}
+
+	return usecase.NewCommitUseCase(generator, deps.Logger)
 }
 
 // BuildReplyCommentUseCase builds a reply comment usecase.

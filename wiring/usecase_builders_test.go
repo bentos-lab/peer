@@ -25,6 +25,12 @@ func TestBuildAutogenUseCaseRejectsMissingCodingAgent(t *testing.T) {
 	require.Contains(t, err.Error(), "coding agent")
 }
 
+func TestBuildCommitUseCaseRejectsMissingCodingAgent(t *testing.T) {
+	_, err := BuildCommitUseCase(config.Config{}, CLILLMOptions{ForceCLIPublishers: true}, "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "coding agent")
+}
+
 func TestBuildReplyCommentUseCaseRejectsMissingCodingAgent(t *testing.T) {
 	_, err := BuildReplyCommentUseCase(config.Config{}, CLILLMOptions{ForceCLIPublishers: true}, "")
 	require.Error(t, err)

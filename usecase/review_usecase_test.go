@@ -66,6 +66,10 @@ func (e *reviewUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _ s
 	return "", false, errors.New("not implemented")
 }
 
+func (e *reviewUseCaseTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *reviewUseCaseTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, errors.New("not implemented")
 }

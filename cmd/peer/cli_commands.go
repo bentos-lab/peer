@@ -45,6 +45,7 @@ type peerDeps struct {
 	buildReviewCommand       func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReviewCommand, error)
 	buildOverviewCommand     func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.OverviewCommand, error)
 	buildAutogenCommand      func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.AutogenCommand, error)
+	buildCommitCommand       func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.CommitCommand, error)
 	buildReplyCommentCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.ReplyCommentCommand, error)
 	buildGitHubHandler       func(config.Config) (http.Handler, error)
 	buildGitLabHandler       func(config.Config) (http.Handler, *gitlabinbound.HookSyncer, error)
@@ -96,6 +97,15 @@ func defaultPeerDeps() peerDeps {
 				GitLab: gitlabvcs.NewCLIClientWithConfig(gitlabvcs.CLIClientConfig{Host: opts.VCSHost}),
 			}
 			return cliinbound.NewAutogenCommand(builder, resolver, deps.CodeEnvironmentFactory, deps.RecipeLoader, deps.Logger), nil
+		},
+		buildCommitCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.CommitCommand, error) {
+			deps, err := wiring.BuildCommonDependencies(cfg, opts, logLevelOverride)
+			if err != nil {
+				return nil, err
+			}
+			return cliinbound.NewCommitCommand(func(_ string) (usecase.CommitUseCase, error) {
+				return wiring.BuildCommitUseCase(cfg, opts, logLevelOverride)
+			}, deps.CodeEnvironmentFactory, deps.Logger), nil
 		},
 		buildReplyCommentCommand: func(cfg config.Config, opts wiring.CLILLMOptions, logLevelOverride string) (*cliinbound.ReplyCommentCommand, error) {
 			builder := func(repoURL string) (usecase.ReplyCommentUseCase, error) {
@@ -153,6 +163,7 @@ func newRootCommand(ctx context.Context, deps peerDeps, version string, commit s
 	cmd.AddCommand(newReviewSubcommand(ctx, deps.loadConfig, deps.buildReviewCommand, deps.resolveOriginURL))
 	cmd.AddCommand(newOverviewSubcommand(ctx, deps.loadConfig, deps.buildOverviewCommand, deps.resolveOriginURL))
 	cmd.AddCommand(newAutogenSubcommand(ctx, deps.loadConfig, deps.buildAutogenCommand, deps.resolveOriginURL))
+	cmd.AddCommand(newCommitSubcommand(ctx, deps.loadConfig, deps.buildCommitCommand))
 	cmd.AddCommand(newReplyCommentSubcommand(ctx, deps.loadConfig, deps.buildReplyCommentCommand, deps.resolveOriginURL))
 	cmd.AddCommand(newInstallSubcommand(ctx))
 	cmd.AddCommand(newUpdateSubcommand(ctx, version))
@@ -424,6 +435,70 @@ func newAutogenSubcommand(
 	flags.StringVar(&llmOpenAIBaseURL, "llm-openai-base-url", "", "OpenAI compatible base URL override (empty to use coding-agent LLM, env: LLM_OPENAI_BASE_URL)")
 	flags.StringVar(&llmOpenAIModel, "llm-openai-model", "", "OpenAI compatible model override (env: LLM_OPENAI_MODEL)")
 	flags.StringVar(&llmOpenAIAPIKey, "llm-openai-api-key", "", "OpenAI compatible API key override (env: LLM_OPENAI_API_KEY)")
+	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
+	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
+	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
+	flags.CountVarP(&verbosity, "verbose", "v", "increase log verbosity (-v=debug, -vv=trace, default=info)")
+	return sub
+}
+
+func newCommitSubcommand(
+	ctx context.Context,
+	loadConfig func() (config.Config, error),
+	buildCommand func(config.Config, wiring.CLILLMOptions, string) (*cliinbound.CommitCommand, error),
+) *cobra.Command {
+	var staged bool
+	var confirm string
+	var codeAgent string
+	var codeAgentProvider string
+	var codeAgentModel string
+	var verbosity int
+
+	sub := &cobra.Command{
+		Use:   "commit",
+		Short: "Generate a commit message and commit changes",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts, logOverride, err := resolveLLMOptions(cmd, "", "", "", codeAgent, codeAgentProvider, codeAgentModel, verbosity)
+			if err != nil {
+				return err
+			}
+			cfg, err := loadConfig()
+			if err != nil {
+				return cliConfigLoadError{cause: err}
+			}
+			configOverrides, err := resolveConfigOverrides(cmd, "", "", "", codeAgent, codeAgentProvider, codeAgentModel)
+			if err != nil {
+				return err
+			}
+			cfg = sharedcli.ApplyConfigOverrides(cfg, configOverrides)
+
+			startupLogger, err := wiring.BuildLogger(cfg, logOverride)
+			if err != nil {
+				return err
+			}
+			if err := logLLMSelection(startupLogger, cfg, opts); err != nil {
+				return err
+			}
+
+			cliCommand, err := buildCommand(cfg, opts, logOverride)
+			if err != nil {
+				return err
+			}
+
+			confirmPtr, err := parseConfirmFlag(cmd, confirm)
+			if err != nil {
+				return err
+			}
+			return cliCommand.Run(ctx, cfg, cliinbound.CommitRunParams{
+				Staged:  staged,
+				Confirm: confirmPtr,
+			}, cmd.OutOrStdout(), cmd.InOrStdin())
+		},
+	}
+
+	flags := sub.Flags()
+	flags.BoolVar(&staged, "staged", false, "commit staged changes only")
+	flags.StringVar(&confirm, "confirm", "", "confirm commit message (true/yes=commit, false/no=print only)")
 	flags.StringVar(&codeAgent, "code-agent", "", "coding agent override (empty to use config, env: CODING_AGENT_NAME)")
 	flags.StringVar(&codeAgentProvider, "code-agent-provider", "", "coding agent provider override (empty to use config, env: CODING_AGENT_PROVIDER)")
 	flags.StringVar(&codeAgentModel, "code-agent-model", "", "coding agent model override (empty to use config, env: CODING_AGENT_MODEL)")
@@ -794,6 +869,26 @@ func boolPointerIfChanged(cmd *cobra.Command, name string, value bool) *bool {
 		return nil
 	}
 	return &value
+}
+
+func parseConfirmFlag(cmd *cobra.Command, value string) (*bool, error) {
+	if cmd == nil {
+		return nil, errors.New("missing command")
+	}
+	if !cmd.Flags().Changed("confirm") {
+		return nil, nil
+	}
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
+	case "true", "yes":
+		parsed := true
+		return &parsed, nil
+	case "false", "no":
+		parsed := false
+		return &parsed, nil
+	default:
+		return nil, fmt.Errorf("invalid value for --confirm: %q (use true/yes/false/no)", value)
+	}
 }
 
 func validateOpenAIStringFlagValue(value string) string {

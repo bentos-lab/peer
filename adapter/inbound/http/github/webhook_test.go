@@ -238,6 +238,10 @@ func (e *mockCodeEnvironment) ReadFile(_ context.Context, _ string, _ string) (s
 	return "", false, nil
 }
 
+func (e *mockCodeEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *mockCodeEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }

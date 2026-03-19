@@ -47,6 +47,10 @@ func (e *overviewTestEnvironment) ReadFile(_ context.Context, _ string, _ string
 	return "", false, nil
 }
 
+func (e *overviewTestEnvironment) CommitChanges(_ context.Context, _ domain.CodeEnvironmentCommitOptions) (domain.CodeEnvironmentCommitResult, error) {
+	return domain.CodeEnvironmentCommitResult{}, nil
+}
+
 func (e *overviewTestEnvironment) PushChanges(_ context.Context, _ domain.CodeEnvironmentPushOptions) (domain.CodeEnvironmentPushResult, error) {
 	return domain.CodeEnvironmentPushResult{}, nil
 }
