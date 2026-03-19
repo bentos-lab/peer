@@ -96,7 +96,7 @@ peer review --head @staged
 peer review --base master --head @all
 ```
 
-- Generate overview of the change request [123]() in the current repository:
+- Generate overview of the change request #123 in the current repository:
 ```bash
 peer overview --change-request 123
 ```
@@ -111,7 +111,7 @@ peer overview --vcs-provider github --change-request 123
 peer overview --change-request 123 --publish
 ```
 
-- Answer to a specific comment ([issuecomment-1234567890]()) in change request [123]():
+- Answer to a specific comment (#issuecomment-1234567890) in change request #123:
 ```bash
 peer replycomment --change-request 123 --comment-id issuecomment-1234567890
 ```
