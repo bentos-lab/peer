@@ -2,7 +2,7 @@
 
 **Peer** is a CLI tool that analyzes your local changes or pull requests to generate concise overviews, review feedback, and actionable suggestions—helping you understand, document, and iterate on code faster.
 
-## Supported Flows
+## Supported Features
 
 | Flow                               | Supported          |
 | ---------------------------------- | ------------------ |
