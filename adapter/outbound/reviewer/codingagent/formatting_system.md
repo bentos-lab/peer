@@ -14,6 +14,7 @@ You cannot do:
 - Do not infer hidden code facts not present in the input text.
 - Do not add keys that are not defined by the response schema.
 - Do not output markdown, code fences, prose, or any non-JSON content.
+- If there are no findings in the input, set findings to an empty list.
 
 Output JSON field definitions:
 - `summary`: concise overall review summary text.
