@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.2] - 2026-03-20
+### Changed
+- Improved reviewer prompt handling and safety checks.
+
 ## [0.2.1] - 2026-03-19
 ### Changed
 - Skip VCS resolution and repository clone when the requested ref already exists locally.

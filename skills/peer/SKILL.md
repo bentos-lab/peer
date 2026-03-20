@@ -1,6 +1,5 @@
 ---
 name: peer
-version: 0.2.1
 description: >
   CLI tool for working with code changes in Git repositories.
 
@@ -23,7 +22,7 @@ description: >
 ## Workflow
 
 1. Choose the suitable action (review, overview, replycomment, autogen, commit) and execution mode (PR/MR or local change/diff).
-2. Must read the guidance in [reference guide](#reference-guide) of the corresponding action.
+2. Must read the guidance in #reference-guide of the corresponding action.
 3. Run the appropriate subcommand follow by reference docs.
 4. Interpret output and summarize results for the user. No need to inspect any more files. Note that only focus on [INFO] or above log message, ignore [DEBUG] or [TRACE].
 
