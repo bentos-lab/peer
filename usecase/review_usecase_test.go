@@ -171,3 +171,96 @@ func TestReviewUseCaseExecutePassesSuggestionsDisabledToReviewer(t *testing.T) {
 	require.Equal(t, 1, reviewer.callCount)
 	require.False(t, reviewer.lastPayload.Suggestions)
 }
+
+func TestReviewUseCaseFiltersNitFindingsBeforePublishing(t *testing.T) {
+	environment := &reviewUseCaseTestEnvironment{}
+	reviewer := &reviewUseCaseTestReviewer{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "a.go",
+					StartLine: 1,
+					EndLine:   1,
+					Severity:  domain.FindingSeverityNit,
+					Title:     "Naming",
+					Detail:    "Nit detail.",
+				},
+				{
+					FilePath:  "b.go",
+					StartLine: 2,
+					EndLine:   2,
+					Severity:  domain.FindingSeverityMajor,
+					Title:     "Nil risk",
+					Detail:    "Major detail.",
+				},
+			},
+		},
+	}
+	publisher := &reviewUseCaseTestPublisher{}
+	useCase, err := NewReviewUseCase(
+		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
+		reviewer,
+		publisher,
+		nil,
+	)
+	require.NoError(t, err)
+
+	result, err := useCase.Execute(context.Background(), ReviewRequest{
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+			RepoURL: "https://github.com/org/repo.git",
+			Base:    "main",
+			Head:    "feature",
+		},
+		Environment: environment,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, publisher.callCount)
+	require.Len(t, publisher.lastResult.Findings, 1)
+	require.Equal(t, domain.FindingSeverityMajor, publisher.lastResult.Findings[0].Severity)
+	require.Len(t, result.Findings, 1)
+	require.Equal(t, domain.FindingSeverityMajor, result.Findings[0].Severity)
+}
+
+func TestReviewUseCaseSkipsPublishingWhenOnlyNitFindingsRemain(t *testing.T) {
+	environment := &reviewUseCaseTestEnvironment{}
+	reviewer := &reviewUseCaseTestReviewer{
+		result: LLMReviewResult{
+			Summary: "summary",
+			Findings: []domain.Finding{
+				{
+					FilePath:  "a.go",
+					StartLine: 1,
+					EndLine:   1,
+					Severity:  domain.FindingSeverityNit,
+					Title:     "Naming",
+					Detail:    "Nit detail.",
+				},
+			},
+		},
+	}
+	publisher := &reviewUseCaseTestPublisher{}
+	useCase, err := NewReviewUseCase(
+		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
+		reviewer,
+		publisher,
+		nil,
+	)
+	require.NoError(t, err)
+
+	result, err := useCase.Execute(context.Background(), ReviewRequest{
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo", ChangeRequestNumber: 42},
+			RepoURL: "https://github.com/org/repo.git",
+			Base:    "main",
+			Head:    "feature",
+		},
+		Environment: environment,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, publisher.callCount)
+	require.Empty(t, result.Messages)
+	require.Empty(t, result.Findings)
+	require.Empty(t, result.Summary)
+}

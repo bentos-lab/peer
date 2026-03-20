@@ -44,6 +44,7 @@ func TestBuildMessages_GroupsByFileAndAddsSummary(t *testing.T) {
 	require.Equal(t, "b.go", messages[1].FilePath)
 	require.Equal(t, domain.ReviewMessageTypeSummary, messages[2].Type)
 	require.Contains(t, messages[2].Body, "Found 3 potential issue(s)")
+	require.NotContains(t, messages[2].Body, "nit=")
 }
 
 func TestBuildMessages_UsesLLMSummaryWhenProvided(t *testing.T) {

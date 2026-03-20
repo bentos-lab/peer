@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bentos-lab/peer/domain"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 )
 
@@ -76,12 +77,22 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 	logStage(u.logger, "review", "review_diff", target, "success", reviewDiffStartedAt, "")
 	u.logger.Debugf("The LLM review produced %d findings.", len(llmResult.Findings))
 
+	filteredFindings := filterNonNitFindings(llmResult.Findings)
+	if len(filteredFindings) == 0 {
+		u.logger.Debugf("skipped_publish_no_findings: no non-NIT findings remained.")
+		return ReviewExecutionResult{
+			Messages: []domain.ReviewMessage{},
+			Findings: []domain.Finding{},
+			Summary:  "",
+		}, nil
+	}
+
 	publishStartedAt := time.Now()
-	messages := BuildMessages(llmResult.Findings, llmResult.Summary)
+	messages := BuildMessages(filteredFindings, llmResult.Summary)
 	publishInput := ReviewPublishResult{
 		Target:         request.Input.Target,
 		Messages:       messages,
-		Findings:       llmResult.Findings,
+		Findings:       filteredFindings,
 		Summary:        llmResult.Summary,
 		RecipeWarnings: request.Recipe.MissingPaths,
 	}
@@ -100,13 +111,24 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 		startedAt,
 		"Full execution took %d ms and produced %d findings with %d messages.",
 		time.Since(startedAt).Milliseconds(),
-		len(llmResult.Findings),
+		len(filteredFindings),
 		len(messages),
 	)
 
 	return ReviewExecutionResult{
 		Messages: messages,
-		Findings: llmResult.Findings,
+		Findings: filteredFindings,
 		Summary:  llmResult.Summary,
 	}, nil
+}
+
+func filterNonNitFindings(findings []domain.Finding) []domain.Finding {
+	filtered := make([]domain.Finding, 0, len(findings))
+	for _, finding := range findings {
+		if finding.Severity == domain.FindingSeverityNit {
+			continue
+		}
+		filtered = append(filtered, finding)
+	}
+	return filtered
 }
