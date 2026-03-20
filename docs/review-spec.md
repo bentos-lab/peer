@@ -120,13 +120,15 @@ Overview adapter (`adapter/outbound/overview/llm`) uses an independent prompt an
 
 For each review:
 - emit grouped messages by file/area that has findings
-- emit one summary message
+- ignore NIT findings when building review output
+- emit one summary message when there are remaining findings
 - do not emit "good/no issue" comments for clean files
+- when no non-NIT findings remain, publish nothing (including summary)
 
 ## Publishing Behavior
 
 - GitHub/GitLab: publish comments/notes only
-- CLI: print grouped messages + summary
+- CLI: print grouped messages + summary when findings remain
 - When overview is enabled, generation and publishing run in one flow.
 - GitHub overview comment is posted only on initial PR creation (`opened`).
 - Suggested changes are enabled only when configured (see [Configuration](/docs/configuration.md#environment-variables)).

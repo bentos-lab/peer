@@ -86,11 +86,10 @@ func defaultSummary(findings []domain.Finding) string {
 	}
 
 	return fmt.Sprintf(
-		"Found %d potential issue(s): critical=%d, major=%d, minor=%d, nit=%d.",
+		"Found %d potential issue(s): critical=%d, major=%d, minor=%d.",
 		len(findings),
 		countBySeverity[domain.FindingSeverityCritical],
 		countBySeverity[domain.FindingSeverityMajor],
 		countBySeverity[domain.FindingSeverityMinor],
-		countBySeverity[domain.FindingSeverityNit],
 	)
 }
