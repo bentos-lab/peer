@@ -135,3 +135,5 @@ Tests instructions:
 {{- else }}
 Do not generate any tests.
 {{- end }}
+
+- All generated content must be focused only the changes between HEAD and BASE. Do not generate for old content.

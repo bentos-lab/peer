@@ -110,8 +110,8 @@ Output guidance:
 - Do not add extra narrative outside these sections.
 - Do not group findings by file or category; output a direct finding list only.
 
-Extremely important:
-- If there are no issues with the changes, you can output only a summary. Do not try too hard to find issues.
+Important:
+- If there are no issues with the changes, output only a summary and no findings. Do not fabricate or force issues.
 
 Required output content:
 - `summary`:
