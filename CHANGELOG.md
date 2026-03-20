@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.0] - 2026-03-20
+### Added
+- Filter NIT findings before publishing review output.
+### Changed
+- Reordered job dependencies to run autogen before overview.
+
 ## [0.2.2] - 2026-03-20
 ### Changed
 - Improved reviewer prompt handling and safety checks.

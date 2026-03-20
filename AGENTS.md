@@ -86,7 +86,6 @@
   * Refer to `RELEASE.md` for the full process
   * Prepare required changes, including:
     * Generating `CHANGELOG.md` based on commit history since the previous version
-    * Updating version in `skills/peer/SKILL.md`
 * Before performing any write or git operation (commit, tag, push):
   * Ask for user confirmation
 * Do not execute the release automatically unless explicitly instructed by the user
