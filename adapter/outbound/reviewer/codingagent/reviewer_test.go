@@ -441,6 +441,36 @@ func TestReviewerReviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
 	require.NotContains(t, env.agent.lastTask, "git rev-parse --verify")
 }
 
+func TestReviewerReviewNormalizesMasterBaseToMain(t *testing.T) {
+	env := &reviewerTestEnvironment{
+		agent:        &reviewerTestAgent{},
+		changedFiles: []domain.ChangedFile{{Path: "a.go", DiffSnippet: "@@ -1 +1 @@\n-old\n+new"}},
+	}
+	formatter := &reviewerTestFormatter{output: map[string]any{
+		"summary":  "summary",
+		"findings": []any{},
+	}}
+
+	reviewer, err := NewReviewer(formatter, Config{Agent: "opencode", Provider: "openai", Model: "m"}, nil)
+	require.NoError(t, err)
+
+	_, err = reviewer.Review(context.Background(), usecase.LLMReviewPayload{
+		Environment: env,
+		Input: domain.ChangeRequestInput{
+			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
+			RepoURL: "https://example.com/repo.git",
+			Base:    "master",
+			Head:    "feature",
+		},
+		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
+		Suggestions: false,
+	})
+	require.NoError(t, err)
+	// "master" must be silently remapped to "main" before the task prompt is built.
+	require.Contains(t, env.agent.lastTask, "Base: main")
+	require.NotContains(t, env.agent.lastTask, "Base: master")
+}
+
 func TestReviewerReviewReturnsErrorWhenEnvironmentMissing(t *testing.T) {
 	formatter := &reviewerTestFormatter{output: map[string]any{
 		"summary":  "summary",
