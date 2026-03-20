@@ -79,6 +79,10 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 
 	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 
+	if normalizedBase == "master" {
+		normalizedBase = "main"
+	}
+
 	if payload.Environment == nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")
 	}
