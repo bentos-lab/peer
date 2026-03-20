@@ -357,38 +357,36 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 		event.Action,
 	)
 
-	var overviewJobID string
+	var dependJobs []string
+
+	if autogenEnabled {
+		headBranch := strings.TrimSpace(event.PullRequest.Head.Ref)
+		jobID, err := h.enqueueAutogenJob(installationID, event.Action, input, autogenDocs, autogenTests, headBranch, head)
+		if err != nil {
+			http.Error(w, "failed to enqueue autogen", http.StatusInternalServerError)
+			return
+		}
+		dependJobs = append(dependJobs, jobID)
+		h.logWebhookAccepted("autogen", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
+	}
+
 	if overviewEnabled {
-		jobID, err := h.enqueueOverviewJob(installationID, event.Action, input, issueCandidates, head)
+		jobID, err := h.enqueueOverviewJob(installationID, event.Action, input, issueCandidates, head, dependJobs)
 		if err != nil {
 			http.Error(w, "failed to enqueue overview", http.StatusInternalServerError)
 			return
 		}
-		overviewJobID = jobID
+		dependJobs = append(dependJobs, jobID)
 		h.logWebhookAccepted("overview", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
 	}
 
 	if reviewEnabled {
-		var deps []string
-		if overviewJobID != "" {
-			deps = []string{overviewJobID}
-		}
-		_, err := h.enqueueReviewJob(installationID, event.Action, input, enableSuggestions, head, deps)
+		_, err := h.enqueueReviewJob(installationID, event.Action, input, enableSuggestions, head, dependJobs)
 		if err != nil {
 			http.Error(w, "failed to enqueue review", http.StatusInternalServerError)
 			return
 		}
 		h.logWebhookAccepted("review", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
-	}
-
-	if autogenEnabled {
-		headBranch := strings.TrimSpace(event.PullRequest.Head.Ref)
-		_, err := h.enqueueAutogenJob(installationID, event.Action, input, autogenDocs, autogenTests, headBranch, head)
-		if err != nil {
-			http.Error(w, "failed to enqueue autogen", http.StatusInternalServerError)
-			return
-		}
-		h.logWebhookAccepted("autogen", input.Target.Repository, input.Target.ChangeRequestNumber, event.Action)
 	}
 
 	w.WriteHeader(http.StatusAccepted)
@@ -813,12 +811,13 @@ func (h *Handler) enqueueReviewJob(installationID string, action string, input d
 	})
 }
 
-func (h *Handler) enqueueOverviewJob(installationID string, action string, input domain.ChangeRequestInput, issueCandidates []domain.IssueContext, headRef string) (string, error) {
+func (h *Handler) enqueueOverviewJob(installationID string, action string, input domain.ChangeRequestInput, issueCandidates []domain.IssueContext, headRef string, deps []string) (string, error) {
 	if h.jobQueue == nil {
 		return "", errors.New("job queue is not configured")
 	}
 	return h.jobQueue.Enqueue(jobqueue.Job{
-		Name: "overview",
+		Name:      "overview",
+		DependsOn: deps,
 		Run: func() error {
 			startedAt := time.Now()
 			defer func() {
