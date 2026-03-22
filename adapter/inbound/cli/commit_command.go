@@ -76,14 +76,12 @@ func (c *CommitCommand) Run(ctx context.Context, cfg config.Config, params Commi
 		}
 	}()
 
-	input := domainChangeRequestInput("local", 0, "", "", "", "", "", map[string]string{})
 	commitUseCase, err := c.commitUseCaseBuilder("")
 	if err != nil {
 		return err
 	}
 
 	request := usecase.CommitRequest{
-		Input:       input,
 		Commit:      false,
 		StageAll:    !params.Staged,
 		Environment: environment,

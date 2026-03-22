@@ -1,5 +1,5 @@
 Primary task:
-- Analyze this change request and produce a conventional commit message.
+- Analyze these local changes and produce a conventional commit message.
 
 Hard constraints:
 - DO NOT edit files.
@@ -28,12 +28,6 @@ Diff commands (required):
   - `git diff --cached --unified=0 --no-color`
   - `git diff --unified=0 --no-color`
 {{- end }}
-
-Metadata:
-- Repository: {{ .Repository }}
-- Staged mode: {{ .Staged }}
-- Title: {{ .Title }}
-- Description: {{ .Description }}
 
 Output guidance:
 - Return plain text only.

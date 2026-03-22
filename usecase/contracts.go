@@ -93,7 +93,6 @@ type AutogenGenerator interface {
 
 // CommitMessagePayload is the complete commit message prompt payload.
 type CommitMessagePayload struct {
-	Input       domain.ChangeRequestInput
 	Staged      bool
 	Environment uccontracts.CodeEnvironment
 }
@@ -214,7 +213,6 @@ type AutogenUseCase interface {
 
 // CommitRequest is the commit-usecase input.
 type CommitRequest struct {
-	Input         domain.ChangeRequestInput
 	CommitMessage string
 	Commit        bool
 	StageAll      bool
