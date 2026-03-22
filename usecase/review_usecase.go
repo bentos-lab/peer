@@ -12,30 +12,27 @@ import (
 
 // reviewUseCase is the concrete ReviewUseCase implementation.
 type reviewUseCase struct {
-	ruleProvider RulePackProvider
-	llmReviewer  LLMReviewer
-	publisher    ReviewResultPublisher
-	logger       Logger
+	llmReviewer LLMReviewer
+	publisher   ReviewResultPublisher
+	logger      Logger
 }
 
 // NewReviewUseCase constructs a review-only usecase.
 func NewReviewUseCase(
-	ruleProvider RulePackProvider,
 	llmReviewer LLMReviewer,
 	publisher ReviewResultPublisher,
 	logger Logger,
 ) (ReviewUseCase, error) {
-	if ruleProvider == nil || llmReviewer == nil || publisher == nil {
+	if llmReviewer == nil || publisher == nil {
 		return nil, errors.New("review usecase dependencies must not be nil")
 	}
 	if logger == nil {
 		logger = stdlogger.Nop()
 	}
 	u := &reviewUseCase{
-		ruleProvider: ruleProvider,
-		llmReviewer:  llmReviewer,
-		publisher:    publisher,
-		logger:       logger,
+		llmReviewer: llmReviewer,
+		publisher:   publisher,
+		logger:      logger,
 	}
 	return u, nil
 }
@@ -50,22 +47,9 @@ func (u *reviewUseCase) Execute(ctx context.Context, request ReviewRequest) (Rev
 		return ReviewExecutionResult{}, errors.New("code environment is required")
 	}
 
-	loadRulePackStartedAt := time.Now()
-	pack, err := u.ruleProvider.CorePack(ctx)
-	if err != nil {
-		logStage(u.logger, "review", "load_rule_pack", target, "failure", loadRulePackStartedAt, "%v", err)
-		return ReviewExecutionResult{}, err
-	}
-	logStage(u.logger, "review", "load_rule_pack", target, "success", loadRulePackStartedAt, "")
-	if strings.TrimSpace(request.Recipe.ReviewRuleset) != "" {
-		pack.Instructions = []string{strings.TrimSpace(request.Recipe.ReviewRuleset)}
-	}
-	u.logger.Debugf("Review rule pack loaded with %d instructions.", len(pack.Instructions))
-
 	reviewDiffStartedAt := time.Now()
 	llmResult, err := u.llmReviewer.Review(ctx, LLMReviewPayload{
 		Input:         request.Input,
-		RulePack:      pack,
 		Environment:   request.Environment,
 		Suggestions:   request.Suggestions,
 		CustomRuleset: strings.TrimSpace(request.Recipe.ReviewRuleset),

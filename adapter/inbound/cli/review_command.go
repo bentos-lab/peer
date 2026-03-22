@@ -106,6 +106,13 @@ func (c *ReviewCommand) Run(ctx context.Context, cfg config.Config, params Revie
 		}
 	}()
 
+	resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, resolution.Base, resolution.Head)
+	if err != nil {
+		return err
+	}
+	resolution.Base = resolvedBase
+	resolution.Head = resolvedHead
+
 	headRef := resolution.Head
 	recipe, err := c.recipeLoader.Load(ctx, environment, headRef)
 	if err != nil {

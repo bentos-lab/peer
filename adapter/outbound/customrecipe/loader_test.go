@@ -19,6 +19,10 @@ func (e *recipeTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAge
 	return nil, nil
 }
 
+func (e *recipeTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *recipeTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, nil
 }

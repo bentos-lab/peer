@@ -35,6 +35,10 @@ func (e *issueAlignmentTestEnvironment) SetupAgent(_ context.Context, opts domai
 	return e.agent, nil
 }
 
+func (e *issueAlignmentTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *issueAlignmentTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return e.changedFiles, nil
 }

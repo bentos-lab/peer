@@ -31,6 +31,10 @@ func (e *commitTestEnv) SetupAgent(_ context.Context, _ domain.CodingAgentSetupO
 	return nil, nil
 }
 
+func (e *commitTestEnv) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *commitTestEnv) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, nil
 }

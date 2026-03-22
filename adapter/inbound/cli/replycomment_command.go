@@ -131,7 +131,12 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 		return err
 	}
 
-	recipe, err := c.recipeLoader.Load(ctx, environment, prInfo.HeadRef)
+	resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, prInfo.BaseRef, prInfo.HeadRef)
+	if err != nil {
+		return err
+	}
+
+	recipe, err := c.recipeLoader.Load(ctx, environment, resolvedHead)
 	if err != nil {
 		return err
 	}
@@ -142,8 +147,8 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 		ChangeRequestNumber: prNumber,
 		Title:               prInfo.Title,
 		Description:         prInfo.Description,
-		Base:                prInfo.BaseRef,
-		Head:                prInfo.HeadRef,
+		Base:                resolvedBase,
+		Head:                resolvedHead,
 		Publish:             params.Publish,
 		Environment:         environment,
 		Recipe:              recipe,

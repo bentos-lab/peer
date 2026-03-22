@@ -49,6 +49,10 @@ func (e *autogenUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.C
 	return nil, nil
 }
 
+func (e *autogenUseCaseTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *autogenUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	e.loadCalls++
 	e.loadOpts = opts

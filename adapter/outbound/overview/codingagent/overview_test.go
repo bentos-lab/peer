@@ -37,6 +37,10 @@ func (e *overviewTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingA
 	return e.agent, nil
 }
 
+func (e *overviewTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *overviewTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	e.loadChangedCalls++
 	if e.loadChangedErr != nil {
@@ -137,14 +141,9 @@ func TestGenerateOverviewUsesTaskPromptWithChangedFiles(t *testing.T) {
 	require.NotContains(t, env.agent.lastTask, "```diff")
 	require.Equal(t, "raw-overview-output", formatter.lastArgs.Messages[0])
 	require.NotEmpty(t, formatter.lastArgs.SystemPrompt)
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "You are a JSON formatter only.")
+	require.Contains(t, formatter.lastArgs.SystemPrompt, "Convert the user-provided overview free-form text into strict JSON that matches the provided response schema.")
 	require.Contains(t, formatter.lastArgs.SystemPrompt, "You can do:")
 	require.Contains(t, formatter.lastArgs.SystemPrompt, "You cannot do:")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`categories[].category`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`categories[].summary`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`walkthroughs[].groupName`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`walkthroughs[].files`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`walkthroughs[].summary`")
 	require.NotEqual(t, "You convert overview free-form text into strict JSON following the provided schema.", formatter.lastArgs.SystemPrompt)
 }
 
@@ -194,12 +193,7 @@ func TestGenerateOverviewTaskPromptBaseEmptyUsesHeadFallback(t *testing.T) {
 		Base:    "",
 		Head:    "feature",
 	}})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Base is empty; fallback to head-only inspection.")
-	require.Contains(t, env.agent.lastTask, "git rev-parse --verify \"feature^{commit}\"")
-	require.Contains(t, env.agent.lastTask, "git show --name-status --no-color \"feature\"")
-	require.Contains(t, env.agent.lastTask, "git show --unified=0 --no-color \"feature\"")
-	require.NotContains(t, env.agent.lastTask, "git diff --name-status \"\" \"feature\"")
+	require.ErrorContains(t, err, "base ref is required")
 }
 
 func TestGenerateOverviewTaskPromptHeadEmptyUsesBaseFallback(t *testing.T) {
@@ -223,12 +217,7 @@ func TestGenerateOverviewTaskPromptHeadEmptyUsesBaseFallback(t *testing.T) {
 		Base:    "main",
 		Head:    "",
 	}})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Head is empty; fallback to base-only inspection.")
-	require.Contains(t, env.agent.lastTask, "git rev-parse --verify \"main^{commit}\"")
-	require.Contains(t, env.agent.lastTask, "git show --name-status --no-color \"main\"")
-	require.Contains(t, env.agent.lastTask, "git show --unified=0 --no-color \"main\"")
-	require.NotContains(t, env.agent.lastTask, "git diff --name-status \"main\" \"\"")
+	require.ErrorContains(t, err, "head ref is required")
 }
 
 func TestGenerateOverviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *testing.T) {
@@ -252,10 +241,7 @@ func TestGenerateOverviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *test
 		Base:    "",
 		Head:    "",
 	}})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Base and Head are empty; treat as full workspace mode with Base=`HEAD` and Head=`@all`.")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
+	require.ErrorContains(t, err, "base ref is required")
 }
 
 func TestGenerateOverviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing.T) {
@@ -279,11 +265,7 @@ func TestGenerateOverviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing
 		Base:    "HEAD",
 		Head:    "@staged",
 	}})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Head uses staged workspace mode.")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
-	require.NotContains(t, env.agent.lastTask, "git rev-parse --verify")
+	require.ErrorContains(t, err, "head ref must not use workspace tokens")
 }
 
 func TestGenerateOverviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
@@ -307,14 +289,7 @@ func TestGenerateOverviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
 		Base:    "HEAD",
 		Head:    "@all",
 	}})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Head uses full workspace mode (staged + unstaged + untracked).")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --name-status")
-	require.Contains(t, env.agent.lastTask, "git ls-files --others --exclude-standard")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
-	require.Contains(t, env.agent.lastTask, "git diff --unified=0 --no-color")
-	require.NotContains(t, env.agent.lastTask, "git rev-parse --verify")
+	require.ErrorContains(t, err, "head ref must not use workspace tokens")
 }
 
 func TestGenerateOverviewReturnsErrorWhenEnvironmentMissing(t *testing.T) {

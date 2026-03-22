@@ -15,6 +15,8 @@ type CodingAgent interface {
 type CodeEnvironment interface {
 	// SetupAgent prepares a coding agent against the target repository context.
 	SetupAgent(ctx context.Context, opts domain.CodingAgentSetupOptions) (CodingAgent, error)
+	// ResolveBaseHead resolves base/head refs into concrete commit refs when needed.
+	ResolveBaseHead(ctx context.Context, base string, head string) (string, string, error)
 	// LoadChangedFiles loads changed files for the selected comparison mode.
 	LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error)
 	// EnsureDiffContentAvailable validates that diff content is present for the requested comparison.

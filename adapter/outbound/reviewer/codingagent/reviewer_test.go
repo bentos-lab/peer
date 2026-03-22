@@ -14,14 +14,17 @@ import (
 )
 
 type reviewerTestAgent struct {
-	lastTask string
-	runCalls int
+	tasks            []string
+	opts             []domain.CodingAgentRunOptions
+	runCalls         int
+	sessionIDToReply string
 }
 
-func (a *reviewerTestAgent) Run(_ context.Context, task string, _ domain.CodingAgentRunOptions) (domain.CodingAgentRunResult, error) {
+func (a *reviewerTestAgent) Run(_ context.Context, task string, opts domain.CodingAgentRunOptions) (domain.CodingAgentRunResult, error) {
 	a.runCalls++
-	a.lastTask = task
-	return domain.CodingAgentRunResult{Text: "raw-review-output"}, nil
+	a.tasks = append(a.tasks, task)
+	a.opts = append(a.opts, opts)
+	return domain.CodingAgentRunResult{Text: "raw-review-output", SessionID: a.sessionIDToReply}, nil
 }
 
 type reviewerTestEnvironment struct {
@@ -35,6 +38,10 @@ type reviewerTestEnvironment struct {
 func (e *reviewerTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (contracts.CodingAgent, error) {
 	e.setupCalls++
 	return e.agent, nil
+}
+
+func (e *reviewerTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
 }
 
 func (e *reviewerTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
@@ -92,7 +99,7 @@ func (f *reviewerTestFormatter) GenerateJSON(_ context.Context, params contracts
 
 func TestReviewerReviewUsesTaskPromptAndNormalizesSuggestedChanges(t *testing.T) {
 	env := &reviewerTestEnvironment{
-		agent:        &reviewerTestAgent{},
+		agent:        &reviewerTestAgent{sessionIDToReply: "ses_1"},
 		changedFiles: []domain.ChangedFile{{Path: "a.go", DiffSnippet: "@@ -1 +1 @@\n-old\n+new"}},
 	}
 	formatter := &reviewerTestFormatter{output: map[string]any{
@@ -146,58 +153,39 @@ func TestReviewerReviewUsesTaskPromptAndNormalizesSuggestedChanges(t *testing.T)
 			Title:       "Improve parser",
 			Description: "PR desc",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule-1", "rule-2"}},
 		Suggestions: true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, env.loadChangedCalls)
+	require.Equal(t, 2, env.agent.runCalls)
+	require.Len(t, env.agent.tasks, 2)
 
-	require.Contains(t, env.agent.lastTask, "Repository: org/repo")
-	require.Contains(t, env.agent.lastTask, "Base: main")
-	require.Contains(t, env.agent.lastTask, "Head: feature")
-	require.Contains(t, env.agent.lastTask, "Language: English")
-	require.Contains(t, env.agent.lastTask, "Include Suggested Changes: true")
-	require.Contains(t, env.agent.lastTask, "Base and Head are the canonical comparison anchors; use both whenever available.")
-	require.Contains(t, env.agent.lastTask, "git rev-parse --verify \"main^{commit}\"")
-	require.Contains(t, env.agent.lastTask, "git rev-parse --verify \"feature^{commit}\"")
-	require.Contains(t, env.agent.lastTask, "git merge-base \"main\" \"feature\"")
-	require.Contains(t, env.agent.lastTask, "git diff --name-status \"<merge-base>\" \"feature\"")
-	require.Contains(t, env.agent.lastTask, "git diff --unified=0 --no-color \"<merge-base>\" \"feature\"")
-	require.NotContains(t, env.agent.lastTask, "Base is empty; fallback to head-only inspection.")
-	require.NotContains(t, env.agent.lastTask, "Head is empty; fallback to base-only inspection.")
-	require.NotContains(t, env.agent.lastTask, "Base and Head are empty; treat as full workspace mode with Base=`HEAD` and Head=`@all`.")
-	require.Contains(t, env.agent.lastTask, "Do not group findings by file or category; output a direct finding list only.")
-	require.Contains(t, env.agent.lastTask, "changed-code line range (`start-end`)")
-	require.Contains(t, env.agent.lastTask, "diff-grounded evidence")
-	require.Contains(t, env.agent.lastTask, "line range (`start-end`) for the suggested change target")
-	require.Contains(t, env.agent.lastTask, "`kind`: `replace` or `delete`")
-	require.Contains(t, env.agent.lastTask, "`replacement`: contains the FULL code (or comment) for replace the old code in `start`-`end` line range, including old lines if those lines don't need to be replaced. Do not include free text in this field. This field is required for `replace`, must be empty for `delete`.")
-	require.NotContains(t, env.agent.lastTask, "Explicitly set `suggested_change: none` for every finding.")
-	require.NotContains(t, env.agent.lastTask, "```diff")
+	require.Contains(t, env.agent.tasks[0], "Review the diff between two refs and fix important issues in the changed code when needed.")
+	require.Contains(t, env.agent.tasks[0], "Refs:")
+	require.Contains(t, env.agent.tasks[0], "Base: main")
+	require.Contains(t, env.agent.tasks[0], "Head: feature")
+	require.Contains(t, env.agent.tasks[0], "git rev-parse --verify \"main^{commit}\"")
+	require.Contains(t, env.agent.tasks[0], "git rev-parse --verify \"feature^{commit}\"")
+	require.Contains(t, env.agent.tasks[0], "git merge-base \"main\" \"feature\"")
+	require.Contains(t, env.agent.tasks[0], "git diff --name-status \"<merge-base>\" \"feature\"")
+	require.Contains(t, env.agent.tasks[0], "git diff --unified=0 --no-color \"<merge-base>\" \"feature\"")
+	require.Contains(t, env.agent.tasks[1], "Based on the real issues you found and the changed code, construct a structured report.")
+	require.Contains(t, env.agent.tasks[1], "One finding block per issue using consistent labels.")
+	require.Contains(t, env.agent.tasks[1], "Also include the changed code (`suggested_change`) for every finding:")
 
 	require.Equal(t, "raw-review-output", formatter.lastArgs.Messages[0])
 	require.NotEmpty(t, formatter.lastArgs.SystemPrompt)
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "You are a JSON formatter only.")
+	require.Contains(t, formatter.lastArgs.SystemPrompt, "Convert the user-provided reviewer free-form text into strict JSON that matches the provided response schema.")
 	require.Contains(t, formatter.lastArgs.SystemPrompt, "You can do:")
 	require.Contains(t, formatter.lastArgs.SystemPrompt, "You cannot do:")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`summary`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].filePath`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].startLine`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].endLine`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].severity`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].title`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].detail`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].suggestion`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].suggestedChange.kind`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].suggestedChange.startLine`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].suggestedChange.endLine`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].suggestedChange.replacement`")
-	require.Contains(t, formatter.lastArgs.SystemPrompt, "`findings[].suggestedChange.reason`")
 	require.NotEqual(t, "You convert reviewer free-form text into strict JSON following the provided schema. Preserve only grounded, explicit findings and keep output concise.", formatter.lastArgs.SystemPrompt)
 	require.Len(t, result.Findings, 2)
 	require.NotNil(t, result.Findings[0].SuggestedChange)
 	require.Equal(t, domain.SuggestedChangeKindReplace, result.Findings[0].SuggestedChange.Kind)
 	require.Nil(t, result.Findings[1].SuggestedChange)
+	require.Len(t, env.agent.opts, 2)
+	require.Equal(t, "", env.agent.opts[0].SessionID)
+	require.Equal(t, "ses_1", env.agent.opts[1].SessionID)
 }
 
 func TestReviewerReviewSuggestionsDisabledDoesNotRequireSuggestedChange(t *testing.T) {
@@ -234,15 +222,15 @@ func TestReviewerReviewSuggestionsDisabledDoesNotRequireSuggestedChange(t *testi
 			Title:       "t",
 			Description: "d",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
 		Suggestions: false,
 	})
 	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Include Suggested Changes: false")
-	require.Contains(t, env.agent.lastTask, "Language: Vietnamese")
-	require.Contains(t, env.agent.lastTask, "- NEVER suggest changes for any finding. Your task is JUST analyze and find them.")
-	require.NotContains(t, env.agent.lastTask, "`kind`: `replace` or `delete`")
-	require.NotContains(t, env.agent.lastTask, "`replacement`: required for `replace`, must be empty for `delete`")
+	require.Equal(t, 2, env.agent.runCalls)
+	require.Len(t, env.agent.tasks, 2)
+	require.Contains(t, env.agent.tasks[0], "Refs:")
+	require.Contains(t, env.agent.tasks[0], "Base: main")
+	require.Contains(t, env.agent.tasks[0], "Head: feature")
+	require.NotContains(t, env.agent.tasks[1], "Also include the changed code (`suggested_change`) for every finding:")
 }
 
 func TestReviewerReviewDropsSuggestedChangeWhenRangeIsInvalid(t *testing.T) {
@@ -285,7 +273,6 @@ func TestReviewerReviewDropsSuggestedChangeWhenRangeIsInvalid(t *testing.T) {
 			Title:       "Improve parser",
 			Description: "PR desc",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule-1", "rule-2"}},
 		Suggestions: true,
 	})
 	require.NoError(t, err)
@@ -314,16 +301,9 @@ func TestReviewerReviewTaskPromptBaseEmptyUsesHeadFallback(t *testing.T) {
 			Base:    "",
 			Head:    "feature",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
 		Suggestions: false,
 	})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Base is empty; fallback to head-only inspection.")
-	require.Contains(t, env.agent.lastTask, "git rev-parse --verify \"feature^{commit}\"")
-	require.Contains(t, env.agent.lastTask, "git show --name-status --no-color \"feature\"")
-	require.Contains(t, env.agent.lastTask, "git show --unified=0 --no-color \"feature\"")
-	require.NotContains(t, env.agent.lastTask, "git diff --name-status \"\" \"feature\"")
-	require.NotContains(t, env.agent.lastTask, "git diff --unified=0 --no-color \"\" \"feature\"")
+	require.ErrorContains(t, err, "base ref is required")
 }
 
 func TestReviewerReviewTaskPromptHeadEmptyUsesBaseFallback(t *testing.T) {
@@ -347,16 +327,9 @@ func TestReviewerReviewTaskPromptHeadEmptyUsesBaseFallback(t *testing.T) {
 			Base:    "main",
 			Head:    "",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
 		Suggestions: false,
 	})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Head is empty; fallback to base-only inspection.")
-	require.Contains(t, env.agent.lastTask, "git rev-parse --verify \"main^{commit}\"")
-	require.Contains(t, env.agent.lastTask, "git show --name-status --no-color \"main\"")
-	require.Contains(t, env.agent.lastTask, "git show --unified=0 --no-color \"main\"")
-	require.NotContains(t, env.agent.lastTask, "git diff --name-status \"main\" \"\"")
-	require.NotContains(t, env.agent.lastTask, "git diff --unified=0 --no-color \"main\" \"\"")
+	require.ErrorContains(t, err, "head ref is required")
 }
 
 func TestReviewerReviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *testing.T) {
@@ -380,14 +353,9 @@ func TestReviewerReviewTaskPromptBaseAndHeadEmptyUsesWorkspaceFallback(t *testin
 			Base:    "",
 			Head:    "",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
 		Suggestions: false,
 	})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Base and Head are empty; treat as full workspace mode with Base=`HEAD` and Head=`@all`.")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
-	require.NotContains(t, env.agent.lastTask, "git rev-parse --verify \"^{commit}\"")
+	require.ErrorContains(t, err, "base ref is required")
 }
 
 func TestReviewerReviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing.T) {
@@ -411,15 +379,9 @@ func TestReviewerReviewTaskPromptStagedTokenUsesStagedWorkspaceMode(t *testing.T
 			Base:    "HEAD",
 			Head:    "@staged",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
 		Suggestions: false,
 	})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Head uses staged workspace mode.")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
-	require.NotContains(t, env.agent.lastTask, "git rev-parse --verify")
-	require.NotContains(t, env.agent.lastTask, "git diff --name-status \"HEAD\" \"@staged\"")
+	require.ErrorContains(t, err, "head ref must not use workspace tokens")
 }
 
 func TestReviewerReviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
@@ -443,17 +405,9 @@ func TestReviewerReviewTaskPromptAllTokenUsesFullWorkspaceMode(t *testing.T) {
 			Base:    "HEAD",
 			Head:    "@all",
 		},
-		RulePack:    usecase.RulePack{Instructions: []string{"rule"}},
 		Suggestions: false,
 	})
-	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Head uses full workspace mode (staged + unstaged + untracked).")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
-	require.Contains(t, env.agent.lastTask, "git diff --name-status")
-	require.Contains(t, env.agent.lastTask, "git ls-files --others --exclude-standard")
-	require.Contains(t, env.agent.lastTask, "git diff --cached --unified=0 --no-color")
-	require.Contains(t, env.agent.lastTask, "git diff --unified=0 --no-color")
-	require.NotContains(t, env.agent.lastTask, "git rev-parse --verify")
+	require.ErrorContains(t, err, "head ref must not use workspace tokens")
 }
 
 func TestReviewerReviewReturnsErrorWhenEnvironmentMissing(t *testing.T) {
@@ -468,7 +422,6 @@ func TestReviewerReviewReturnsErrorWhenEnvironmentMissing(t *testing.T) {
 		Input: domain.ChangeRequestInput{
 			Target: domain.ChangeRequestTarget{Repository: "org/repo"},
 		},
-		RulePack: usecase.RulePack{Instructions: []string{"rule"}},
 	})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "code environment must not be nil")
@@ -495,7 +448,6 @@ func TestReviewerReviewReturnsErrorWhenDiffContentIsEmpty(t *testing.T) {
 			Base:    "main",
 			Head:    "feature",
 		},
-		RulePack: usecase.RulePack{Instructions: []string{"rule"}},
 	})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "diff content is empty")

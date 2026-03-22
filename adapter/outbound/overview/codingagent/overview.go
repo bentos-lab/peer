@@ -70,10 +70,12 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 	startedAt := time.Now()
 	g.logger.Infof("Coding-agent overview generation started.")
 
-	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
-
 	if payload.Environment == nil {
 		return usecase.LLMOverviewResult{}, fmt.Errorf("code environment must not be nil")
+	}
+	normalizedBase, normalizedHead, err := refs.ValidateResolvedRefs(payload.Input.Base, payload.Input.Head)
+	if err != nil {
+		return usecase.LLMOverviewResult{}, err
 	}
 	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: normalizedBase,

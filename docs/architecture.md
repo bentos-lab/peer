@@ -37,7 +37,6 @@ Define the architecture and dependency rules for this repository so implementati
 
 `usecase` can only rely on ports:
 - `ReviewInputProvider`
-- `RulePackProvider`
 - `LLMReviewer`
 - `ReviewResultPublisher`
 
@@ -62,8 +61,6 @@ Define the architecture and dependency rules for this repository so implementati
     - `adapter/outbound/publisher/github`
     - `adapter/outbound/publisher/gitlab`
     - `adapter/outbound/publisher/cli`
-  - Rules:
-    - `usecase/rulepack/core_provider.go`
 
 ## Non-Goals in Current Version
 

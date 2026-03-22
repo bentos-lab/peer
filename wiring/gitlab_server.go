@@ -18,7 +18,6 @@ import (
 	"github.com/bentos-lab/peer/config"
 	"github.com/bentos-lab/peer/shared/jobqueue"
 	"github.com/bentos-lab/peer/usecase"
-	"github.com/bentos-lab/peer/usecase/rulepack"
 )
 
 // BuildGitLabHandler wires dependencies for GitLab webhook flow.
@@ -58,7 +57,7 @@ func BuildGitLabHandler(cfg config.Config) (*gitlabinbound.Handler, *gitlabinbou
 			return nil, err
 		}
 		publisher := gitlabpublisher.NewPublisher(glClient, logger)
-		return usecase.NewReviewUseCase(rulepack.NewCoreRulePackProvider(), reviewer, publisher, logger)
+		return usecase.NewReviewUseCase(reviewer, publisher, logger)
 	}
 
 	overviewBuilder := func(repoURL string) (usecase.OverviewUseCase, error) {

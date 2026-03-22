@@ -58,9 +58,12 @@ func (a *Answerer) Answer(ctx context.Context, payload usecase.ReplyCommentAnswe
 	startedAt := time.Now()
 	a.logger.Infof("Coding-agent replycomment started.")
 
-	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
 	if payload.Environment == nil {
 		return "", fmt.Errorf("code environment must not be nil")
+	}
+	normalizedBase, normalizedHead, err := refs.ValidateResolvedRefs(payload.Input.Base, payload.Input.Head)
+	if err != nil {
+		return "", err
 	}
 	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: normalizedBase,

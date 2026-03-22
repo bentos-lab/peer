@@ -1,8 +1,25 @@
 package refs
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
-// NormalizePromptRefs trims base/head refs for coding-agent prompts without dropping base.
-func NormalizePromptRefs(base string, head string) (string, string) {
-	return strings.TrimSpace(base), strings.TrimSpace(head)
+// ValidateResolvedRefs trims and validates base/head refs for coding-agent prompts.
+func ValidateResolvedRefs(base string, head string) (string, string, error) {
+	base = strings.TrimSpace(base)
+	head = strings.TrimSpace(head)
+	if base == "" {
+		return "", "", fmt.Errorf("base ref is required")
+	}
+	if head == "" {
+		return "", "", fmt.Errorf("head ref is required")
+	}
+	if strings.HasPrefix(base, "@") {
+		return "", "", fmt.Errorf("base ref must not use workspace tokens")
+	}
+	if strings.HasPrefix(head, "@") {
+		return "", "", fmt.Errorf("head ref must not use workspace tokens")
+	}
+	return base, head, nil
 }
