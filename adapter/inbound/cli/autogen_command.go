@@ -108,6 +108,13 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 		}
 	}()
 
+	resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, resolution.Base, resolution.Head)
+	if err != nil {
+		return err
+	}
+	resolution.Base = resolvedBase
+	resolution.Head = resolvedHead
+
 	headRef := strings.TrimSpace(resolution.Head)
 	if headRef == "" {
 		headRef = "HEAD"

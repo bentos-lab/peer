@@ -1378,6 +1378,87 @@ func TestHostCodeEnvironment_PushChangesUsesCwdWhenFlagSet(t *testing.T) {
 	require.NoError(t, runner.VerifyDone())
 }
 
+func TestHostCodeEnvironment_ResolveBaseHeadCommitsStaged(t *testing.T) {
+	workspaceDir := t.TempDir()
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"}},
+		Result:   commandrunner.Result{Stdout: []byte("old-sha\n")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "diff", "--cached", "--name-only"}},
+		Result:   commandrunner.Result{Stdout: []byte("foo.go\n")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "commit", "-m", "peer: snapshot workspace"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"}},
+		Result:   commandrunner.Result{Stdout: []byte("new-sha\n")},
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+		UseCwd: true,
+	})
+
+	base, head, err := env.ResolveBaseHead(context.Background(), "HEAD", "@staged")
+	require.NoError(t, err)
+	require.Equal(t, "old-sha", base)
+	require.Equal(t, "new-sha", head)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ResolveBaseHeadCommitsAll(t *testing.T) {
+	workspaceDir := t.TempDir()
+	runner := commandrunner.NewDummyCommandRunner()
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"}},
+		Result:   commandrunner.Result{Stdout: []byte("old-sha\n")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "add", "-A"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "diff", "--cached", "--name-only"}},
+		Result:   commandrunner.Result{Stdout: []byte("foo.go\n")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "commit", "-m", "peer: snapshot workspace"}},
+		Result:   commandrunner.Result{Stdout: []byte("ok")},
+	})
+	runner.Enqueue(commandrunner.CommandStep{
+		Expected: commandrunner.CommandCall{Name: "git", Args: []string{"-C", workspaceDir, "rev-parse", "HEAD"}},
+		Result:   commandrunner.Result{Stdout: []byte("new-sha\n")},
+	})
+
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{
+		Runner: runner,
+		Getwd: func() (string, error) {
+			return workspaceDir, nil
+		},
+		UseCwd: true,
+	})
+
+	base, head, err := env.ResolveBaseHead(context.Background(), "main", "@all")
+	require.NoError(t, err)
+	require.Equal(t, "main", base)
+	require.Equal(t, "new-sha", head)
+	require.NoError(t, runner.VerifyDone())
+}
+
+func TestHostCodeEnvironment_ResolveBaseHeadRejectsEmptyRefs(t *testing.T) {
+	env := NewHostCodeEnvironment(HostCodeEnvironmentConfig{})
+
+	_, _, err := env.ResolveBaseHead(context.Background(), "", "main")
+	require.ErrorContains(t, err, "base ref is required")
+}
+
 type hostTestLogger struct {
 	debugLogs []string
 	warnLogs  []string

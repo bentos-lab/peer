@@ -427,6 +427,13 @@ func (h *Handler) handleNoteEvent(w http.ResponseWriter, r *http.Request, body [
 				}
 			}()
 
+			resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, req.Base, req.Head)
+			if err != nil {
+				return err
+			}
+			req.Base = resolvedBase
+			req.Head = resolvedHead
+
 			recipe, err := h.recipeLoader.Load(ctx, environment, req.Head)
 			if err != nil {
 				return err
@@ -540,6 +547,14 @@ func (h *Handler) enqueueReviewJob(action string, input domain.ChangeRequestInpu
 				}
 			}()
 
+			resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, input.Base, input.Head)
+			if err != nil {
+				return err
+			}
+			input.Base = resolvedBase
+			input.Head = resolvedHead
+			headRef = resolvedHead
+
 			recipe, err := h.recipeLoader.Load(ctx, environment, headRef)
 			if err != nil {
 				return err
@@ -614,6 +629,14 @@ func (h *Handler) enqueueOverviewJob(action string, input domain.ChangeRequestIn
 				}
 			}()
 
+			resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, input.Base, input.Head)
+			if err != nil {
+				return err
+			}
+			input.Base = resolvedBase
+			input.Head = resolvedHead
+			headRef = resolvedHead
+
 			recipe, err := h.recipeLoader.Load(ctx, environment, headRef)
 			if err != nil {
 				return err
@@ -687,6 +710,14 @@ func (h *Handler) enqueueAutogenJob(action string, input domain.ChangeRequestInp
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
 				}
 			}()
+
+			resolvedBase, resolvedHead, err := environment.ResolveBaseHead(ctx, input.Base, input.Head)
+			if err != nil {
+				return err
+			}
+			input.Base = resolvedBase
+			input.Head = resolvedHead
+			headRef = resolvedHead
 
 			recipe, err := h.recipeLoader.Load(ctx, environment, headRef)
 			if err != nil {

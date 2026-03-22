@@ -16,8 +16,11 @@ import (
 	"github.com/bentos-lab/peer/usecase/contracts"
 )
 
-//go:embed task.md
-var reviewTaskPromptTemplateRaw string
+//go:embed task_phase1.md
+var reviewTaskPhase1PromptTemplateRaw string
+
+//go:embed task_phase2.md
+var reviewTaskPhase2PromptTemplateRaw string
 
 //go:embed formatting_system.md
 var reviewFormattingSystemPrompt string
@@ -50,7 +53,6 @@ type reviewTaskPromptTemplateData struct {
 	Description   string
 	Language      string
 	Suggestions   bool
-	RulePackText  string
 	CustomRuleset string
 }
 
@@ -77,10 +79,12 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 	startedAt := time.Now()
 	r.logger.Infof("Coding-agent review started.")
 
-	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
-
 	if payload.Environment == nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")
+	}
+	normalizedBase, normalizedHead, err := refs.ValidateResolvedRefs(payload.Input.Base, payload.Input.Head)
+	if err != nil {
+		return usecase.LLMReviewResult{}, err
 	}
 	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: normalizedBase,
@@ -93,7 +97,7 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 	if err != nil {
 		return usecase.LLMReviewResult{}, err
 	}
-	taskPrompt, err := sharedtext.RenderSimpleTemplate("review_task_prompt", reviewTaskPromptTemplateRaw, reviewTaskPromptTemplateData{
+	taskPhase1Prompt, err := sharedtext.RenderSimpleTemplate("review_task_phase1_prompt", reviewTaskPhase1PromptTemplateRaw, reviewTaskPromptTemplateData{
 		Repository:    payload.Input.Target.Repository,
 		RepoURL:       payload.Input.RepoURL,
 		Base:          normalizedBase,
@@ -102,21 +106,44 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		Description:   sharedtext.SingleLine(payload.Input.Description),
 		Language:      resolveLanguage(payload.Input.Language),
 		Suggestions:   payload.Suggestions,
-		RulePackText:  strings.Join(payload.RulePack.Instructions, "\n\n"),
 		CustomRuleset: strings.TrimSpace(payload.CustomRuleset),
 	})
 	if err != nil {
 		return usecase.LLMReviewResult{}, err
 	}
 
-	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+	phase1Result, err := agent.Run(ctx, strings.TrimSpace(taskPhase1Prompt), domain.CodingAgentRunOptions{
 		Provider: r.config.Provider,
 		Model:    r.config.Model,
 	})
 	if err != nil {
-		return usecase.LLMReviewResult{}, fmt.Errorf("failed to run coding agent task: %w", err)
+		return usecase.LLMReviewResult{}, fmt.Errorf("failed to run coding agent phase 1 task: %w", err)
 	}
-	rawText := strings.TrimSpace(result.Text)
+
+	taskPhase2Prompt, err := sharedtext.RenderSimpleTemplate("review_task_phase2_prompt", reviewTaskPhase2PromptTemplateRaw, reviewTaskPromptTemplateData{
+		Repository:    payload.Input.Target.Repository,
+		RepoURL:       payload.Input.RepoURL,
+		Base:          normalizedBase,
+		Head:          normalizedHead,
+		Title:         payload.Input.Title,
+		Description:   sharedtext.SingleLine(payload.Input.Description),
+		Language:      resolveLanguage(payload.Input.Language),
+		Suggestions:   payload.Suggestions,
+		CustomRuleset: strings.TrimSpace(payload.CustomRuleset),
+	})
+	if err != nil {
+		return usecase.LLMReviewResult{}, err
+	}
+
+	phase2Result, err := agent.Run(ctx, strings.TrimSpace(taskPhase2Prompt), domain.CodingAgentRunOptions{
+		Provider:  r.config.Provider,
+		Model:     r.config.Model,
+		SessionID: phase1Result.SessionID,
+	})
+	if err != nil {
+		return usecase.LLMReviewResult{}, fmt.Errorf("failed to run coding agent phase 2 task: %w", err)
+	}
+	rawText := strings.TrimSpace(phase2Result.Text)
 
 	outputMap, err := r.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: reviewFormattingSystemPrompt,

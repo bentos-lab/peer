@@ -20,6 +20,10 @@ func (e *dummyCodeEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgen
 	return &dummyCodingAgent{}, nil
 }
 
+func (e *dummyCodeEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *dummyCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return []domain.ChangedFile{}, nil
 }

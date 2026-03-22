@@ -60,6 +60,10 @@ func (e *testEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetu
 	return nil, nil
 }
 
+func (e *testEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *testEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, nil
 }

@@ -11,18 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type reviewUseCaseTestRulePackProvider struct {
-	pack RulePack
-	err  error
-}
-
-func (p *reviewUseCaseTestRulePackProvider) CorePack(_ context.Context) (RulePack, error) {
-	if p.err != nil {
-		return RulePack{}, p.err
-	}
-	return p.pack, nil
-}
-
 type reviewUseCaseTestReviewer struct {
 	lastPayload LLMReviewPayload
 	callCount   int
@@ -56,6 +44,10 @@ type reviewUseCaseTestEnvironment struct {
 
 func (e *reviewUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgentSetupOptions) (uccontracts.CodingAgent, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (e *reviewUseCaseTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
 }
 
 func (e *reviewUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
@@ -99,7 +91,6 @@ func TestReviewUseCaseExecutePassesEnvironmentToReviewer(t *testing.T) {
 		},
 	}
 	useCase, err := NewReviewUseCase(
-		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
 		reviewer,
 		&reviewUseCaseTestPublisher{},
 		nil,
@@ -125,7 +116,6 @@ func TestReviewUseCaseExecutePassesEnvironmentToReviewer(t *testing.T) {
 func TestReviewUseCaseRequiresEnvironment(t *testing.T) {
 	reviewer := &reviewUseCaseTestReviewer{}
 	useCase, err := NewReviewUseCase(
-		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
 		reviewer,
 		&reviewUseCaseTestPublisher{},
 		nil,
@@ -154,7 +144,6 @@ func TestReviewUseCaseExecutePassesSuggestionsDisabledToReviewer(t *testing.T) {
 		},
 	}
 	useCase, err := NewReviewUseCase(
-		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
 		reviewer,
 		&reviewUseCaseTestPublisher{},
 		nil,
@@ -203,7 +192,6 @@ func TestReviewUseCaseFiltersNitFindingsBeforePublishing(t *testing.T) {
 	}
 	publisher := &reviewUseCaseTestPublisher{}
 	useCase, err := NewReviewUseCase(
-		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
 		reviewer,
 		publisher,
 		nil,
@@ -246,7 +234,6 @@ func TestReviewUseCaseSkipsPublishingWhenOnlyNitFindingsRemain(t *testing.T) {
 	}
 	publisher := &reviewUseCaseTestPublisher{}
 	useCase, err := NewReviewUseCase(
-		&reviewUseCaseTestRulePackProvider{pack: RulePack{Instructions: []string{"rule-1"}}},
 		reviewer,
 		publisher,
 		nil,

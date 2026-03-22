@@ -46,7 +46,7 @@
 - Run a specific test: `go test <package_or_test_path>`
 - Run application entrypoint: `go run cmd/main.go --parameters`
 - Commit message must contain a title and a detailed description of what changes, and the description must not exceed the maximum length.
-- Before finalizing plan, please run `go mod tidy`, `go test ./...`, `go vet`, `gofmt`, and other static analyzers.
+- At the end of plan, always require to run `go mod tidy`, `go test ./...`, `go vet`, `gofmt`, and other static analyzers before finalizing implementation.
 
 
 ## Coding Style and Naming Conventions

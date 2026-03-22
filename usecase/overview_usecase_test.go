@@ -62,6 +62,10 @@ func (e *overviewUseCaseTestEnvironment) SetupAgent(_ context.Context, _ domain.
 	return nil, errors.New("not implemented")
 }
 
+func (e *overviewUseCaseTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *overviewUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, errors.New("not implemented")
 }

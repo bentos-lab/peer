@@ -15,26 +15,15 @@ Produce useful code review messages from changed content using an LLM.
 
 Changed contents are loaded by `ReviewInputProvider`.
 
-## Rule Packs
+## Review Rules
 
-Current version supports one hardcoded pack:
-- `core/v1`
-- policy source file: `usecase/rulepack/core_policy_v1.md` (embedded at build time via `go:embed`)
-
-`core/v1` instruction focus:
-- potential bugs
-- risky logic changes
-- maintainability/readability improvements
+When `ReviewRuleset` is empty, reviewers apply a hardcoded default rule list:
+- potential bugs or correctness risks
+- risky logic changes and missing safeguards
+- maintainability or readability issues that materially affect future changes
 - test impact suggestions
 
-Explicitly excluded:
-- fixed Clean Architecture checklists
-- fixed SOLID checklists
-
-Policy authoring mode:
-- runtime review policy is written as Markdown Go template (`*.md`)
-- non-developers can modify policy text without changing Go code
-- current template data includes: `ReviewLanguage`
+When `ReviewRuleset` is provided, it fully replaces the default rule list.
 
 ## LLM Contract
 

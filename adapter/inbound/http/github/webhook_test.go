@@ -230,6 +230,10 @@ func (e *mockCodeEnvironment) SetupAgent(_ context.Context, _ domain.CodingAgent
 	return nil, nil
 }
 
+func (e *mockCodeEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *mockCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, nil
 }

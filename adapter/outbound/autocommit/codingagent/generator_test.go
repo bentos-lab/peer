@@ -29,6 +29,10 @@ func (e *commitTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAge
 	return e.agent, nil
 }
 
+func (e *commitTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *commitTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return e.changedFiles, nil
 }

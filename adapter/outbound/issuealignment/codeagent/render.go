@@ -22,7 +22,10 @@ func renderIssueAlignmentTask(payload usecase.LLMIssueAlignmentPayload, keyIdeas
 		files = append(files, issueAlignmentFileData{Path: file.Path, ChangedText: changedText})
 	}
 
-	base, head := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	base, head, err := refs.ValidateResolvedRefs(payload.Input.Base, payload.Input.Head)
+	if err != nil {
+		return "", err
+	}
 
 	data := issueAlignmentTaskTemplateData{
 		Repository:    payload.Input.Target.Repository,

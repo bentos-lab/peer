@@ -26,7 +26,6 @@ import (
 	"github.com/bentos-lab/peer/config"
 	"github.com/bentos-lab/peer/usecase"
 	"github.com/bentos-lab/peer/usecase/contracts"
-	"github.com/bentos-lab/peer/usecase/rulepack"
 )
 
 // BuildReviewUseCase builds a review usecase.
@@ -51,7 +50,6 @@ func BuildReviewUseCase(cfg config.Config, opts CLILLMOptions, logLevelOverride 
 	}
 
 	reviewUseCase, err := usecase.NewReviewUseCase(
-		rulepack.NewCoreRulePackProvider(),
 		reviewer,
 		reviewPublisher,
 		deps.Logger,

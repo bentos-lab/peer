@@ -71,7 +71,10 @@ func (g *IssueAlignmentGenerator) GenerateIssueAlignment(ctx context.Context, pa
 		return domain.IssueAlignmentResult{}, fmt.Errorf("issue alignment requires issue candidates")
 	}
 
-	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	normalizedBase, normalizedHead, err := refs.ValidateResolvedRefs(payload.Input.Base, payload.Input.Head)
+	if err != nil {
+		return domain.IssueAlignmentResult{}, err
+	}
 
 	changedFiles, err := payload.Environment.LoadChangedFiles(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: normalizedBase,

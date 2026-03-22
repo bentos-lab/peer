@@ -29,6 +29,10 @@ func (e *autogenTestEnvironment) SetupAgent(_ context.Context, _ domain.CodingAg
 	return nil, nil
 }
 
+func (e *autogenTestEnvironment) ResolveBaseHead(_ context.Context, base string, head string) (string, string, error) {
+	return base, head, nil
+}
+
 func (e *autogenTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	return nil, nil
 }

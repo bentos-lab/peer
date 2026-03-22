@@ -92,6 +92,72 @@ func (e *HostCodeEnvironment) SetupAgent(ctx context.Context, opts domain.Coding
 	}
 }
 
+// ResolveBaseHead resolves base/head refs into concrete commit refs when needed.
+func (e *HostCodeEnvironment) ResolveBaseHead(ctx context.Context, base string, head string) (string, string, error) {
+	base = strings.TrimSpace(base)
+	head = strings.TrimSpace(head)
+	if base == "" {
+		return "", "", fmt.Errorf("base ref is required")
+	}
+	if head == "" {
+		return "", "", fmt.Errorf("head ref is required")
+	}
+	if strings.HasPrefix(base, "@") {
+		return "", "", fmt.Errorf("base ref must not use workspace tokens")
+	}
+	if strings.HasPrefix(head, "@") && head != "@staged" && head != "@all" {
+		return "", "", fmt.Errorf("head ref must not use workspace tokens")
+	}
+
+	workspaceDir, err := e.workspaceDirForRef(head)
+	if err != nil {
+		return "", "", err
+	}
+	if e.isRemote && isWorkspaceTokenRef(head) {
+		return "", "", fmt.Errorf("ref %q requires local workspace mode", head)
+	}
+
+	if isWorkspaceTokenRef(head) {
+		preCommitHead, err := e.getCurrentHead(ctx, workspaceDir)
+		if err != nil {
+			return "", "", err
+		}
+
+		stageAll := head == "@all"
+		if _, err := e.CommitChanges(ctx, domain.CodeEnvironmentCommitOptions{
+			CommitMessage: "peer: snapshot workspace",
+			StageAll:      stageAll,
+		}); err != nil {
+			return "", "", err
+		}
+
+		newHead, err := e.getCurrentHead(ctx, workspaceDir)
+		if err != nil {
+			return "", "", err
+		}
+
+		resolvedBase := base
+		if base == "HEAD" {
+			resolvedBase = preCommitHead
+		}
+		resolvedBase = strings.TrimSpace(resolvedBase)
+		if resolvedBase == "" || strings.HasPrefix(resolvedBase, "@") {
+			return "", "", fmt.Errorf("base ref must not use workspace tokens")
+		}
+		return resolvedBase, newHead, nil
+	}
+
+	resolvedBase, err := e.normalizeRef(ctx, workspaceDir, base)
+	if err != nil {
+		return "", "", err
+	}
+	resolvedHead, err := e.normalizeRef(ctx, workspaceDir, head)
+	if err != nil {
+		return "", "", err
+	}
+	return resolvedBase, resolvedHead, nil
+}
+
 // LoadChangedFiles resolves changed files from the selected comparison mode.
 func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
 	workspaceDir, err := e.workspaceDirForRef(opts.Head)

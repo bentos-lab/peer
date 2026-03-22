@@ -63,7 +63,10 @@ func (g *Generator) Generate(ctx context.Context, payload usecase.AutogenPayload
 		return "", fmt.Errorf("code environment must not be nil")
 	}
 
-	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
+	normalizedBase, normalizedHead, err := refs.ValidateResolvedRefs(payload.Input.Base, payload.Input.Head)
+	if err != nil {
+		return "", err
+	}
 	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
 		Base: normalizedBase,
 		Head: normalizedHead,

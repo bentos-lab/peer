@@ -31,7 +31,7 @@ type reviewModelOutput struct {
 }
 
 type reviewSystemPromptTemplateData struct {
-	RulePackText string
+	CustomRuleset string
 }
 
 type reviewUserPromptTemplateData struct {
@@ -61,7 +61,6 @@ func NewReviewer(generator contracts.LLMGenerator, logger usecase.Logger) (*Revi
 
 // Review generates findings from changed content by calling an LLM provider.
 func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload) (usecase.LLMReviewResult, error) {
-	r.logger.Debugf("The rule pack includes %d instructions.", len(payload.RulePack.Instructions))
 	if payload.Environment == nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")
 	}
@@ -75,7 +74,7 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 	}
 	r.logger.Debugf("The review input includes %d changed files.", len(changedFiles))
 
-	systemPrompt, err := renderSystemPrompt(strings.Join(payload.RulePack.Instructions, "\n\n"))
+	systemPrompt, err := renderSystemPrompt(strings.TrimSpace(payload.CustomRuleset))
 	if err != nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("review: render system prompt: %w", err)
 	}

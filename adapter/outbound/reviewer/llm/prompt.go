@@ -5,9 +5,9 @@ import (
 	sharedtext "github.com/bentos-lab/peer/shared/text"
 )
 
-func renderSystemPrompt(rulePackText string) (string, error) {
+func renderSystemPrompt(customRuleset string) (string, error) {
 	return sharedtext.RenderSimpleTemplate("reviewer_system_prompt", reviewSystemPromptTemplateRaw, reviewSystemPromptTemplateData{
-		RulePackText: rulePackText,
+		CustomRuleset: customRuleset,
 	})
 }
 

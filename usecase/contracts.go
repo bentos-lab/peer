@@ -7,28 +7,14 @@ import (
 	uccontracts "github.com/bentos-lab/peer/usecase/contracts"
 )
 
-// RulePack defines the active set of review instructions.
-type RulePack struct {
-	ID           string
-	Version      string
-	Name         string
-	Instructions []string
-}
-
 // OverviewIssueAlignmentInput supplies issue alignment data for overview flows.
 type OverviewIssueAlignmentInput struct {
 	Candidates []domain.IssueContext
 }
 
-// RulePackProvider returns hardcoded rule packs.
-type RulePackProvider interface {
-	CorePack(ctx context.Context) (RulePack, error)
-}
-
 // LLMReviewPayload is the complete review prompt payload.
 type LLMReviewPayload struct {
 	Input         domain.ChangeRequestInput
-	RulePack      RulePack
 	Environment   uccontracts.CodeEnvironment
 	Suggestions   bool
 	CustomRuleset string
