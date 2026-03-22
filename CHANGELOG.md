@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.0] - 2026-03-22
+### Changed
+- Introduced a two-phase review flow and ensured base/head refs are resolved before review work begins.
+- Split large helper modules into smaller, focused packages to improve clarity and maintainability.
+- Removed change request metadata from the commit workflow.
+
 ## [0.3.0] - 2026-03-20
 ### Added
 - Filter NIT findings before publishing review output.
