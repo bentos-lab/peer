@@ -53,3 +53,4 @@ git push origin vX.Y.Z
 
 * Do not release if anything is outdated or failing
 * Do not rewrite history after release
+* The change logs must be described by natural language, not commit titles. You must summarize the changes to generate change log.
