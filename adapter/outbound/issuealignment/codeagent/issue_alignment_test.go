@@ -39,6 +39,10 @@ func (e *issueAlignmentTestEnvironment) LoadChangedFiles(_ context.Context, _ do
 	return e.changedFiles, nil
 }
 
+func (e *issueAlignmentTestEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *issueAlignmentTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

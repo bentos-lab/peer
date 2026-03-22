@@ -234,6 +234,10 @@ func (e *mockCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeE
 	return nil, nil
 }
 
+func (e *mockCodeEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *mockCodeEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

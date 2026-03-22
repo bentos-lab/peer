@@ -1,220 +1,105 @@
 package host
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"strings"
 
-	"github.com/bentos-lab/peer/adapter/outbound/commandrunner"
-	"github.com/bentos-lab/peer/domain"
-	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	"github.com/bentos-lab/peer/shared/toolinstall"
-	"github.com/bentos-lab/peer/usecase"
 )
 
-// HostOpencodeAgent runs tasks through the opencode CLI on the host machine.
-type HostOpencodeAgent struct {
-	workspaceDir string
-	runner       commandrunner.StreamRunner
-	logger       usecase.Logger
-	installer    *toolinstall.OpencodeInstaller
-}
+func (a *HostOpencodeAgent) resolveModelSpec(ctx context.Context, provider string, model string) (string, error) {
+	provider = strings.TrimSpace(provider)
+	model = strings.TrimSpace(model)
 
-// NewHostOpencodeAgent creates a host opencode coding agent.
-func NewHostOpencodeAgent(workspaceDir string, runner commandrunner.StreamRunner, logger usecase.Logger) *HostOpencodeAgent {
-	if runner == nil {
-		runner = commandrunner.NewOSStreamCommandRunner()
-	}
-	if logger == nil {
-		logger = stdlogger.Nop()
-	}
-	return &HostOpencodeAgent{
-		workspaceDir: workspaceDir,
-		runner:       runner,
-		logger:       logger,
-		installer:    toolinstall.NewOpencodeInstaller(nil),
-	}
-}
-
-// Run executes one coding task using opencode JSON output mode.
-func (a *HostOpencodeAgent) Run(ctx context.Context, task string, opts domain.CodingAgentRunOptions) (domain.CodingAgentRunResult, error) {
-	task = strings.TrimSpace(task)
-	if task == "" {
-		return domain.CodingAgentRunResult{}, fmt.Errorf("task is required")
-	}
-
-	if err := a.ensureOpencodeInstalled(ctx); err != nil {
-		return domain.CodingAgentRunResult{}, err
-	}
-
-	a.logger.Tracef("Open-code task: %s", task)
-
-	provider := strings.TrimSpace(opts.Provider)
-	model := strings.TrimSpace(opts.Model)
-	modelSpec, err := a.resolveModelSpec(ctx, provider, model)
-	if err != nil {
-		return domain.CodingAgentRunResult{}, err
-	}
-
-	if modelSpec == "" {
-		a.logger.Debugf("coding-agent opencode using default model")
-	} else {
-		a.logger.Debugf("coding-agent opencode using model %s", modelSpec)
-	}
-	parser := newOpencodeJSONStreamParser(a.logger)
-	stderrBuffer := newLineBuffer(func(line string) {
-		if strings.TrimSpace(line) == "" {
-			return
+	if provider == "" {
+		if model != "" {
+			a.logger.Warnf("coding-agent opencode provider is empty; clearing model %q", model)
 		}
-		a.logger.Warnf("coding-agent opencode stderr: %s", line)
-	})
+		return "", nil
+	}
 
-	args := []string{
-		"run",
-		"--format",
-		"json",
-		"--dir",
-		a.workspaceDir,
+	if model == "" {
+		models, err := a.listOpencodeModels(ctx, provider)
+		if err != nil {
+			a.logger.Warnf("coding-agent opencode failed to list models for provider %s: %v", provider, err)
+			return "", nil
+		}
+		if len(models) == 0 {
+			a.logger.Warnf("coding-agent opencode no models returned for provider %s", provider)
+			return "", nil
+		}
+		model = selectDefaultOpencodeModel(provider, models)
 	}
-	if sessionID := strings.TrimSpace(opts.SessionID); sessionID != "" {
-		args = append(args, "--session", sessionID)
+
+	if model == "" {
+		return "", nil
 	}
-	if modelSpec != "" {
-		args = append(args, "--model", modelSpec)
+	return provider + "/" + model, nil
+}
+
+func (a *HostOpencodeAgent) listOpencodeModels(ctx context.Context, provider string) ([]string, error) {
+	result, err := a.runner.RunStream(ctx, nil, "opencode", "models", provider)
+	if err != nil {
+		return nil, formatCommandError(err, result)
 	}
-	args = append(args, task)
-	result, err := a.runner.RunStream(
-		ctx,
-		func(chunk commandrunner.StreamChunk) {
-			if len(chunk.Data) == 0 {
-				return
+	return parseOpencodeModelList(provider, string(result.Stdout)), nil
+}
+
+func selectDefaultOpencodeModel(provider string, models []string) string {
+	defaultModel, ok := defaultOpencodeModels[strings.ToLower(provider)]
+	if ok {
+		for _, candidate := range models {
+			if strings.EqualFold(candidate, defaultModel) {
+				return candidate
 			}
-			switch chunk.Type {
-			case commandrunner.StreamTypeStdout:
-				parser.Consume(chunk.Data)
-			case commandrunner.StreamTypeStderr:
-				stderrBuffer.Append(chunk.Data)
+		}
+	}
+	return models[0]
+}
+
+func parseOpencodeModelList(provider string, stdout string) []string {
+	provider = strings.TrimSpace(provider)
+	providerLower := strings.ToLower(provider)
+	lines := strings.Split(stdout, "\n")
+	models := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		model := strings.TrimSpace(fields[0])
+		if model == "" {
+			continue
+		}
+		if strings.Contains(model, "/") {
+			lower := strings.ToLower(model)
+			prefix := providerLower + "/"
+			if providerLower != "" && strings.HasPrefix(lower, prefix) {
+				model = model[len(prefix):]
+			} else {
+				model = model[strings.LastIndex(model, "/")+1:]
 			}
-		},
-		"opencode",
-		args...,
-	)
-	stderrBuffer.Flush()
-	if err != nil {
-		return domain.CodingAgentRunResult{}, fmt.Errorf("failed to run opencode task: %w", formatCommandError(err, result))
-	}
-
-	text, err := parser.Finalize()
-	if err != nil {
-		return domain.CodingAgentRunResult{}, err
-	}
-
-	return domain.CodingAgentRunResult{Text: text, SessionID: parser.sessionID}, nil
-}
-
-const opencodeDebugTranscriptMaxChars = 512
-
-type parsedOpencodeEvent struct {
-	Type   string
-	Text   string
-	Action string
-}
-
-type opencodeJSONStreamParser struct {
-	logger                usecase.Logger
-	stdoutLineBuffer      lineBuffer
-	finalText             string
-	assistantDelta        strings.Builder
-	parsedLineCount       int
-	assistantMessageCount int
-	assistantDeltaCount   int
-	lineNumber            int
-	firstError            error
-	sessionID             string
-}
-
-// Consume processes one stdout chunk from opencode in real time.
-func (p *opencodeJSONStreamParser) Consume(stdoutChunk []byte) {
-	if p.firstError != nil || len(stdoutChunk) == 0 {
-		return
-	}
-	p.stdoutLineBuffer.Append(stdoutChunk)
-}
-
-// Finalize flushes any remaining buffered line and resolves final assistant text.
-func (p *opencodeJSONStreamParser) Finalize() (string, error) {
-	p.stdoutLineBuffer.Flush()
-	if p.firstError != nil {
-		return "", p.firstError
-	}
-
-	logTranscript := func(source string, text string) {
-		transcriptLineCount := strings.Count(text, "\n") + 1
-		truncated := truncateForDebug(text, opencodeDebugTranscriptMaxChars)
-		p.logger.Debugf(
-			"coding-agent debug action=%q source=%s parsed_lines=%d message_events=%d delta_events=%d chars=%d lines=%d content=%q",
-			"agent finalized assistant transcript",
-			source,
-			p.parsedLineCount,
-			p.assistantMessageCount,
-			p.assistantDeltaCount,
-			len(text),
-			transcriptLineCount,
-			truncated,
-		)
-	}
-
-	p.finalText = strings.TrimSpace(p.finalText)
-	if p.finalText != "" {
-		logTranscript("assistant_message", p.finalText)
-		return p.finalText, nil
-	}
-
-	deltaText := strings.TrimSpace(p.assistantDelta.String())
-	if deltaText != "" {
-		logTranscript("assistant_delta", deltaText)
-		return deltaText, nil
-	}
-
-	return "", fmt.Errorf("no assistant output found in opencode response")
-}
-
-type lineBuffer struct {
-	buffer      bytes.Buffer
-	consumeLine func(string)
-}
-
-func (b *lineBuffer) Append(chunk []byte) {
-	if len(chunk) == 0 {
-		return
-	}
-	_, _ = b.buffer.Write(chunk)
-
-	for {
-		content := b.buffer.Bytes()
-		before, after, ok := bytes.Cut(content, []byte{'\n'})
-		if !ok {
-			return
 		}
-
-		line := string(before)
-		remaining := append([]byte(nil), after...)
-		b.buffer.Reset()
-		_, _ = b.buffer.Write(remaining)
-		if b.consumeLine != nil {
-			b.consumeLine(line)
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
 		}
+		models = append(models, model)
 	}
+	return models
 }
 
-func (b *lineBuffer) Flush() {
-	if b.buffer.Len() == 0 {
-		return
+var defaultOpencodeModels = map[string]string{
+	"openai":    "gpt-5.3-codex",
+	"anthropic": "claude-sonnet-4-6",
+	"gemini":    "gemini-3-pro-preview",
+	"google":    "gemini-3-pro-preview",
+}
+
+func (a *HostOpencodeAgent) ensureOpencodeInstalled(ctx context.Context) error {
+	if a.installer == nil {
+		a.installer = toolinstall.NewOpencodeInstaller(nil)
 	}
-	line := b.buffer.String()
-	b.buffer.Reset()
-	if b.consumeLine != nil {
-		b.consumeLine(line)
-	}
+	return a.installer.EnsureOpencodeInstalled(ctx)
 }

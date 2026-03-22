@@ -9,6 +9,7 @@ import (
 
 	"github.com/bentos-lab/peer/domain"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
+	sharedtext "github.com/bentos-lab/peer/shared/text"
 	"github.com/bentos-lab/peer/usecase"
 	"github.com/bentos-lab/peer/usecase/contracts"
 
@@ -65,7 +66,7 @@ func NewGenerator(agent contracts.CodingAgent, config Config, logger usecase.Log
 
 // Generate runs a coding-agent task and returns raw text output.
 func (g *Generator) Generate(ctx context.Context, params contracts.GenerateParams) (string, error) {
-	task, err := renderTemplate("llm_task_prompt", taskTemplateRaw, taskTemplateData{
+	task, err := sharedtext.RenderSimpleTemplate("llm_task_prompt", taskTemplateRaw, taskTemplateData{
 		SystemPrompt: strings.TrimSpace(params.SystemPrompt),
 		Messages:     params.Messages,
 	})
@@ -73,12 +74,17 @@ func (g *Generator) Generate(ctx context.Context, params contracts.GenerateParam
 		return "", err
 	}
 
-	output, err := g.runTask(ctx, task, domain.CodingAgentRunOptions{
+	trimmedTask := strings.TrimSpace(task)
+	if trimmedTask == "" {
+		return "", fmt.Errorf("task is required")
+	}
+
+	output, err := g.agent.Run(ctx, trimmedTask, domain.CodingAgentRunOptions{
 		Provider: g.config.Provider,
 		Model:    g.config.Model,
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to run coding agent task: %w", err)
 	}
 	return strings.TrimSpace(output.Text), nil
 }
@@ -106,7 +112,7 @@ func (g *Generator) GenerateJSON(ctx context.Context, params contracts.GenerateP
 		if attempt > 1 && lastErr != nil {
 			taskMessages = append(taskMessages, buildJSONFixMessage(lastErr, lastOutput))
 		}
-		task, err := renderTemplate("llm_task_prompt_json", taskJSONTemplateRaw, taskJSONTemplateData{
+		task, err := sharedtext.RenderSimpleTemplate("llm_task_prompt_json", taskJSONTemplateRaw, taskJSONTemplateData{
 			SystemPrompt: strings.TrimSpace(params.SystemPrompt),
 			Messages:     taskMessages,
 			Schema:       schemaText,
@@ -116,13 +122,18 @@ func (g *Generator) GenerateJSON(ctx context.Context, params contracts.GenerateP
 			return nil, err
 		}
 
-		result, err := g.runTask(ctx, task, domain.CodingAgentRunOptions{
+		trimmedTask := strings.TrimSpace(task)
+		if trimmedTask == "" {
+			return nil, fmt.Errorf("task is required")
+		}
+
+		result, err := g.agent.Run(ctx, trimmedTask, domain.CodingAgentRunOptions{
 			Provider:  g.config.Provider,
 			Model:     g.config.Model,
 			SessionID: sessionID,
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to run coding agent task: %w", err)
 		}
 		if strings.TrimSpace(result.SessionID) != "" {
 			sessionID = strings.TrimSpace(result.SessionID)

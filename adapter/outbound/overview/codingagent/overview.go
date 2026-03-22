@@ -75,7 +75,10 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 	if payload.Environment == nil {
 		return usecase.LLMOverviewResult{}, fmt.Errorf("code environment must not be nil")
 	}
-	if err := ensureDiffContentAvailable(ctx, payload.Environment, normalizedBase, normalizedHead); err != nil {
+	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: normalizedBase,
+		Head: normalizedHead,
+	}); err != nil {
 		return usecase.LLMOverviewResult{}, err
 	}
 
@@ -99,10 +102,14 @@ func (g *OverviewGenerator) GenerateOverview(ctx context.Context, payload usecas
 		return usecase.LLMOverviewResult{}, err
 	}
 
-	rawText, err := runTask(ctx, agent, g.config, taskPrompt)
+	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+		Provider: g.config.Provider,
+		Model:    g.config.Model,
+	})
 	if err != nil {
-		return usecase.LLMOverviewResult{}, err
+		return usecase.LLMOverviewResult{}, fmt.Errorf("failed to run coding agent task: %w", err)
 	}
+	rawText := strings.TrimSpace(result.Text)
 
 	outputMap, err := g.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: overviewFormattingSystemPrompt,

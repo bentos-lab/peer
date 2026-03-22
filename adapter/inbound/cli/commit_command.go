@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
 	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/domain"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	sharedlogging "github.com/bentos-lab/peer/shared/logging"
 	"github.com/bentos-lab/peer/usecase"
@@ -66,12 +66,17 @@ func (c *CommitCommand) Run(ctx context.Context, cfg config.Config, params Commi
 		return errors.New("stdin is required")
 	}
 
-	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, "")
+	if c.envFactory == nil {
+		return fmt.Errorf("code environment factory is required")
+	}
+	environment, err := c.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+		UseCwd: true,
+	})
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if cleanupErr := cleanup(ctx); cleanupErr != nil {
+		if cleanupErr := environment.Cleanup(ctx); cleanupErr != nil {
 			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
 		}
 	}()
@@ -99,7 +104,7 @@ func (c *CommitCommand) Run(ctx context.Context, cfg config.Config, params Commi
 		return err
 	}
 
-	_, _ = fmt.Fprintln(stdout, result.CommitMessage)
+	fmt.Fprintln(stdout, result.CommitMessage)
 
 	if params.Confirm == nil {
 		ok, err := c.promptYesNo(stdout, stdin, "Commit with this message? [y/N]: ")
@@ -115,7 +120,7 @@ func (c *CommitCommand) Run(ctx context.Context, cfg config.Config, params Commi
 
 	request.Commit = true
 	request.CommitMessage = result.CommitMessage
-	commitResult, err := commitUseCase.Execute(ctx, request)
+	_, err = commitUseCase.Execute(ctx, request)
 	if err != nil {
 		c.logger.Errorf("CLI commit failed.")
 		c.logger.Debugf("The CLI commit ran for %d ms before failing.", time.Since(startedAt).Milliseconds())
@@ -125,7 +130,6 @@ func (c *CommitCommand) Run(ctx context.Context, cfg config.Config, params Commi
 
 	c.logger.Infof("CLI commit completed.")
 	c.logger.Debugf("The CLI commit completed in %d ms.", time.Since(startedAt).Milliseconds())
-	_ = commitResult
 	return nil
 }
 
@@ -133,7 +137,7 @@ func promptYesNo(writer io.Writer, reader io.Reader, prompt string) (bool, error
 	if writer == nil || reader == nil {
 		return false, errors.New("prompt requires io")
 	}
-	_, _ = fmt.Fprint(writer, prompt)
+	fmt.Fprint(writer, prompt)
 	buf := bufio.NewReader(reader)
 	line, err := buf.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {

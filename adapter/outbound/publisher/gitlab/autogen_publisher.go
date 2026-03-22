@@ -92,4 +92,3 @@ func formatSummaryList(items []string) string {
 	}
 	return strings.TrimRight(builder.String(), "\n")
 }
-

@@ -123,10 +123,14 @@ func (g *IssueAlignmentGenerator) GenerateIssueAlignment(ctx context.Context, pa
 		return domain.IssueAlignmentResult{}, fmt.Errorf("failed to setup coding agent: %w", err)
 	}
 
-	rawText, err := runTask(ctx, agent, g.config, taskPrompt)
+	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+		Provider: g.config.Provider,
+		Model:    g.config.Model,
+	})
 	if err != nil {
-		return domain.IssueAlignmentResult{}, err
+		return domain.IssueAlignmentResult{}, fmt.Errorf("failed to run coding agent task: %w", err)
 	}
+	rawText := strings.TrimSpace(result.Text)
 
 	outputMap, err := g.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: issueAlignmentFormattingSystemPrompt,

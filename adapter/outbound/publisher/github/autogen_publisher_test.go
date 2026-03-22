@@ -33,6 +33,10 @@ func (e *autogenTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.Co
 	return nil, nil
 }
 
+func (e *autogenTestEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *autogenTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

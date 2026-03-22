@@ -33,6 +33,10 @@ func (e *commitTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.Cod
 	return e.changedFiles, nil
 }
 
+func (e *commitTestEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *commitTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

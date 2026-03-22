@@ -23,6 +23,10 @@ func (e *recipeTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.Cod
 	return nil, nil
 }
 
+func (e *recipeTestEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *recipeTestEnvironment) ReadFile(_ context.Context, path string, _ string) (string, bool, error) {
 	content, ok := e.files[path]
 	return content, ok, nil

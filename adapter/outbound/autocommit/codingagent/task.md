@@ -30,7 +30,7 @@ Diff commands (required):
 {{- end }}
 
 Output guidance:
-- Return plain text only.
+- Return plain text only. Which contain only commit message, not explanation, header.
 - Output MUST be a conventional commit message.
 - Use format: `type(scope): summary` or `type: summary`.
 - Allowed types: feat, fix, docs, refactor, test, chore, build, ci, perf, style.

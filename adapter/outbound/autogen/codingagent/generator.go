@@ -64,7 +64,10 @@ func (g *Generator) Generate(ctx context.Context, payload usecase.AutogenPayload
 	}
 
 	normalizedBase, normalizedHead := refs.NormalizePromptRefs(payload.Input.Base, payload.Input.Head)
-	if err := ensureDiffContentAvailable(ctx, payload.Environment, normalizedBase, normalizedHead); err != nil {
+	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: normalizedBase,
+		Head: normalizedHead,
+	}); err != nil {
 		return "", err
 	}
 
@@ -96,10 +99,14 @@ func (g *Generator) Generate(ctx context.Context, payload usecase.AutogenPayload
 		return "", err
 	}
 
-	output, err := runTask(ctx, agent, g.config, taskPrompt)
+	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+		Provider: g.config.Provider,
+		Model:    g.config.Model,
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to run coding agent task: %w", err)
 	}
+	output := strings.TrimSpace(result.Text)
 
 	g.logger.Infof("Coding-agent autogen completed.")
 	g.logger.Debugf("Coding-agent autogen took %d ms.", time.Since(startedAt).Milliseconds())

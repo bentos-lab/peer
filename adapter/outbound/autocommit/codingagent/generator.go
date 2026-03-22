@@ -30,7 +30,7 @@ type Generator struct {
 }
 
 type commitTaskPromptTemplateData struct {
-	Staged      bool
+	Staged bool
 }
 
 // NewGenerator creates a coding-agent commit message generator.
@@ -57,7 +57,10 @@ func (g *Generator) GenerateCommitMessage(ctx context.Context, payload usecase.C
 	if payload.Environment == nil {
 		return "", fmt.Errorf("code environment must not be nil")
 	}
-	if err := ensureDiffContentAvailable(ctx, payload.Environment, "", headToken); err != nil {
+	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: "",
+		Head: headToken,
+	}); err != nil {
 		return "", err
 	}
 
@@ -70,18 +73,22 @@ func (g *Generator) GenerateCommitMessage(ctx context.Context, payload usecase.C
 	}
 
 	taskPrompt, err := sharedtext.RenderSimpleTemplate("commit_task_prompt", commitTaskPromptTemplateRaw, commitTaskPromptTemplateData{
-		Staged:      payload.Staged,
+		Staged: payload.Staged,
 	})
 	if err != nil {
 		return "", err
 	}
 
-	output, err := runTask(ctx, agent, g.config, taskPrompt)
+	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+		Provider: g.config.Provider,
+		Model:    g.config.Model,
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to run coding agent task: %w", err)
 	}
+	output := strings.TrimSpace(result.Text)
 
 	g.logger.Infof("Coding-agent commit message generation completed.")
 	g.logger.Debugf("Coding-agent commit message generation took %d ms.", time.Since(startedAt).Milliseconds())
-	return strings.TrimSpace(output), nil
+	return output, nil
 }

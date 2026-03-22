@@ -58,6 +58,10 @@ func (e *autogenUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, opts
 	return e.files, nil
 }
 
+func (e *autogenUseCaseTestEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *autogenUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

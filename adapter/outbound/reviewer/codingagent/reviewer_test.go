@@ -2,6 +2,8 @@ package codingagent
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/bentos-lab/peer/domain"
@@ -41,6 +43,19 @@ func (e *reviewerTestEnvironment) LoadChangedFiles(_ context.Context, _ domain.C
 		return nil, e.loadChangedErr
 	}
 	return e.changedFiles, nil
+}
+
+func (e *reviewerTestEnvironment) EnsureDiffContentAvailable(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) error {
+	changedFiles, err := e.LoadChangedFiles(ctx, opts)
+	if err != nil {
+		return err
+	}
+	for _, file := range changedFiles {
+		if strings.TrimSpace(file.DiffSnippet) != "" {
+			return nil
+		}
+	}
+	return fmt.Errorf("diff content is empty for base %q and head %q", opts.Base, opts.Head)
 }
 
 func (e *reviewerTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {

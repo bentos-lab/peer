@@ -7,10 +7,10 @@ import (
 )
 
 type fakeGitHubClient struct {
-	resolvedRepository string
-	pullRequestInfo    domain.ChangeRequestInfo
-	issue              domain.Issue
-	issueComments      []domain.IssueComment
+	resolvedRepository     string
+	pullRequestInfo        domain.ChangeRequestInfo
+	issue                  domain.Issue
+	issueComments          []domain.IssueComment
 	resolveRepositoryCalls int
 }
 
