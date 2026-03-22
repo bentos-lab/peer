@@ -33,6 +33,10 @@ func (e *testCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeE
 	return nil, nil
 }
 
+func (e *testCodeEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *testCodeEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

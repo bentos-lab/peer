@@ -66,6 +66,10 @@ func (e *overviewUseCaseTestEnvironment) LoadChangedFiles(_ context.Context, _ d
 	return nil, errors.New("not implemented")
 }
 
+func (e *overviewUseCaseTestEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *overviewUseCaseTestEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, errors.New("not implemented")
 }

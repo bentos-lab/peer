@@ -17,6 +17,8 @@ type CodeEnvironment interface {
 	SetupAgent(ctx context.Context, opts domain.CodingAgentSetupOptions) (CodingAgent, error)
 	// LoadChangedFiles loads changed files for the selected comparison mode.
 	LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error)
+	// EnsureDiffContentAvailable validates that diff content is present for the requested comparison.
+	EnsureDiffContentAvailable(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) error
 	// ReadFile reads a repository-relative file at the provided ref.
 	ReadFile(ctx context.Context, path string, ref string) (string, bool, error)
 	// CommitChanges commits changes in the code environment.

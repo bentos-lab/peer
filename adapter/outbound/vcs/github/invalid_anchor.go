@@ -40,4 +40,3 @@ func isInvalidAnchorCommandError(err error) bool {
 	}
 	return isInvalidAnchorErrorText(errorText)
 }
-

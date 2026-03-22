@@ -58,4 +58,3 @@ func (p *ReplyCommentPublisher) Publish(ctx context.Context, result usecase.Repl
 	}
 	return nil
 }
-

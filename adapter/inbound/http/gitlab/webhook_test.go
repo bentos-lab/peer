@@ -64,6 +64,10 @@ func (e *testEnvironment) LoadChangedFiles(_ context.Context, _ domain.CodeEnvir
 	return nil, nil
 }
 
+func (e *testEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *testEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

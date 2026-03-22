@@ -61,8 +61,9 @@ _ = result.Text
 ## Host Environment Behavior
 
 - `Factory.New` with `RepoURL` empty:
-  - uses current working directory as workspace for token refs (`@staged`, `@all`); empty ref defaults to `@all`,
-  - for non-token refs, reads `remote.origin.url`, clones into `~/.bentos-labtmp`, and operates on that clone.
+  - default: copies the current working directory into a temporary workspace under `~/.peertmp`,
+  - optional: when `UseCwd` is true, uses the current working directory directly (local-only).
+  - uses the selected workspace for token refs (`@staged`, `@all`) and normal refs; empty ref defaults to `@all`.
 - `Factory.New` with `RepoURL` non-empty:
   - creates a random temporary workspace under `~/.bentos-labtmp`,
   - runs shallow clone (`git clone --depth 1`),

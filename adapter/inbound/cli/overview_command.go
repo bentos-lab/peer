@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
-	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
 	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/domain"
+	sharedcli "github.com/bentos-lab/peer/shared/cli"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	sharedlogging "github.com/bentos-lab/peer/shared/logging"
 	"github.com/bentos-lab/peer/usecase"
@@ -69,7 +71,7 @@ func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params Ove
 		c.logger = stdlogger.Nop()
 	}
 
-	effectiveIssueAlignment := ResolveBool(params.IssueAlignment, nil, cfg.Overview.IssueAlignmentEnabled)
+	effectiveIssueAlignment := sharedcli.ResolveBool(params.IssueAlignment, nil, cfg.Overview.IssueAlignmentEnabled)
 	vcsClient, err := c.vcsResolver.Resolve(params.VCSProvider)
 	if err != nil {
 		return err
@@ -89,10 +91,16 @@ func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params Ove
 		return err
 	}
 
-	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, resolution.RepoURL)
+	if c.envFactory == nil {
+		return fmt.Errorf("code environment factory is required")
+	}
+	environment, err := c.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+		RepoURL: resolution.RepoURL,
+	})
 	if err != nil {
 		return err
 	}
+	cleanup := environment.Cleanup
 	defer func() {
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -104,7 +112,7 @@ func (c *OverviewCommand) Run(ctx context.Context, cfg config.Config, params Ove
 	if err != nil {
 		return err
 	}
-	effectiveIssueAlignment = ResolveBool(params.IssueAlignment, recipe.OverviewIssueAlignmentEnabled, cfg.Overview.IssueAlignmentEnabled)
+	effectiveIssueAlignment = sharedcli.ResolveBool(params.IssueAlignment, recipe.OverviewIssueAlignmentEnabled, cfg.Overview.IssueAlignmentEnabled)
 	issueCandidates := resolution.IssueCandidates
 	if effectiveIssueAlignment {
 		if issueCandidates == nil {

@@ -12,10 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bentos-lab/peer/adapter/inbound/cli"
 	"github.com/bentos-lab/peer/adapter/inbound/http/background"
-	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
 	"github.com/bentos-lab/peer/domain"
+	sharedcli "github.com/bentos-lab/peer/shared/cli"
 	"github.com/bentos-lab/peer/shared/jobqueue"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	sharedlogging "github.com/bentos-lab/peer/shared/logging"
@@ -415,10 +414,13 @@ func (h *Handler) handleNoteEvent(w http.ResponseWriter, r *http.Request, body [
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, req.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: req.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -525,10 +527,13 @@ func (h *Handler) enqueueReviewJob(action string, input domain.ChangeRequestInpu
 			if h.codeEnvFactory == nil || h.recipeLoader == nil {
 				return errors.New("code environment is not configured")
 			}
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: input.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -596,10 +601,13 @@ func (h *Handler) enqueueOverviewJob(action string, input domain.ChangeRequestIn
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: input.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -667,10 +675,13 @@ func (h *Handler) enqueueAutogenJob(action string, input domain.ChangeRequestInp
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: input.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -741,19 +752,19 @@ func (h *Handler) resolveAutogenEnabled(action string, recipe domain.CustomRecip
 }
 
 func (h *Handler) resolveReviewSuggestions(recipe domain.CustomRecipe) bool {
-	return cli.ResolveBool(recipe.ReviewSuggestions, nil, h.reviewSuggestions)
+	return sharedcli.ResolveBool(recipe.ReviewSuggestions, nil, h.reviewSuggestions)
 }
 
 func (h *Handler) resolveIssueAlignmentEnabled(recipe domain.CustomRecipe) bool {
-	return cli.ResolveBool(recipe.OverviewIssueAlignmentEnabled, nil, h.overviewIssueAlign)
+	return sharedcli.ResolveBool(recipe.OverviewIssueAlignmentEnabled, nil, h.overviewIssueAlign)
 }
 
 func (h *Handler) resolveAutogenDocs(recipe domain.CustomRecipe) bool {
-	return cli.ResolveBool(recipe.AutogenDocs, nil, h.autogenDocs)
+	return sharedcli.ResolveBool(recipe.AutogenDocs, nil, h.autogenDocs)
 }
 
 func (h *Handler) resolveAutogenTests(recipe domain.CustomRecipe) bool {
-	return cli.ResolveBool(recipe.AutogenTests, nil, h.autogenTests)
+	return sharedcli.ResolveBool(recipe.AutogenTests, nil, h.autogenTests)
 }
 
 func buildWebhookInput(repository string, prNumber int, repoURL string, base string, head string, title string, description string, action string) domain.ChangeRequestInput {

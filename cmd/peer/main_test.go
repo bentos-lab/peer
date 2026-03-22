@@ -130,6 +130,10 @@ func (e *mainTestCodeEnvironment) LoadChangedFiles(_ context.Context, _ domain.C
 	return nil, nil
 }
 
+func (e *mainTestCodeEnvironment) EnsureDiffContentAvailable(_ context.Context, _ domain.CodeEnvironmentLoadOptions) error {
+	return nil
+}
+
 func (e *mainTestCodeEnvironment) ReadFile(_ context.Context, _ string, _ string) (string, bool, error) {
 	return "", false, nil
 }

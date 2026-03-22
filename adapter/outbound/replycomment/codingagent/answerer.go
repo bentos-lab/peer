@@ -62,7 +62,10 @@ func (a *Answerer) Answer(ctx context.Context, payload usecase.ReplyCommentAnswe
 	if payload.Environment == nil {
 		return "", fmt.Errorf("code environment must not be nil")
 	}
-	if err := ensureDiffContentAvailable(ctx, payload.Environment, normalizedBase, normalizedHead); err != nil {
+	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: normalizedBase,
+		Head: normalizedHead,
+	}); err != nil {
 		return "", err
 	}
 
@@ -90,10 +93,14 @@ func (a *Answerer) Answer(ctx context.Context, payload usecase.ReplyCommentAnswe
 		return "", err
 	}
 
-	rawText, err := runTask(ctx, agent, a.config, taskPrompt)
+	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+		Provider: a.config.Provider,
+		Model:    a.config.Model,
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to run coding agent task: %w", err)
 	}
+	rawText := strings.TrimSpace(result.Text)
 
 	a.logger.Infof("Coding-agent replycomment completed.")
 	a.logger.Debugf("Coding-agent replycomment took %d ms.", time.Since(startedAt).Milliseconds())

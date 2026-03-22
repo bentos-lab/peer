@@ -53,6 +53,7 @@ func (f *Factory) New(ctx context.Context, opts domain.CodeEnvironmentInitOption
 		Getwd:       f.getwd,
 		MakeTempDir: f.makeTempDir,
 		Logger:      f.logger,
+		UseCwd:      opts.UseCwd,
 	})
 	if err := environment.prepareWorkspace(ctx, opts.RepoURL); err != nil {
 		return nil, err

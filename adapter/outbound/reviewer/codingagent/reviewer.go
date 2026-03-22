@@ -82,7 +82,10 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 	if payload.Environment == nil {
 		return usecase.LLMReviewResult{}, fmt.Errorf("code environment must not be nil")
 	}
-	if err := ensureDiffContentAvailable(ctx, payload.Environment, normalizedBase, normalizedHead); err != nil {
+	if err := payload.Environment.EnsureDiffContentAvailable(ctx, domain.CodeEnvironmentLoadOptions{
+		Base: normalizedBase,
+		Head: normalizedHead,
+	}); err != nil {
 		return usecase.LLMReviewResult{}, err
 	}
 
@@ -106,10 +109,14 @@ func (r *Reviewer) Review(ctx context.Context, payload usecase.LLMReviewPayload)
 		return usecase.LLMReviewResult{}, err
 	}
 
-	rawText, err := runTask(ctx, agent, r.config, taskPrompt)
+	result, err := agent.Run(ctx, strings.TrimSpace(taskPrompt), domain.CodingAgentRunOptions{
+		Provider: r.config.Provider,
+		Model:    r.config.Model,
+	})
 	if err != nil {
-		return usecase.LLMReviewResult{}, err
+		return usecase.LLMReviewResult{}, fmt.Errorf("failed to run coding agent task: %w", err)
 	}
+	rawText := strings.TrimSpace(result.Text)
 
 	outputMap, err := r.formatter.GenerateJSON(ctx, contracts.GenerateParams{
 		SystemPrompt: reviewFormattingSystemPrompt,

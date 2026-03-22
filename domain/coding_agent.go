@@ -16,6 +16,8 @@ type CodeEnvironmentLoadOptions struct {
 // CodeEnvironmentInitOptions contains request-scoped context for environment initialization.
 type CodeEnvironmentInitOptions struct {
 	RepoURL string
+	// UseCwd uses the current working directory directly for local repositories.
+	UseCwd bool
 }
 
 // CodeEnvironmentPushOptions contains inputs for pushing code changes.

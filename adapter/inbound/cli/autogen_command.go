@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
-	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
 	"github.com/bentos-lab/peer/config"
+	"github.com/bentos-lab/peer/domain"
+	sharedcli "github.com/bentos-lab/peer/shared/cli"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	sharedlogging "github.com/bentos-lab/peer/shared/logging"
 	"github.com/bentos-lab/peer/usecase"
@@ -90,10 +92,16 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 		return err
 	}
 
-	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, resolution.RepoURL)
+	if c.envFactory == nil {
+		return fmt.Errorf("code environment factory is required")
+	}
+	environment, err := c.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+		RepoURL: resolution.RepoURL,
+	})
 	if err != nil {
 		return err
 	}
+	cleanup := environment.Cleanup
 	defer func() {
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -114,8 +122,8 @@ func (c *AutogenCommand) Run(ctx context.Context, cfg config.Config, params Auto
 		return err
 	}
 
-	effectiveDocs := ResolveBool(params.Docs, recipe.AutogenDocs, cfg.Autogen.DocsEnabled)
-	effectiveTests := ResolveBool(params.Tests, recipe.AutogenTests, cfg.Autogen.TestsEnabled)
+	effectiveDocs := sharedcli.ResolveBool(params.Docs, recipe.AutogenDocs, cfg.Autogen.DocsEnabled)
+	effectiveTests := sharedcli.ResolveBool(params.Tests, recipe.AutogenTests, cfg.Autogen.TestsEnabled)
 
 	request := usecase.AutogenRequest{
 		Input:       domainChangeRequestInputForAutogen(resolution.Repository, resolution.ChangeRequestNumber, resolution.RepoURL, resolution.Base, resolution.Head, resolution.Title, resolution.Description),

@@ -14,11 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bentos-lab/peer/adapter/inbound/cli"
 	"github.com/bentos-lab/peer/adapter/inbound/http/background"
-	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
 	githubvcs "github.com/bentos-lab/peer/adapter/outbound/vcs/github"
 	"github.com/bentos-lab/peer/domain"
+	sharedcli "github.com/bentos-lab/peer/shared/cli"
 	"github.com/bentos-lab/peer/shared/jobqueue"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
 	sharedlogging "github.com/bentos-lab/peer/shared/logging"
@@ -306,8 +305,8 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 
 	overviewEnabled = overviewEnabled && isActionAllowed(event.Action, recipeConfig.OverviewEvents, h.overviewEvents)
 
-	enableSuggestions := cli.ResolveBool(recipeConfig.ReviewSuggestions, nil, h.reviewSuggestions)
-	issueAlignmentEnabled := cli.ResolveBool(recipeConfig.OverviewIssueAlignmentEnabled, nil, h.overviewIssueAlign)
+	enableSuggestions := sharedcli.ResolveBool(recipeConfig.ReviewSuggestions, nil, h.reviewSuggestions)
+	issueAlignmentEnabled := sharedcli.ResolveBool(recipeConfig.OverviewIssueAlignmentEnabled, nil, h.overviewIssueAlign)
 
 	autogenEnabled := h.autogenEnabled
 	if recipeConfig.AutogenEnabled != nil {
@@ -315,8 +314,8 @@ func (h *Handler) handlePullRequestEvent(w http.ResponseWriter, r *http.Request,
 	}
 
 	autogenEnabled = autogenEnabled && isActionAllowed(event.Action, recipeConfig.AutogenEvents, h.autogenEvents)
-	autogenDocs := cli.ResolveBool(recipeConfig.AutogenDocs, nil, h.autogenDocs)
-	autogenTests := cli.ResolveBool(recipeConfig.AutogenTests, nil, h.autogenTests)
+	autogenDocs := sharedcli.ResolveBool(recipeConfig.AutogenDocs, nil, h.autogenDocs)
+	autogenTests := sharedcli.ResolveBool(recipeConfig.AutogenTests, nil, h.autogenTests)
 	if !autogenDocs && !autogenTests {
 		autogenEnabled = false
 	}
@@ -500,10 +499,13 @@ func (h *Handler) handleIssueCommentEvent(w http.ResponseWriter, r *http.Request
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, req.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: req.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -638,10 +640,13 @@ func (h *Handler) handleReviewCommentEvent(w http.ResponseWriter, r *http.Reques
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, req.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: req.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -769,10 +774,13 @@ func (h *Handler) enqueueReviewJob(installationID string, action string, input d
 			if h.codeEnvFactory == nil || h.recipeLoader == nil {
 				return errors.New("code environment is not configured")
 			}
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: input.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -842,10 +850,13 @@ func (h *Handler) enqueueOverviewJob(installationID string, action string, input
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: input.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)
@@ -914,10 +925,13 @@ func (h *Handler) enqueueAutogenJob(installationID string, action string, input 
 				return errors.New("code environment is not configured")
 			}
 
-			environment, cleanup, err := codeenv.NewEnvironment(ctx, h.codeEnvFactory, input.RepoURL)
+			environment, err := h.codeEnvFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+				RepoURL: input.RepoURL,
+			})
 			if err != nil {
 				return err
 			}
+			cleanup := environment.Cleanup
 			defer func() {
 				if cleanupErr := cleanup(ctx); cleanupErr != nil {
 					h.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	codeenv "github.com/bentos-lab/peer/adapter/outbound/codeenv"
 	"github.com/bentos-lab/peer/config"
 	"github.com/bentos-lab/peer/domain"
 	"github.com/bentos-lab/peer/shared/logger/stdlogger"
@@ -102,10 +101,16 @@ func (c *ReplyCommentCommand) Run(ctx context.Context, cfg config.Config, params
 		return err
 	}
 
-	environment, cleanup, err := codeenv.NewEnvironment(ctx, c.envFactory, repoURL)
+	if c.envFactory == nil {
+		return fmt.Errorf("code environment factory is required")
+	}
+	environment, err := c.envFactory.New(ctx, domain.CodeEnvironmentInitOptions{
+		RepoURL: repoURL,
+	})
 	if err != nil {
 		return err
 	}
+	cleanup := environment.Cleanup
 	defer func() {
 		if cleanupErr := cleanup(ctx); cleanupErr != nil {
 			c.logger.Warnf("Failed to cleanup code environment: %v", cleanupErr)

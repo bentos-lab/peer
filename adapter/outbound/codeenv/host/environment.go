@@ -22,6 +22,7 @@ type HostCodeEnvironmentConfig struct {
 	Logger       usecase.Logger
 	WorkspaceDir string
 	IsRemote     bool
+	UseCwd       bool
 }
 
 // HostCodeEnvironment prepares code operations that run directly on the host machine.
@@ -33,6 +34,9 @@ type HostCodeEnvironment struct {
 	logger       usecase.Logger
 	workspaceDir string
 	isRemote     bool
+	isLocalCopy  bool
+	cleanup      bool
+	useCwd       bool
 	mu           sync.Mutex
 }
 
@@ -56,6 +60,8 @@ func NewHostCodeEnvironment(cfg HostCodeEnvironmentConfig) *HostCodeEnvironment 
 		logger:       defaults.logger,
 		workspaceDir: strings.TrimSpace(cfg.WorkspaceDir),
 		isRemote:     cfg.IsRemote,
+		cleanup:      cfg.IsRemote,
+		useCwd:       cfg.UseCwd,
 	}
 }
 
@@ -67,7 +73,7 @@ func (e *HostCodeEnvironment) SetupAgent(ctx context.Context, opts domain.Coding
 	}
 
 	headRef := strings.TrimSpace(opts.Ref)
-	workspaceDir, err := e.workspaceDirForRef(ctx, headRef)
+	workspaceDir, err := e.workspaceDirForRef(headRef)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +94,7 @@ func (e *HostCodeEnvironment) SetupAgent(ctx context.Context, opts domain.Coding
 
 // LoadChangedFiles resolves changed files from the selected comparison mode.
 func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.CodeEnvironmentLoadOptions) ([]domain.ChangedFile, error) {
-	workspaceDir, err := e.workspaceDirForRef(ctx, opts.Head)
+	workspaceDir, err := e.workspaceDirForRef(opts.Head)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +150,7 @@ func (e *HostCodeEnvironment) LoadChangedFiles(ctx context.Context, opts domain.
 
 // ReadFile reads a repository-relative file at the provided ref.
 func (e *HostCodeEnvironment) ReadFile(ctx context.Context, path string, ref string) (string, bool, error) {
-	workspaceDir, err := e.workspaceDirForRef(ctx, ref)
+	workspaceDir, err := e.workspaceDirForRef(ref)
 	if err != nil {
 		return "", false, err
 	}
@@ -178,7 +184,7 @@ func (e *HostCodeEnvironment) ReadFile(ctx context.Context, path string, ref str
 
 // Cleanup removes any temporary workspace created for remote repositories.
 func (e *HostCodeEnvironment) Cleanup(_ context.Context) error {
-	if !e.isRemote {
+	if !e.cleanup {
 		return nil
 	}
 	workspaceDir := strings.TrimSpace(e.workspaceDir)
