@@ -62,7 +62,6 @@ func TestCommitUseCaseGeneratesMessageWhenMissing(t *testing.T) {
 
 	env := &commitTestEnv{}
 	result, err := useCase.Execute(context.Background(), CommitRequest{
-		Input:       domain.ChangeRequestInput{Target: domain.ChangeRequestTarget{Repository: "local"}},
 		Commit:      false,
 		Environment: env,
 	})
@@ -80,7 +79,6 @@ func TestCommitUseCaseCommitsWithProvidedMessage(t *testing.T) {
 
 	env := &commitTestEnv{}
 	result, err := useCase.Execute(context.Background(), CommitRequest{
-		Input:         domain.ChangeRequestInput{Target: domain.ChangeRequestTarget{Repository: "local"}},
 		CommitMessage: "fix: commit",
 		Commit:        true,
 		StageAll:      true,
@@ -101,7 +99,6 @@ func TestCommitUseCaseRejectsEmptyGeneratedMessage(t *testing.T) {
 
 	env := &commitTestEnv{}
 	_, err = useCase.Execute(context.Background(), CommitRequest{
-		Input:       domain.ChangeRequestInput{Target: domain.ChangeRequestTarget{Repository: "local"}},
 		Commit:      false,
 		Environment: env,
 	})
@@ -115,7 +112,6 @@ func TestCommitUseCaseReturnsCommitError(t *testing.T) {
 
 	env := &commitTestEnv{commitErr: domain.ErrNoCodeChanges}
 	_, err = useCase.Execute(context.Background(), CommitRequest{
-		Input:       domain.ChangeRequestInput{Target: domain.ChangeRequestTarget{Repository: "local"}},
 		Commit:      true,
 		StageAll:    false,
 		Environment: env,

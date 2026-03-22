@@ -31,8 +31,7 @@ func NewCommitUseCase(generator CommitMessageGenerator, logger Logger) (CommitUs
 // Execute runs the commit flow.
 func (u *commitUseCase) Execute(ctx context.Context, request CommitRequest) (CommitExecutionResult, error) {
 	startedAt := time.Now()
-	target := request.Input.Target
-	logExecution(u.logger, "commit", target, "start", startedAt, "")
+	u.logger.Infof("Commit execution started.")
 
 	if request.Environment == nil {
 		return CommitExecutionResult{}, errors.New("code environment is required")
@@ -42,25 +41,41 @@ func (u *commitUseCase) Execute(ctx context.Context, request CommitRequest) (Com
 	if message == "" {
 		generateStartedAt := time.Now()
 		generated, err := u.generator.GenerateCommitMessage(ctx, CommitMessagePayload{
-			Input:       request.Input,
 			Staged:      !request.StageAll,
 			Environment: request.Environment,
 		})
 		if err != nil {
-			logStage(u.logger, "commit", "generate_commit_message", target, "failure", generateStartedAt, "%v", err)
+			u.logger.Errorf(
+				"Commit stage %q failed after %d ms: %v.",
+				"generate_commit_message",
+				time.Since(generateStartedAt).Milliseconds(),
+				err,
+			)
 			return CommitExecutionResult{}, err
 		}
 		message = strings.TrimSpace(generated)
 		if message == "" {
 			err := fmt.Errorf("commit message is required")
-			logStage(u.logger, "commit", "generate_commit_message", target, "failure", generateStartedAt, "%v", err)
+			u.logger.Errorf(
+				"Commit stage %q failed after %d ms: %v.",
+				"generate_commit_message",
+				time.Since(generateStartedAt).Milliseconds(),
+				err,
+			)
 			return CommitExecutionResult{}, err
 		}
-		logStage(u.logger, "commit", "generate_commit_message", target, "success", generateStartedAt, "")
+		u.logger.Debugf(
+			"Commit stage %q completed in %d ms.",
+			"generate_commit_message",
+			time.Since(generateStartedAt).Milliseconds(),
+		)
 	}
 
 	if !request.Commit {
-		logExecution(u.logger, "commit", target, "complete", startedAt, "")
+		u.logger.Infof(
+			"Commit execution completed in %d ms.",
+			time.Since(startedAt).Milliseconds(),
+		)
 		return CommitExecutionResult{CommitMessage: message, Committed: false}, nil
 	}
 
@@ -70,11 +85,23 @@ func (u *commitUseCase) Execute(ctx context.Context, request CommitRequest) (Com
 		StageAll:      request.StageAll,
 	})
 	if err != nil {
-		logStage(u.logger, "commit", "commit_changes", target, "failure", commitStartedAt, "%v", err)
+		u.logger.Errorf(
+			"Commit stage %q failed after %d ms: %v.",
+			"commit_changes",
+			time.Since(commitStartedAt).Milliseconds(),
+			err,
+		)
 		return CommitExecutionResult{}, err
 	}
-	logStage(u.logger, "commit", "commit_changes", target, "success", commitStartedAt, "")
+	u.logger.Debugf(
+		"Commit stage %q completed in %d ms.",
+		"commit_changes",
+		time.Since(commitStartedAt).Milliseconds(),
+	)
 
-	logExecution(u.logger, "commit", target, "complete", startedAt, "")
+	u.logger.Infof(
+		"Commit execution completed in %d ms.",
+		time.Since(startedAt).Milliseconds(),
+	)
 	return CommitExecutionResult{CommitMessage: message, Committed: result.Committed}, nil
 }

@@ -128,6 +128,8 @@ peer replycomment --change-request 123 --comment-id issuecomment-1234567890 --pu
 peer commit
 ```
 
+- The commit flow uses local changes only and does not use change request metadata.
+
 - Commit staged changes only:
 ```bash
 peer commit --staged

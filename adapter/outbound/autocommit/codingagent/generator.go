@@ -30,11 +30,7 @@ type Generator struct {
 }
 
 type commitTaskPromptTemplateData struct {
-	Repository  string
-	RepoURL     string
 	Staged      bool
-	Title       string
-	Description string
 }
 
 // NewGenerator creates a coding-agent commit message generator.
@@ -74,11 +70,7 @@ func (g *Generator) GenerateCommitMessage(ctx context.Context, payload usecase.C
 	}
 
 	taskPrompt, err := sharedtext.RenderSimpleTemplate("commit_task_prompt", commitTaskPromptTemplateRaw, commitTaskPromptTemplateData{
-		Repository:  payload.Input.Target.Repository,
-		RepoURL:     payload.Input.RepoURL,
 		Staged:      payload.Staged,
-		Title:       payload.Input.Title,
-		Description: sharedtext.SingleLine(payload.Input.Description),
 	})
 	if err != nil {
 		return "", err

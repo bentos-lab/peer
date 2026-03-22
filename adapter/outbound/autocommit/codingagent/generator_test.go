@@ -58,19 +58,11 @@ func TestGenerateCommitMessageUsesTaskPromptAndTrimsOutput(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := generator.GenerateCommitMessage(context.Background(), usecase.CommitMessagePayload{
-		Input: domain.ChangeRequestInput{
-			Target:      domain.ChangeRequestTarget{Repository: "org/repo"},
-			RepoURL:     "https://example.com/org/repo",
-			Title:       "Title",
-			Description: "Description",
-		},
 		Staged:      false,
 		Environment: env,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "feat: add commit", result)
-	require.Contains(t, env.agent.lastTask, "Repository: org/repo")
-	require.Contains(t, env.agent.lastTask, "Staged mode: false")
 	require.Contains(t, env.agent.lastTask, "git diff --name-status")
 	require.Contains(t, env.agent.lastTask, "Output MUST be a conventional commit message.")
 }
@@ -84,14 +76,9 @@ func TestGenerateCommitMessageHandlesStagedMode(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = generator.GenerateCommitMessage(context.Background(), usecase.CommitMessagePayload{
-		Input: domain.ChangeRequestInput{
-			Target:  domain.ChangeRequestTarget{Repository: "org/repo"},
-			RepoURL: "https://example.com/org/repo",
-		},
 		Staged:      true,
 		Environment: env,
 	})
 	require.NoError(t, err)
-	require.Contains(t, env.agent.lastTask, "Staged mode: true")
 	require.Contains(t, env.agent.lastTask, "git diff --cached --name-status")
 }
